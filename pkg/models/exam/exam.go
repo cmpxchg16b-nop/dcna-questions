@@ -43,7 +43,7 @@ type ExamServer interface {
 	// if the cursor is nil, a brand-new cursor will be created, you should always use the `repositionedCursor` to get the next question, whether it was succeeded or not.
 	// if the exam is un-seekable, the operation will fail.
 	// the content of cursor is opaque, the client should never assume anything about it.
-	SeekCursorTo(ctx context.Context, examId ExamId, cursor *QuestionCursor, newIndex int) (repositionedCursor *QuestionCursor, err error)
+	SeekCursorTo(ctx context.Context, examId ExamId, cursor *QuestionCursor, newVirtualIndex int) (repositionedCursor *QuestionCursor, err error)
 
 	SubmitAnswer(ctx context.Context, examId ExamId, answerXML string, checkOnly bool) (assessmentXML string, err error)
 }
@@ -82,6 +82,11 @@ type OnMemoryExamServer struct {
 // examOptions act as a server-wide baseline that is combined (bitwise OR) with
 // the per-exam options passed to StartNewExam.
 func NewOnMemoryExamServer(questions pkgmodelquestions.Questions, examOptions ExamOptions) *OnMemoryExamServer {
+	if len(questions) == 0 {
+		// An empty question bank makes exams pointless and would make downstream
+		// modulo arithmetic divide by zero. Fail loudly at construction instead.
+		panic("exam: NewOnMemoryExamServer requires a non-empty question bank")
+	}
 	return &OnMemoryExamServer{
 		questions:     questions,
 		examOptions:   examOptions,
@@ -224,9 +229,16 @@ func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamI
 		}
 		question = sess.cachedQuestion(perm[idx], srv.rng)
 		if idx+1 < len(perm) {
-			c := QuestionCursor(uuid.NewString())
-			sess.Cursors[string(c)] = idx + 1
-			nextCursor = &c
+			// The cursor's meaning is unchanged ("next question to read"), so
+			// advance it in place instead of minting a new token. On the very
+			// first call the incoming cursor is nil, so one is created.
+			c := cursor
+			if c == nil {
+				fresh := QuestionCursor(uuid.NewString())
+				c = &fresh
+			}
+			sess.Cursors[string(*c)] = idx + 1
+			nextCursor = c
 		}
 		resp <- result{question: question, nextCursor: nextCursor}
 	}
@@ -261,13 +273,14 @@ func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamId, 
 			resp <- result{err: errOutOfRange}
 			return
 		}
-		// Reuse the incoming cursor id when given, otherwise mint a new one.
-		id := uuid.NewString()
+		// Seeking repositions traversal: mint a fresh cursor and invalidate
+		// the old one so it can no longer be used.
+		newId := uuid.NewString()
+		sess.Cursors[newId] = newIndex
 		if cursor != nil {
-			id = string(*cursor)
+			delete(sess.Cursors, string(*cursor))
 		}
-		sess.Cursors[id] = newIndex
-		c := QuestionCursor(id)
+		c := QuestionCursor(newId)
 		resp <- result{cursor: &c}
 	}
 	if err := srv.dispatch(ctx, cmd); err != nil {
