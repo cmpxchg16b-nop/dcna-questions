@@ -32,9 +32,12 @@ func TestGetExamByIdSeedsWhenAbsent(t *testing.T) {
 
 func TestGetExamByIdReturnsExisting(t *testing.T) {
 	s := newSession()
+	// Creation goes through GetExamById (LoadOrStore); UpdateExam only does a
+	// CAS against the snapshot the caller last observed.
+	cur := s.GetExamById("e1")
 	existing := ExamSession{ExamId: "e1", TblVer: 7}
-	if !s.UpdateExam("e1", ExamSession{}, existing) {
-		t.Fatal("insert failed")
+	if !s.UpdateExam("e1", *cur, existing) {
+		t.Fatal("update failed")
 	}
 	got := s.GetExamById("e1")
 	if got == nil || got.TblVer != 7 {
@@ -44,15 +47,18 @@ func TestGetExamByIdReturnsExisting(t *testing.T) {
 
 func TestUpdateExamCASConflict(t *testing.T) {
 	s := newSession()
+	// Seed via GetExamById, then advance through CAS. The client always CASes
+	// against the snapshot it last read; the server never guarantees success.
+	seed := s.GetExamById("e2")
 	v1 := ExamSession{ExamId: "e2", TblVer: 1}
-	if !s.UpdateExam("e2", ExamSession{}, v1) {
-		t.Fatal("insert failed")
+	if !s.UpdateExam("e2", *seed, v1) {
+		t.Fatal("CAS from seed to v1 failed")
 	}
 	v2 := ExamSession{ExamId: "e2", TblVer: 2}
 	if !s.UpdateExam("e2", v1, v2) {
 		t.Fatal("expected CAS from v1 to v2 to succeed")
 	}
-	// A stale client holding v1 must fail to swap.
+	// A stale client still holding v1 must fail to swap.
 	stale := ExamSession{ExamId: "e2", TblVer: 3}
 	if s.UpdateExam("e2", v1, stale) {
 		t.Fatal("expected CAS with stale old value to fail")
