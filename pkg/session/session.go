@@ -25,13 +25,17 @@ const (
 	DefaultTTL = 7 * 24 * time.Hour
 )
 
-// Session holds the server-side state for a single anonymous session. Both the
-// counter and the expiry are atomics so they can be read and mutated from
-// concurrent requests without a mutex.
+// Session holds the server-side state for a single anonymous session. It carries
+// its own id; the counter and expiry are atomics so they can be read and mutated
+// from concurrent requests without a mutex.
 type Session struct {
+	id        string
 	counter   atomic.Int64
 	expiresAt atomic.Int64 // unix nanos
 }
+
+// Id returns the session's identifier.
+func (s *Session) Id() string { return s.id }
 
 // Counter returns the current counter value.
 func (s *Session) Counter() int64 { return s.counter.Load() }
@@ -42,8 +46,8 @@ func (s *Session) SetCounter(v int64) { s.counter.Store(v) }
 // IncrCounter increments the counter by one and returns the new value.
 func (s *Session) IncrCounter() int64 { return s.counter.Add(1) }
 
-// expiry returns the time at which the session is no longer valid.
-func (s *Session) expiry() time.Time { return time.Unix(0, s.expiresAt.Load()) }
+// Expiry returns the time at which the session is no longer valid.
+func (s *Session) Expiry() time.Time { return time.Unix(0, s.expiresAt.Load()) }
 
 // SessionManager abstracts session storage and the wiring of a Session into a
 // request context.
@@ -86,7 +90,7 @@ func (m *OnMemorySessionManager) GetSessionById(id string) (*Session, bool) {
 		return nil, false
 	}
 	sess := v.(*Session)
-	if time.Now().After(sess.expiry()) {
+	if time.Now().After(sess.Expiry()) {
 		m.sessions.Delete(id)
 		return nil, false
 	}
@@ -108,7 +112,7 @@ func (m *OnMemorySessionManager) WithSession(ctx context.Context, sess *Session)
 // full TTL, stores it, and returns the id and session.
 func (m *OnMemorySessionManager) CreateSession() (string, *Session) {
 	id := uuid.NewString()
-	sess := &Session{}
+	sess := &Session{id: id}
 	sess.expiresAt.Store(time.Now().Add(m.ttl).UnixNano())
 	m.sessions.Store(id, sess)
 	return id, sess
@@ -129,5 +133,39 @@ func (m *OnMemorySessionManager) SetCookie(w http.ResponseWriter, id string) {
 		MaxAge:   int(m.ttl.Seconds()),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// WithSessionId ensures every request carries a valid anonymous session.
+//
+//   - If no session_id cookie is present, or it refers to an unknown/expired
+//     session, a new anonymous session is created with a random UUID id and the
+//     default 7d TTL.
+//   - If a valid session_id cookie is present, the session's TTL is renewed to
+//     the full window.
+//
+// In both cases the (possibly new) id is written back to the response cookie and
+// the resolved Session is attached to the request context via the SessionManager.
+func WithSessionId(h http.Handler, sm *OnMemorySessionManager) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			id   string
+			sess *Session
+		)
+
+		if c, err := r.Cookie(CookieName); err == nil && c.Value != "" {
+			if s, ok := sm.GetSessionById(c.Value); ok {
+				// Existing, valid session: slide its expiration forward.
+				id, sess = c.Value, s
+				sm.RenewSession(sess)
+			}
+		}
+		if sess == nil {
+			// No cookie, unknown id, or expired: start fresh.
+			id, sess = sm.CreateSession()
+		}
+
+		sm.SetCookie(w, id)
+		h.ServeHTTP(w, r.WithContext(sm.WithSession(r.Context(), sess)))
 	})
 }
