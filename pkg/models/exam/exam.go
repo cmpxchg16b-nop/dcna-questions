@@ -28,7 +28,7 @@ type ExamServer interface {
 	// if the cursor is nil, a brand-new cursor will be created, you should always use the `repositionedCursor` to get the next question, whether it was succeeded or not.
 	// if the exam is un-seekable, the operation will fail.
 	// the content of cursor is opaque, the client should never assume anything about it.
-	SeekCursorTo(ctx context.Context, examId ExamId, cursor *QuestionCursor) (repositionedCursor *QuestionCursor, err error)
+	SeekCursorTo(ctx context.Context, examId ExamId, cursor *QuestionCursor, newIndex int) (repositionedCursor *QuestionCursor, err error)
 
 	SubmitAnswer(ctx context.Context, examId ExamId, answerXML string, checkOnly bool) (assessmentXML string, err error)
 }
@@ -38,9 +38,10 @@ type OnMemoryExamServer struct {
 	sessionsStore map[ExamId]*OnMemoryExamSession
 	closeDoer sync.Once
 	serviceChan chan struct{} // type tbd
+	examOptions ExamOptions
 }
 
-func NewOnMemoryExamServer(questions pkgmodelquestions.Questions) *OnMemoryExamServer {
+func NewOnMemoryExamServer(questions pkgmodelquestions.Questions, examOptions ExamOptions) *OnMemoryExamServer {
 	// todo
 	return nil
 }
