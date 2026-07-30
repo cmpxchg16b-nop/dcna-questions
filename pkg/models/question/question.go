@@ -70,6 +70,7 @@ type QuestionDescription struct {
 }
 
 type Question struct {
+	Id            string              `xml:"id,attr" json:"id"`
 	Num           int                 `xml:"num,attr" json:"num"`
 	Type          QuestionType        `xml:"type,attr" json:"type"`
 	Description   QuestionDescription `xml:"description" json:"description"`

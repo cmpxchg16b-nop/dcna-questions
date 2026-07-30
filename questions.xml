@@ -1,5 +1,5 @@
 <questions>
-  <question num="1" type="single-choice">
+  <question id="1" num="1" type="single-choice">
     <description>An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix?</description>
     <options>
       <option id="1">All iBGP and eBGP peers, because NO_ADVERTISE only prevents the prefix from being readvertised toward the originating AS</option>
@@ -15,7 +15,7 @@
       </options>
     </correctanswer>
   </question>
-  <question num="2" type="multiple-choice">
+  <question id="2" num="2" type="multiple-choice">
     <description>Refer to the exhibit. An engineer must configure an L3Out peering with the backbone network. The L3Out must forward unicast and multicast traffic over the link.
 Which two methods should be used to configure L3Out to meet these requirements? (Choose two.)</description>
     <exhibits>
@@ -39,7 +39,7 @@ Which two methods should be used to configure L3Out to meet these requirements? 
       </combination>
     </correctanswer>
   </question>
-  <question num="3" type="drag-and-drop">
+  <question id="3" num="3" type="drag-and-drop">
     <description>An engineer deploys a Cisco ACI fabric. The engineer created a VPC policy group named Allot_MET_RIO7_RIO8 for the enclosure and these objects have been configured:
 &#8226; Physical Domain Bare_Metal_L3In_Dom
 &#8226; VLAN pool NFVI_VLPool

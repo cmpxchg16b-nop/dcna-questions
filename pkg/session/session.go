@@ -25,13 +25,31 @@ const (
 	DefaultTTL = 7 * 24 * time.Hour
 )
 
+type ExamAnswer struct {
+	QuestionId string
+	AnswerXML  string
+}
+
+type ExamAnswers []ExamAnswer
+
+type ExamSession struct {
+	// Point to an on-going exam
+	ExamId string
+
+	// TableVersion, increment at client-side before every update
+	TblVer int
+
+	Answers ExamAnswers
+}
+
 // Session holds the server-side state for a single anonymous session. It carries
 // its own id; the counter and expiry are atomics so they can be read and mutated
 // from concurrent requests without a mutex.
 type Session struct {
-	id        string
-	counter   atomic.Int64
-	expiresAt atomic.Int64 // unix nanos
+	id           string
+	counter      atomic.Int64
+	examSessions sync.Map     // map[string]ExamSession
+	expiresAt    atomic.Int64 // unix nanos
 }
 
 // Id returns the session's identifier.
