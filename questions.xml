@@ -34,16 +34,16 @@ Which two methods should be used to configure L3Out to meet these requirements? 
       <!-- combinations are orderless, in other words: they are just unordered set. -->
       <!-- so that means, both (1, 4) and (4, 1) are correct answers. -->
       <combination>
-        <option id="1">
-        <option id="4">
+        <option id="1" />
+        <option id="4" />
       </combination>
     </correctanswer>
   </question>
   <question num="3" type="drag-and-drop">
     <description>An engineer deploys a Cisco ACI fabric. The engineer created a VPC policy group named Allot_MET_RIO7_RIO8 for the enclosure and these objects have been configured:
-&bullet; Physical Domain Bare_Metal_L3In_Dom
-&bullet; VLAN pool NFVI_VLPool
-&bullet; AAEP NFVI_AAEP
+&#8226; Physical Domain Bare_Metal_L3In_Dom
+&#8226; VLAN pool NFVI_VLPool
+&#8226; AAEP NFVI_AAEP
 Drag and drop objects from the left to the objects under which they must be added to configure an EPG named 12_MSSMET2_LDE_int_EPG. Not all objects are used.</description>
     <candidates>
       <candidate id="1">NFVI_VLPool</candidate>
