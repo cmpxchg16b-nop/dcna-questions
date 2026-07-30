@@ -9,7 +9,7 @@ import (
 
 func main() {
 	mux := http.NewServeMux()
-	mux.Handle("/", http.FileServerFS(dcnaquestions.WebFS()))
+	mux.Handle("/", dcnaquestions.Handler())
 
 	const addr = ":8080"
 	log.Printf("listening on http://localhost%s", addr)
