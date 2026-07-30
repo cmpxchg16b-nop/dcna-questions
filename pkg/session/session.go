@@ -25,13 +25,6 @@ const (
 	DefaultTTL = 7 * 24 * time.Hour
 )
 
-type ExamAnswer struct {
-	QuestionId string
-	AnswerXML  string
-}
-
-type ExamAnswers []ExamAnswer
-
 type ExamSession struct {
 	// Point to an on-going exam
 	ExamId string
@@ -39,7 +32,7 @@ type ExamSession struct {
 	// TableVersion, increment at client-side before every update
 	TblVer int
 
-	Answers ExamAnswers
+	ExamAnswersXML string
 }
 
 // Session holds the server-side state for a single anonymous session. It carries
@@ -63,6 +56,37 @@ func (s *Session) SetCounter(v int64) { s.counter.Store(v) }
 
 // IncrCounter increments the counter by one and returns the new value.
 func (s *Session) IncrCounter() int64 { return s.counter.Add(1) }
+
+// ListExams returns the ids of every exam currently tracked by the session. The
+// ids are the keys of the underlying concurrent map. The returned slice should
+// be treated as a snapshot; concurrent updates are not reflected in it.
+func (s *Session) ListExams() []string {
+	var ids []string
+	s.examSessions.Range(func(key, _ any) bool {
+		ids = append(ids, key.(string))
+		return true
+	})
+	return ids
+}
+
+// GetExamById returns the ExamSession for the given exam id. If no such exam is
+// tracked by this session yet, a fresh ExamSession seeded with the id is stored
+// and returned (LoadOrStore semantics); the result is therefore never nil.
+// Because ExamSession values are immutable, a returned pointer is a stable
+// snapshot that never races with later updates.
+func (s *Session) GetExamById(id string) *ExamSession {
+	v, _ := s.examSessions.LoadOrStore(id, ExamSession{ExamId: id})
+	sess := v.(ExamSession)
+	return &sess
+}
+
+// UpdateExam atomically replaces the ExamSession for id with new only if the
+// current value equals old. It reports whether the swap succeeded. On failure
+// the caller is responsible for resolving the conflict (e.g. re-reading and
+// retrying), since ExamSession values are immutable and updated via copy.
+func (s *Session) UpdateExam(id string, old, new ExamSession) bool {
+	return s.examSessions.CompareAndSwap(id, old, new)
+}
 
 // Expiry returns the time at which the session is no longer valid.
 func (s *Session) Expiry() time.Time { return time.Unix(0, s.expiresAt.Load()) }
