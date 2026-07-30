@@ -5,7 +5,7 @@
     Implementing Cisco Application Centric Infrastructure (300-620 DCACI) v1.1 is a 90-minute exam that certifies a candidate's knowledge of Cisco switches in Application Centric Infrastructure (ACI) mode, including configuration, implementation, and management.</description>
   <questionset>
     <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
-    <questions>
+    <questioncollection>
       <question id="1" num="1" type="single-choice">
         <description
         >An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix?</description>
@@ -91,6 +91,6 @@
           </connectionsolutions>
         </correctanswer>
       </question>
-    </questions>
-  </questionsets>
+    </questioncollection>
+  </questionset>
 </exam>
