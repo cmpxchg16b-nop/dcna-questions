@@ -18,9 +18,10 @@ type QuestionCursor string
 type ExamOptions uint32
 
 const (
-	ExamOptionRandomQuestions ExamOptions = 1 << iota
-	ExamOptionRandomOptions
+	ExamOptionRandomQuestions ExamOptions = 1 << iota // randomized questions ordering within a collection
+	ExamOptionRandomOptions // randomized options ordering
 	ExamOptionSeekable // the 'Seekable' allows the client to seek to question with given number at will
+	ExamOptionRandomQuestionColl // Randomized question collection picking
 )
 
 var (
@@ -29,10 +30,11 @@ var (
 	errInvalidCursor = errors.New("invalid question cursor")
 	errOutOfRange    = errors.New("question index out of range")
 	errShuttingDown  = errors.New("exam server is shutting down")
+	errEmptyExam     = errors.New("exam has no questions")
 )
 
 type ExamServer interface {
-	StartNewExam(ctx context.Context, userSessionId string, examOptions ExamOptions) (ExamId, error)
+	StartNewExam(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error)
 	ListExams(ctx context.Context, userSessionId string) []ExamId
 	EndExam(ctx context.Context, examId ExamId) error
 
@@ -55,8 +57,12 @@ type ExamServer interface {
 // closure to that goroutine through serviceChan; the closure executes with
 // exclusive access to the map. No mutexes (other than the closeDoer used to
 // make Shutdown idempotent) guard session state.
+//
+// The server holds no question bank and no RNG: both live per session (see
+// OnMemoryExamSession), supplied through StartNewExam. Each session's RNG is
+// only ever touched inside closures run by the actor goroutine, so it remains
+// lock-free.
 type OnMemoryExamServer struct {
-	questions   pkgmodelquestions.QuestionCollection
 	examOptions ExamOptions
 
 	// sessionsStore is only ever read or written inside closures run by the
@@ -71,29 +77,18 @@ type OnMemoryExamServer struct {
 	done chan struct{}
 
 	closeDoer sync.Once
-
-	// rng is owned by the actor goroutine and is therefore lock-free. Using a
-	// private source (instead of the package-level rand functions) keeps the
-	// server free of the math/rand global lock.
-	rng *rand.Rand
 }
 
-// NewOnMemoryExamServer constructs an in-memory exam server backed by questions.
-// examOptions act as a server-wide baseline that is combined (bitwise OR) with
-// the per-exam options passed to StartNewExam.
-func NewOnMemoryExamServer(questions pkgmodelquestions.QuestionCollection, examOptions ExamOptions) *OnMemoryExamServer {
-	if len(questions.Questions) == 0 {
-		// An empty question bank makes exams pointless and would make downstream
-		// modulo arithmetic divide by zero. Fail loudly at construction instead.
-		panic("exam: NewOnMemoryExamServer requires a non-empty question bank")
-	}
+// NewOnMemoryExamServer constructs an in-memory exam server. examOptions act as
+// a server-wide baseline that is combined (bitwise OR) with the per-exam options
+// passed to StartNewExam. The question bank and RNG are supplied per exam via
+// StartNewExam, not held by the server.
+func NewOnMemoryExamServer(examOptions ExamOptions) *OnMemoryExamServer {
 	return &OnMemoryExamServer{
-		questions:     questions,
 		examOptions:   examOptions,
 		sessionsStore: make(map[ExamId]*OnMemoryExamSession),
 		serviceChan:   make(chan func()),
 		done:          make(chan struct{}),
-		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -133,16 +128,20 @@ func (srv *OnMemoryExamServer) dispatch(ctx context.Context, cmd func()) error {
 	}
 }
 
-func (srv *OnMemoryExamServer) StartNewExam(ctx context.Context, userSessionId string, examOptions ExamOptions) (ExamId, error) {
+func (srv *OnMemoryExamServer) StartNewExam(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error) {
 	type result struct {
 		examId ExamId
 		err    error
 	}
 	resp := make(chan result, 1)
 	cmd := func() {
+		if exam == nil || len(exam.QuestionSet.QuestionCollections) == 0 {
+			resp <- result{err: errEmptyExam}
+			return
+		}
 		opts := srv.examOptions | examOptions
 		examId := ExamId(uuid.NewString())
-		srv.sessionsStore[examId] = newExamSession(examId, userSessionId, &srv.questions, opts, srv.rng)
+		srv.sessionsStore[examId] = newExamSession(examId, userSessionId, exam, opts)
 		resp <- result{examId: examId}
 	}
 	if err := srv.dispatch(ctx, cmd); err != nil {
@@ -227,7 +226,7 @@ func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamI
 			resp <- result{}
 			return
 		}
-		question = sess.cachedQuestion(perm[idx], srv.rng)
+		question = sess.cachedQuestion(perm[idx])
 		if idx+1 < len(perm) {
 			// The cursor's meaning is unchanged ("next question to read"), so
 			// advance it in place instead of minting a new token. On the very
@@ -325,26 +324,34 @@ type OnMemoryExamSession struct {
 
 	// for OnMemoryExamServer/OnMemoryExamSession, cursor id should be uuid
 	Cursors map[string]int
+
+	// rng is the per-session random source, used to shuffle the question order
+	// and each question's options. It is owned by the actor goroutine (touched
+	// only inside dispatch closures) and is therefore lock-free.
+	rng *rand.Rand
 }
 
 // cachedQuestion returns the question at actualIdx, building and caching a copy
-// with shuffled options on first access. rng is provided by the actor goroutine
-// and is therefore used single-threaded.
-func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int, rng *rand.Rand) *pkgmodelquestions.Question {
+// with shuffled options on first access. The session's rng is used, which is
+// owned by the actor goroutine and therefore single-threaded.
+func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int) *pkgmodelquestions.Question {
 	orig := &sess.Questions.Questions[actualIdx]
 	if cached, ok := sess.CachedQuestion[orig.Id]; ok {
 		return cached.Question
 	}
-	omq := buildOnMemoryQuestion(orig, sess.Options, rng)
+	omq := buildOnMemoryQuestion(orig, sess.Options, sess.rng)
 	sess.CachedQuestion[orig.Id] = omq
 	return omq.Question
 }
 
-// newExamSession allocates a session and computes its question permutation up
-// front (the order in which questions are presented). Option permutations are
-// derived lazily, per question, as it is first requested.
-func newExamSession(examId ExamId, userSessionId string, questions *pkgmodelquestions.QuestionCollection, opts ExamOptions, rng *rand.Rand) *OnMemoryExamSession {
-	n := len(questions.Questions)
+// newExamSession allocates a session backed by exam's question set, selecting
+// the question collection to present and computing its permutation up front
+// (the order in which questions are presented). Option permutations are derived
+// lazily, per question, as it is first requested.
+func newExamSession(examId ExamId, userSessionId string, exam *pkgmodelquestions.Exam, opts ExamOptions) *OnMemoryExamSession {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	qc := selectQuestionCollection(exam.QuestionSet, opts, rng)
+	n := len(qc.Questions)
 	var qPerm []int
 	if opts&ExamOptionRandomQuestions != 0 {
 		qPerm = rng.Perm(n)
@@ -354,12 +361,40 @@ func newExamSession(examId ExamId, userSessionId string, questions *pkgmodelques
 	return &OnMemoryExamSession{
 		ExamId:              examId,
 		UserSessionId:       userSessionId,
-		Questions:           questions,
+		Questions:           &qc,
 		Options:             opts,
 		QuestionPermutation: qPerm,
 		CachedQuestion:      make(map[string]OnMemoryQuestion),
 		Cursors:             make(map[string]int),
+		rng:                 rng,
 	}
+}
+
+// selectQuestionCollection resolves which QuestionCollection from the exam's
+// question set is presented to a candidate.
+//
+// With ExamOptionRandomQuestionColl set, one collection is picked at random
+// (the point of a multi-collection set: vary the exam by drawing a different
+// subset). Otherwise every collection's questions are flattened into a single
+// combined collection, so the candidate sees all questions.
+func selectQuestionCollection(qs pkgmodelquestions.QuestionSet, opts ExamOptions, rng *rand.Rand) pkgmodelquestions.QuestionCollection {
+	cols := qs.QuestionCollections
+	if len(cols) == 0 {
+		return pkgmodelquestions.QuestionCollection{}
+	}
+	if opts&ExamOptionRandomQuestionColl != 0 {
+		return cols[rng.Intn(len(cols))]
+	}
+	// Flatten all collections into one so the candidate sees every question.
+	var total int
+	for _, c := range cols {
+		total += len(c.Questions)
+	}
+	flat := make([]pkgmodelquestions.Question, 0, total)
+	for _, c := range cols {
+		flat = append(flat, c.Questions...)
+	}
+	return pkgmodelquestions.QuestionCollection{Questions: flat}
 }
 
 // buildOnMemoryQuestion returns a shallow copy of orig whose Options are
