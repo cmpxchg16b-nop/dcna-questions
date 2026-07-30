@@ -56,7 +56,7 @@ type ExamServer interface {
 // exclusive access to the map. No mutexes (other than the closeDoer used to
 // make Shutdown idempotent) guard session state.
 type OnMemoryExamServer struct {
-	questions   pkgmodelquestions.Questions
+	questions   pkgmodelquestions.QuestionCollection
 	examOptions ExamOptions
 
 	// sessionsStore is only ever read or written inside closures run by the
@@ -81,8 +81,8 @@ type OnMemoryExamServer struct {
 // NewOnMemoryExamServer constructs an in-memory exam server backed by questions.
 // examOptions act as a server-wide baseline that is combined (bitwise OR) with
 // the per-exam options passed to StartNewExam.
-func NewOnMemoryExamServer(questions pkgmodelquestions.Questions, examOptions ExamOptions) *OnMemoryExamServer {
-	if len(questions) == 0 {
+func NewOnMemoryExamServer(questions pkgmodelquestions.QuestionCollection, examOptions ExamOptions) *OnMemoryExamServer {
+	if len(questions.Questions) == 0 {
 		// An empty question bank makes exams pointless and would make downstream
 		// modulo arithmetic divide by zero. Fail loudly at construction instead.
 		panic("exam: NewOnMemoryExamServer requires a non-empty question bank")
@@ -310,7 +310,7 @@ type OnMemoryQuestion struct {
 type OnMemoryExamSession struct {
 	ExamId        ExamId
 	UserSessionId string
-	Questions     *pkgmodelquestions.Questions
+	Questions     *pkgmodelquestions.QuestionCollection
 
 	// Options captured for this exam; drives seekable checks and option
 	// shuffling when a question is first materialized.
@@ -331,7 +331,7 @@ type OnMemoryExamSession struct {
 // with shuffled options on first access. rng is provided by the actor goroutine
 // and is therefore used single-threaded.
 func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int, rng *rand.Rand) *pkgmodelquestions.Question {
-	orig := &(*sess.Questions)[actualIdx]
+	orig := &sess.Questions.Questions[actualIdx]
 	if cached, ok := sess.CachedQuestion[orig.Id]; ok {
 		return cached.Question
 	}
@@ -343,8 +343,8 @@ func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int, rng *rand.Rand) *
 // newExamSession allocates a session and computes its question permutation up
 // front (the order in which questions are presented). Option permutations are
 // derived lazily, per question, as it is first requested.
-func newExamSession(examId ExamId, userSessionId string, questions *pkgmodelquestions.Questions, opts ExamOptions, rng *rand.Rand) *OnMemoryExamSession {
-	n := len(*questions)
+func newExamSession(examId ExamId, userSessionId string, questions *pkgmodelquestions.QuestionCollection, opts ExamOptions, rng *rand.Rand) *OnMemoryExamSession {
+	n := len(questions.Questions)
 	var qPerm []int
 	if opts&ExamOptionRandomQuestions != 0 {
 		qPerm = rng.Perm(n)

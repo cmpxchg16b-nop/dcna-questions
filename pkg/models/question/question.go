@@ -1,6 +1,14 @@
 // Package question defines the data model for the question bank.
 package question
 
+import (
+	"bytes"
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"os"
+)
+
 type QuestionType string
 
 const (
@@ -8,6 +16,15 @@ const (
 	QuestionTypeMultipleChoice QuestionType = "multiple-choice"
 	QuestionTypeDragAndDrop    QuestionType = "drag-and-drop"
 )
+
+// Valid reports whether t is one of the recognized question types.
+func (t QuestionType) Valid() bool {
+	switch t {
+	case QuestionTypeSingleChoice, QuestionTypeMultipleChoice, QuestionTypeDragAndDrop:
+		return true
+	}
+	return false
+}
 
 // PlainText is a text node in the question document.
 type PlainText string
@@ -81,4 +98,94 @@ type Question struct {
 	CorrectAnswer CorrectAnswer       `xml:"correctanswer" json:"correctAnswer"`
 }
 
-type Questions []Question
+// QuestionCollection is a named group of questions. It models a single
+// <questioncollection> element, which contains zero or more <question> children.
+type QuestionCollection struct {
+	Questions []Question `xml:"question" json:"questions,omitempty"`
+}
+
+// QuestionSet is the single <questionset> within an exam. It groups zero, one or
+// more question collections; a subset may be chosen at random to vary the exam.
+type QuestionSet struct {
+	QuestionCollections []QuestionCollection `xml:"questioncollection" json:"questionCollections,omitempty"`
+}
+
+// Exam is the root <exam> document: a named certification exam carrying
+// metadata and exactly one question set.
+type Exam struct {
+	XMLName     xml.Name     `xml:"exam" json:"-"`
+	Id          string       `xml:"id,attr" json:"id"`
+	ShortName   string       `xml:"shortname,attr" json:"shortName"`
+	Code        string       `xml:"code,attr" json:"code"`
+	Title       PlainText    `xml:"title" json:"title"`
+	Description PlainText    `xml:"description" json:"description"`
+	QuestionSet QuestionSet  `xml:"questionset" json:"questionSet"`
+}
+
+// namedEntities extends the predefined XML entities (amp, lt, gt, apos, quot,
+// which encoding/xml resolves by itself) with the full HTML named-entity table.
+//
+// Numeric character references such as &#8226; (the bullet, the only reference
+// form currently used in the question bank) are resolved by encoding/xml
+// unconditionally and need no entry here. This table exists solely so that
+// named HTML entities (&nbsp;, &copy;, ...) decode correctly should a future
+// question bank introduce them. It is built once and shared; encoding/xml only
+// reads it, never writes.
+var namedEntities = func() map[string]string {
+	m := make(map[string]string, len(xml.HTMLEntity))
+	for k, v := range xml.HTMLEntity {
+		m[k] = v
+	}
+	return m
+}()
+
+// ExamLoader decodes Exam documents from XML. It is stateless and safe for
+// concurrent use; the zero value is ready to use.
+type ExamLoader struct{}
+
+// NewExamLoader returns an ExamLoader. It is retained for call-site
+// readability; ExamLoader{} is equivalent.
+func NewExamLoader() *ExamLoader { return &ExamLoader{} }
+
+// Load decodes data into an Exam and validates its structure.
+func (l *ExamLoader) Load(data []byte) (*Exam, error) {
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	dec.Entity = namedEntities
+	var exam Exam
+	if err := dec.Decode(&exam); err != nil {
+		return nil, fmt.Errorf("decode exam XML: %w", err)
+	}
+	if err := exam.validate(); err != nil {
+		return nil, fmt.Errorf("invalid exam: %w", err)
+	}
+	return &exam, nil
+}
+
+// LoadFile reads the XML file at path and decodes it into an Exam.
+func (l *ExamLoader) LoadFile(path string) (*Exam, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read exam file %q: %w", path, err)
+	}
+	return l.Load(data)
+}
+
+// validate reports structural problems with a decoded exam. It catches the
+// kinds of mistakes (a typo'd question type, a missing id) that would otherwise
+// produce silently broken questions downstream.
+func (e *Exam) validate() error {
+	if e.Id == "" {
+		return errors.New("missing exam id")
+	}
+	for _, qc := range e.QuestionSet.QuestionCollections {
+		for _, q := range qc.Questions {
+			if q.Id == "" {
+				return errors.New("question with missing id")
+			}
+			if !q.Type.Valid() {
+				return fmt.Errorf("question %q: unknown type %q", q.Id, q.Type)
+			}
+		}
+	}
+	return nil
+}
