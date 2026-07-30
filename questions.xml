@@ -1,26 +1,76 @@
 <questions>
   <question num="1" type="single-choice">
-    <description>An engineer is configuring router R2 in autonomous system 65002 to control the
-      propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session.
-      The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on
-      this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP
-      peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise
-      the 192.0.2.0/24 prefix?</description>
+    <description>An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix?</description>
     <options>
-      <option id="opt1" label="A">All iBGP and eBGP peers, because NO_ADVERTISE only prevents the
-        prefix from being readvertised toward the originating AS</option>
-      <option id="opt2" label="B">All three iBGP peers only</option>
-      <option id="opt3" label="C">The eBGP peer in AS 65003 only</option>
-      <option id="opt4" label="D">All iBGP and eBGP peers, but with the community attribute stripped
-        from the updates</option>
-      <option id="opt5" label="E">No BGP peers at all; the prefix remains in R2's local BGP table
-        but is not advertised to any peer</option>
+      <option id="1">All iBGP and eBGP peers, because NO_ADVERTISE only prevents the prefix from being readvertised toward the originating AS</option>
+      <option id="2">All three iBGP peers only</option>
+      <option id="3">The eBGP peer in AS 65003 only</option>
+      <option id="4">All iBGP and eBGP peers, but with the community attribute stripped from the updates</option>
+      <option id="5">No BGP peers at all; the prefix remains in R2's local BGP table but is not advertised to any peer</option>
     </options>
     <correctanswer>
       <options>
-        <option id="opt5" label="E">No BGP peers at all; the prefix remains in R2's local BGP table
-          but is not advertised to any peer</option>
+        <!-- In some case, more that one option is correct, even it's a single-choice question. -->
+        <option id="5">No BGP peers at all; the prefix remains in R2's local BGP table but is not advertised to any peer</option>
       </options>
+    </correctanswer>
+  </question>
+  <question num="2" type="multiple-choice">
+    <description>Refer to the exhibit. An engineer must configure an L3Out peering with the backbone network. The L3Out must forward unicast and multicast traffic over the link.
+Which two methods should be used to configure L3Out to meet these requirements? (Choose two.)</description>
+    <exhibits>
+      <exhibit>
+        <image src="assets/9b44f37d-60b7-4b05-82db-2effb6aa58d6.jpg" />
+      </exhibit>
+    </exhibits>
+    <options>
+      <option id="1">Layer 3 routed port</option>
+      <option id="2">VPC with SVI</option>
+      <option id="3">port channel with SVI</option>
+      <option id="4">Layer 3 routed subinterface</option>
+      <option id="5">Layer 3 floating SVI</option>
+    </options>
+    <correctanswer>
+      <!-- combinations are orderless, in other words: they are just unordered set. -->
+      <!-- so that means, both (1, 4) and (4, 1) are correct answers. -->
+      <combination>
+        <option id="1">
+        <option id="4">
+      </combination>
+    </correctanswer>
+  </question>
+  <question num="3" type="drag-and-drop">
+    <description>An engineer deploys a Cisco ACI fabric. The engineer created a VPC policy group named Allot_MET_RIO7_RIO8 for the enclosure and these objects have been configured:
+&bullet; Physical Domain Bare_Metal_L3In_Dom
+&bullet; VLAN pool NFVI_VLPool
+&bullet; AAEP NFVI_AAEP
+Drag and drop objects from the left to the objects under which they must be added to configure an EPG named 12_MSSMET2_LDE_int_EPG. Not all objects are used.</description>
+    <candidates>
+      <candidate id="1">NFVI_VLPool</candidate>
+      <candidate id="2">Bare_Metal_L3ln_Dom</candidate>
+      <candidate id="3">NFVI_AAEP</candidate>
+      <candidate id="4">Allot_MET_RIO7_RIO8</candidate>
+    </candidates>
+    <drops>
+      <drop id="1">AAEP</drop>
+      <drop id="2">physical domain</drop>
+      <drop id="3">VPC policy group</drop>
+    </drops>
+    <correctanswer>
+      <connectionsolutions>
+        <connectionsolution>
+          <!-- drag 2 and drop it to 1 -->
+          <connect dst="1" src="2" />
+
+          <!-- drag 1 and drop it to 2 -->
+          <connect dst="2" src="1" />
+
+          <!-- drag 3 and drop it to 3 -->
+          <connect dst="3" src="3" />
+        </connectionsolution>
+
+        <!-- in some case, a drag-and-drop question can also have multiple correct answers, then we just define more connectionsolution objects -->
+      </connectionsolutions>
     </correctanswer>
   </question>
 </questions>
