@@ -139,35 +139,51 @@ var namedEntities = func() map[string]string {
 	return m
 }()
 
-// ExamLoader decodes Exam documents from XML. It is stateless and safe for
-// concurrent use; the zero value is ready to use.
-type ExamLoader struct{}
+type ExamLoader interface {
+	LoadFrom(url string) (*Exam, error)
+}
 
-// NewExamLoader returns an ExamLoader. It is retained for call-site
+// FileExamLoader decodes Exam documents from XML. It is stateless and safe for
+// concurrent use; the zero value is ready to use.
+type FileExamLoader struct{}
+
+// NewFileExamLoader returns an ExamLoader. It is retained for call-site
 // readability; ExamLoader{} is equivalent.
-func NewExamLoader() *ExamLoader { return &ExamLoader{} }
+func NewFileExamLoader() *FileExamLoader { return &FileExamLoader{} }
 
 // Load decodes data into an Exam and validates its structure.
-func (l *ExamLoader) Load(data []byte) (*Exam, error) {
+//
+// The document root is <root>, which wraps exactly one <exam> plus an optional
+// <examanswer> holding example answers. Only the <exam> is loaded; the example
+// answer is ignored.
+func (l *FileExamLoader) Load(data []byte) (*Exam, error) {
 	dec := xml.NewDecoder(bytes.NewReader(data))
 	dec.Entity = namedEntities
-	var exam Exam
-	if err := dec.Decode(&exam); err != nil {
+	var doc struct {
+		XMLName xml.Name `xml:"root"`
+		Exam    Exam     `xml:"exam"`
+	}
+	if err := dec.Decode(&doc); err != nil {
 		return nil, fmt.Errorf("decode exam XML: %w", err)
 	}
-	if err := exam.validate(); err != nil {
+	if err := doc.Exam.validate(); err != nil {
 		return nil, fmt.Errorf("invalid exam: %w", err)
 	}
-	return &exam, nil
+	return &doc.Exam, nil
 }
 
 // LoadFile reads the XML file at path and decodes it into an Exam.
-func (l *ExamLoader) LoadFile(path string) (*Exam, error) {
+func (l *FileExamLoader) LoadFile(path string) (*Exam, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read exam file %q: %w", path, err)
 	}
 	return l.Load(data)
+}
+
+// LoadFile reads the XML file at path and decodes it into an Exam.
+func (l *FileExamLoader) LoadFrom(url string) (*Exam, error) {
+	return l.LoadFile(url)
 }
 
 // validate reports structural problems with a decoded exam. It catches the

@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	exam, err := question.NewExamLoader().LoadFile("exam1.xml")
+	exam, err := question.NewFileExamLoader().LoadFile("exam1.xml")
 	if err != nil {
 		log.Fatal(err)
 	}

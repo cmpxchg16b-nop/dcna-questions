@@ -11,18 +11,18 @@ import (
 // TestStartNewExam_WalksAllQuestions loads the real exam1.xml and confirms that
 // a fresh session presents every question in its question collection, in order.
 func TestStartNewExam_WalksAllQuestions(t *testing.T) {
-	exam, err := pkgmodelquestions.NewExamLoader().LoadFile(filepath.Join("..", "..", "..", "exam1.xml"))
+	exam, err := pkgmodelquestions.NewFileExamLoader().LoadFile(filepath.Join("..", "..", "..", "exam1.xml"))
 	if err != nil {
 		t.Fatalf("load exam: %v", err)
 	}
 
-	srv := NewOnMemoryExamServer(ExamOptionSeekable)
+	srv := NewOnMemoryExamServer()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExam(ctx, exam, "user-1", 0)
+	examId, err := srv.StartNewExam(ctx, exam, "user-1", ExamOptionSeekable)
 	if err != nil {
 		t.Fatalf("StartNewExam: %v", err)
 	}
@@ -44,11 +44,11 @@ func TestStartNewExam_WalksAllQuestions(t *testing.T) {
 		}
 	}
 
-	// exam1.xml has one collection with 3 questions (ids 1, 2, 3).
-	if len(seen) != 3 {
-		t.Fatalf("expected 3 questions, got %d (%v)", len(seen), seen)
+	// exam1.xml has one collection with 5 questions (ids 1, 2, 3, 4, 5).
+	if len(seen) != 5 {
+		t.Fatalf("expected 5 questions, got %d (%v)", len(seen), seen)
 	}
-	for i, want := range []string{"1", "2", "3"} {
+	for i, want := range []string{"1", "2", "3", "4", "5"} {
 		if seen[i] != want {
 			t.Errorf("question %d: got id %q, want %q", i, seen[i], want)
 		}
@@ -57,7 +57,7 @@ func TestStartNewExam_WalksAllQuestions(t *testing.T) {
 
 // TestStartNewExam_EmptyExam verifies that an exam with no questions is rejected.
 func TestStartNewExam_EmptyExam(t *testing.T) {
-	srv := NewOnMemoryExamServer(0)
+	srv := NewOnMemoryExamServer()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -92,13 +92,13 @@ func TestStartNewExam_RandomCollPicksOneCollection(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(ExamOptionRandomQuestionColl | ExamOptionSeekable)
+	srv := NewOnMemoryExamServer()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExam(ctx, exam, "user-1", 0)
+	examId, err := srv.StartNewExam(ctx, exam, "user-1", ExamOptionRandomQuestionColl|ExamOptionSeekable)
 	if err != nil {
 		t.Fatalf("StartNewExam: %v", err)
 	}
@@ -149,13 +149,13 @@ func TestStartNewExam_FlattensCollectionsByDefault(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(ExamOptionSeekable)
+	srv := NewOnMemoryExamServer()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExam(ctx, exam, "user-1", 0)
+	examId, err := srv.StartNewExam(ctx, exam, "user-1", ExamOptionSeekable)
 	if err != nil {
 		t.Fatalf("StartNewExam: %v", err)
 	}

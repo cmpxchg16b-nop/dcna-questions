@@ -34,8 +34,13 @@ var (
 )
 
 type ExamServer interface {
+	// Start a new exam session
 	StartNewExam(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error)
+
+	// List started exam sessions of a given user session
 	ListExams(ctx context.Context, userSessionId string) []ExamId
+
+	// Terminate the specified exam session
 	EndExam(ctx context.Context, examId ExamId) error
 
 	// the initial cursor should be nil
@@ -63,8 +68,6 @@ type ExamServer interface {
 // only ever touched inside closures run by the actor goroutine, so it remains
 // lock-free.
 type OnMemoryExamServer struct {
-	examOptions ExamOptions
-
 	// sessionsStore is only ever read or written inside closures run by the
 	// actor goroutine.
 	sessionsStore map[ExamId]*OnMemoryExamSession
@@ -79,13 +82,11 @@ type OnMemoryExamServer struct {
 	closeDoer sync.Once
 }
 
-// NewOnMemoryExamServer constructs an in-memory exam server. examOptions act as
-// a server-wide baseline that is combined (bitwise OR) with the per-exam options
-// passed to StartNewExam. The question bank and RNG are supplied per exam via
-// StartNewExam, not held by the server.
-func NewOnMemoryExamServer(examOptions ExamOptions) *OnMemoryExamServer {
+// NewOnMemoryExamServer constructs an in-memory exam server. The exam options,
+// question bank, and RNG are all supplied per exam via StartNewExam, not held by
+// the server.
+func NewOnMemoryExamServer() *OnMemoryExamServer {
 	return &OnMemoryExamServer{
-		examOptions:   examOptions,
 		sessionsStore: make(map[ExamId]*OnMemoryExamSession),
 		serviceChan:   make(chan func()),
 		done:          make(chan struct{}),
@@ -139,7 +140,7 @@ func (srv *OnMemoryExamServer) StartNewExam(ctx context.Context, exam *pkgmodelq
 			resp <- result{err: errEmptyExam}
 			return
 		}
-		opts := srv.examOptions | examOptions
+		opts := examOptions
 		examId := ExamId(uuid.NewString())
 		srv.sessionsStore[examId] = newExamSession(examId, userSessionId, exam, opts)
 		resp <- result{examId: examId}

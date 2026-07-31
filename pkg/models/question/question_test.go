@@ -10,6 +10,7 @@ func TestExamLoader_LoadDecodesNumericEntities(t *testing.T) {
 	// The question bank uses numeric character references (e.g. &#8226; for the
 	// bullet). These must resolve without any custom entity table.
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
 <exam id="1" shortname="DCACI" code="300-620">
   <title>Implementing Cisco ACI</title>
   <description>x</description>
@@ -22,9 +23,10 @@ func TestExamLoader_LoadDecodesNumericEntities(t *testing.T) {
       </question>
     </questioncollection>
   </questionset>
-</exam>`
+</exam>
+</root>`
 
-	exam, err := NewExamLoader().Load([]byte(xml))
+	exam, err := NewFileExamLoader().Load([]byte(xml))
 	if err != nil {
 		t.Fatalf("Load: unexpected error: %v", err)
 	}
@@ -39,6 +41,7 @@ func TestExamLoader_LoadMultipleCollections(t *testing.T) {
 	// QuestionCollection structs (each a <questioncollection>) without the old
 	// custom UnmarshalXML that existed only to handle a slice-of-slices.
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
 <exam id="1" shortname="X" code="1">
   <title>t</title><description>d</description>
   <questionset>
@@ -50,9 +53,10 @@ func TestExamLoader_LoadMultipleCollections(t *testing.T) {
       <question id="3" num="3" type="multiple-choice"><description>c</description></question>
     </questioncollection>
   </questionset>
-</exam>`
+</exam>
+</root>`
 
-	exam, err := NewExamLoader().Load([]byte(xml))
+	exam, err := NewFileExamLoader().Load([]byte(xml))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -71,6 +75,7 @@ func TestExamLoader_LoadMultipleCollections(t *testing.T) {
 
 func TestExamLoader_LoadRejectsUnknownQuestionType(t *testing.T) {
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
 <exam id="1" shortname="DCACI" code="300-620">
   <title>t</title><description>d</description>
   <questionset>
@@ -80,28 +85,31 @@ func TestExamLoader_LoadRejectsUnknownQuestionType(t *testing.T) {
       </question>
     </questioncollection>
   </questionset>
-</exam>`
+</exam>
+</root>`
 
-	if _, err := NewExamLoader().Load([]byte(xml)); err == nil {
+	if _, err := NewFileExamLoader().Load([]byte(xml)); err == nil {
 		t.Fatal("Load: expected error for unknown question type, got nil")
 	}
 }
 
 func TestExamLoader_LoadRejectsMissingExamId(t *testing.T) {
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
 <exam shortname="DCACI" code="300-620">
   <title>t</title><description>d</description>
   <questionset><questioncollection></questioncollection></questionset>
-</exam>`
+</exam>
+</root>`
 
-	_, err := NewExamLoader().Load([]byte(xml))
+	_, err := NewFileExamLoader().Load([]byte(xml))
 	if err == nil || !strings.Contains(err.Error(), "missing exam id") {
 		t.Fatalf("Load: expected missing-exam-id error, got %v", err)
 	}
 }
 
 func TestExamLoader_LoadFileMissing(t *testing.T) {
-	if _, err := NewExamLoader().LoadFile("does-not-exam.xml"); err == nil {
+	if _, err := NewFileExamLoader().LoadFile("does-not-exam.xml"); err == nil {
 		t.Fatal("LoadFile: expected error for missing file, got nil")
 	}
 }
@@ -110,16 +118,16 @@ func TestExamLoader_LoadFileMissing(t *testing.T) {
 // exercising the full nested <questionset>><questioncollection>><question>
 // structure end-to-end.
 func TestExamLoader_LoadFileRealRepoExam(t *testing.T) {
-	exam, err := NewExamLoader().LoadFile(filepath.Join("..", "..", "..", "exam1.xml"))
+	exam, err := NewFileExamLoader().LoadFile(filepath.Join("..", "..", "..", "exam1.xml"))
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
-	if exam.Id != "1" || exam.ShortName != "DCACI" {
+	if exam.Id != "1" || exam.ShortName != "DCNA" {
 		t.Fatalf("unexpected exam meta: %+v", exam)
 	}
 	qs := exam.QuestionSet.QuestionCollections
-	if len(qs) != 1 || len(qs[0].Questions) != 3 {
-		t.Fatalf("expected 1 collection with 3 questions, got %d collections", len(qs))
+	if len(qs) != 1 || len(qs[0].Questions) != 5 {
+		t.Fatalf("expected 1 collection with 5 questions, got %d collections", len(qs))
 	}
 	// Question 3 is the drag-and-drop with a bullet (&#8226;) in its description.
 	q3 := qs[0].Questions[2]
