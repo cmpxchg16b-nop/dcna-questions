@@ -13,8 +13,10 @@ import {
   DialogTitle,
   List,
   ListItem,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import { formatDistanceToNow } from "date-fns";
 import { useExamDocs } from "@/hooks/useExamDocs";
 import { ExamSessionExcerpt, mockExamSessions } from "@/api/mockExamSessions";
 
@@ -45,12 +47,21 @@ export default function Home() {
                         {session.ExamShortName} · {session.ExamCode}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Session {session.Id} · Started{" "}
-                        {new Date(session.StartedAt).toLocaleString()}
+                        Started{" "}
+                        <Tooltip
+                          title={new Date(session.StartedAt).toLocaleString()}
+                        >
+                          <Box component="span">
+                            {formatDistanceToNow(new Date(session.StartedAt), {
+                              addSuffix: true,
+                            })}
+                          </Box>
+                        </Tooltip>
                       </Typography>
                     </Box>
                     <Button
                       variant="contained"
+                      sx={{ whiteSpace: "nowrap" }}
                       onClick={() => alert("unimplemented")}
                     >
                       Resume
@@ -58,6 +69,7 @@ export default function Home() {
                     <Button
                       variant="contained"
                       color="error"
+                      sx={{ whiteSpace: "nowrap" }}
                       onClick={() => setSessionToEnd(session)}
                     >
                       End Exam
