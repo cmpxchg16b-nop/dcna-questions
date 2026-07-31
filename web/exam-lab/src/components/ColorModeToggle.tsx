@@ -2,7 +2,7 @@
 
 import { Box, IconButton, Tooltip } from "@mui/material";
 import { useColorScheme } from "@mui/material/styles";
-import BrightnessAutoIcon from "@mui/icons-material/BrightnessAuto";
+import ContrastIcon from "@mui/icons-material/Contrast";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 
@@ -16,7 +16,7 @@ const NEXT_MODE: Record<Mode, Mode> = {
 };
 
 const MODE_ICON: Record<Mode, React.ReactNode> = {
-  system: <BrightnessAutoIcon />,
+  system: <ContrastIcon />,
   light: <LightModeIcon />,
   dark: <DarkModeIcon />,
 };

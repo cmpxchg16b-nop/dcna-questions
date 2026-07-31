@@ -22,6 +22,15 @@ const theme = createTheme({
   shape: {
     borderRadius: 12,
   },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: "9999px",
+        },
+      },
+    },
+  },
 });
 
 export default theme;
