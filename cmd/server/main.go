@@ -2,7 +2,7 @@ package main
 
 import (
 	dcnaquestions "dcna-questions"
-	"dcna-questions/pkg/counter"
+	pkgapicounter "dcna-questions/pkg/api/counter"
 	"dcna-questions/pkg/session"
 
 	pkglog "dcna-questions/pkg/log"
@@ -14,7 +14,7 @@ func main() {
 	sm := session.NewOnMemorySessionManager()
 
 	mux := http.NewServeMux()
-	mux.Handle("/api/counter", counter.NewHandler(sm))
+	mux.Handle("/api/counter", pkgapicounter.NewHandler(sm))
 	mux.Handle("/", dcnaquestions.Handler())
 
 	const addr = ":8080"
