@@ -241,3 +241,53 @@ func (e *Exam) validate() error {
 	}
 	return nil
 }
+
+// ExamSource describes one source of exam documents: a Loader (an abstract type
+// that knows how to decode an Exam from a URL) plus the URLs it provides.
+type ExamSource struct {
+	Loader ExamLoader
+	URLs   []string
+}
+
+// ExamRepository aggregates exam documents drawn from one or more ExamSources.
+type ExamRepository struct {
+	sources []ExamSource
+}
+
+// NewExamRepository constructs an ExamRepository over the given sources.
+func NewExamRepository(sources []ExamSource) *ExamRepository {
+	return &ExamRepository{sources: sources}
+}
+
+// ExamDataEvent is one item emitted by ListExamDocuments: a successfully loaded
+// exam (Data) or, when loading a URL failed, the error (Err). Exactly one of
+// Err or Data is non-nil per event; the consumer distinguishes them by checking
+// the Err field.
+type ExamDataEvent struct {
+	Err  error
+	Data *Exam
+}
+
+// ListExamDocuments streams every exam from every source over a single
+// unbuffered channel of ExamDataEvent, multiplexing successes and failures so
+// the caller can consume them with a single range. On error the error is
+// emitted as an event and loading continues; the callee-spawned goroutine
+// closes the channel once every source has been exhausted. The caller tests for
+// failure by checking the event's Err field.
+func (r *ExamRepository) ListExamDocuments() <-chan ExamDataEvent {
+	events := make(chan ExamDataEvent)
+	go func() {
+		defer close(events)
+		for _, src := range r.sources {
+			for _, url := range src.URLs {
+				exam, err := src.Loader.LoadFrom(url)
+				if err != nil {
+					events <- ExamDataEvent{Err: fmt.Errorf("load exam %q: %w", url, err)}
+					continue
+				}
+				events <- ExamDataEvent{Data: exam}
+			}
+		}
+	}()
+	return events
+}
