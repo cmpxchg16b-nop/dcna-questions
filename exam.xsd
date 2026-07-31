@@ -1,0 +1,223 @@
+<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="title" type="xs:string" />
+  <xs:element name="description" type="xs:string" />
+  <xs:simpleType name="QuestionType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="single-choice" />
+      <xs:enumeration value="multiple-choice" />
+      <xs:enumeration value="drag-and-drop" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="option">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="id" type="xs:string" />
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="options">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="option" minOccurs="1" maxOccurs="unbounded" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="combination">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="option" minOccurs="1" maxOccurs="unbounded" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="connect">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">Represent a connection line in Cisco-flavor drag-and-drop exam question.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="dst" type="xs:string" />
+      <xs:attribute name="src" type="xs:string" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="connectsource">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string" use="required" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="connectdestination">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string" use="required" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="connectcombination">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="connectsource" minOccurs="1" maxOccurs="unbounded" />
+        <xs:element ref="connectdestination" minOccurs="1" maxOccurs="unbounded" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="connectionsolution">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="connect" minOccurs="0" maxOccurs="unbounded" />
+        <xs:element ref="connectcombination" minOccurs="0" maxOccurs="unbounded" />
+      </xs:sequence>
+      <xs:attribute name="requiredUniqueConnections" type="xs:integer" use="required">
+        <xs:annotation>
+          <xs:documentation>Dictating the fixed number of unique connections to make the answer to be valid</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="connectionsolutions">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="connectionsolution" minOccurs="1" maxOccurs="unbounded" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="correctanswer">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="options" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="combination" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="connectionsolutions" minOccurs="0" maxOccurs="1" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="image">
+    <xs:complexType>
+      <xs:attribute name="src" type="xs:string" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="exhibit">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="image" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="exhibits">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="exhibit" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="candidate">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="id" use="required" />
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="candidates">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">Represent a drag-and-drop source area</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="candidate" minOccurs="1" maxOccurs="unbounded" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="drop">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="id" type="xs:string" use="required" />
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="drops">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">Represent a drag-and-drop drop area</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="drop" minOccurs="1" maxOccurs="unbounded"></xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="droparealabel">
+    <xs:annotation>
+      <xs:documentation>Represent a label in a drop area</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  <xs:element name="droparea">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">Represent a drop section in a multi-subsection drops</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="droparealabel" minOccurs="0" maxOccurs="unbounded" />
+        <xs:element ref="drop" minOccurs="1" maxOccurs="unbounded" />
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string" use="required" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="multiareadrop">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">Represent a drag-and-drop drop area that was divided into multiple sub-sections</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="droparea" minOccurs="1" maxOccurs="unbounded"></xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="question">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="description" />
+        <xs:element ref="exhibits" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="options" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="candidates" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="multiareadrop" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="drops" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="correctanswer" minOccurs="1" maxOccurs="1" />
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string" />
+      <xs:attribute name="num" type="xs:integer" />
+      <xs:attribute name="type" type="QuestionType" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="questioncollection">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="question" minOccurs="1" maxOccurs="unbounded" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="questionset">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="questioncollection" minOccurs="1" maxOccurs="unbounded" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="exam">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="title" />
+              <xs:element ref="description" />
+              <xs:element ref="questionset" minOccurs="1" maxOccurs="1" />
+            </xs:sequence>
+            <xs:attribute name="id" type="xs:string" use="required" />
+            <xs:attribute name="shortname" type="xs:string" />
+            <xs:attribute name="code" type="xs:string" />
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
