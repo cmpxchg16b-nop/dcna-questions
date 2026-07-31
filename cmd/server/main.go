@@ -2,7 +2,6 @@ package main
 
 import (
 	dcnaquestions "dcna-questions"
-	pkgapicounter "dcna-questions/pkg/api/counter"
 	pkgapiexamdocs "dcna-questions/pkg/api/examdocs"
 	pkgapiexamsessions "dcna-questions/pkg/api/examsessions"
 	pkgmodelsexamserver "dcna-questions/pkg/models/examserver"
@@ -33,7 +32,6 @@ func main() {
 	examSessionHandler := pkgapiexamsessions.NewExamSessionHandler(sm, examServer, repo)
 
 	mux := http.NewServeMux()
-	mux.Handle("/api/counter", pkgapicounter.NewHandler(sm))
 	mux.Handle("/api/examdocs", examHandler)
 	mux.Handle("/api/examsessions", examSessionHandler)
 	mux.Handle("/api/examsessions/", examSessionHandler)

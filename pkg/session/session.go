@@ -25,70 +25,16 @@ const (
 	DefaultTTL = 7 * 24 * time.Hour
 )
 
-type UserExamSession struct {
-	// Point to an on-going exam
-	ExamId string
-
-	// TableVersion, increment at client-side before every update
-	TblVer int
-
-	// For example answer XML, see the <examanswer></examanswer> enclosure in exam1.xml
-	// When submitting, only <root><examanswer></examanswer></root> is needed, plus some necessary XML preamble in the beginning (see exam1.xml as well)
-	ExamAnswersXML string
-}
-
 // Session holds the server-side state for a single anonymous session. It carries
 // its own id; the counter and expiry are atomics so they can be read and mutated
 // from concurrent requests without a mutex.
 type Session struct {
 	id           string
-	counter      atomic.Int64
-	examSessions sync.Map     // map[string]ExamSession
 	expiresAt    atomic.Int64 // unix nanos
 }
 
 // Id returns the session's identifier.
 func (s *Session) Id() string { return s.id }
-
-// Counter returns the current counter value.
-func (s *Session) Counter() int64 { return s.counter.Load() }
-
-// SetCounter replaces the counter value.
-func (s *Session) SetCounter(v int64) { s.counter.Store(v) }
-
-// IncrCounter increments the counter by one and returns the new value.
-func (s *Session) IncrCounter() int64 { return s.counter.Add(1) }
-
-// ListExams returns the ids of every exam currently tracked by the session. The
-// ids are the keys of the underlying concurrent map. The returned slice should
-// be treated as a snapshot; concurrent updates are not reflected in it.
-func (s *Session) ListExams() []string {
-	var ids []string
-	s.examSessions.Range(func(key, _ any) bool {
-		ids = append(ids, key.(string))
-		return true
-	})
-	return ids
-}
-
-// GetUserExamSessionById returns the ExamSession for the given exam id. If no such exam is
-// tracked by this session yet, a fresh ExamSession seeded with the id is stored
-// and returned (LoadOrStore semantics); the result is therefore never nil.
-// Because ExamSession values are immutable, a returned pointer is a stable
-// snapshot that never races with later updates.
-func (s *Session) GetUserExamSessionById(id string) *UserExamSession {
-	v, _ := s.examSessions.LoadOrStore(id, UserExamSession{ExamId: id})
-	sess := v.(UserExamSession)
-	return &sess
-}
-
-// UpdateUserExamSession atomically replaces the ExamSession for id with new only if the
-// current value equals old. It reports whether the swap succeeded. On failure
-// the caller is responsible for resolving the conflict (e.g. re-reading and
-// retrying), since ExamSession values are immutable and updated via copy.
-func (s *Session) UpdateUserExamSession(id string, old, new UserExamSession) bool {
-	return s.examSessions.CompareAndSwap(id, old, new)
-}
 
 // Expiry returns the time at which the session is no longer valid.
 func (s *Session) Expiry() time.Time { return time.Unix(0, s.expiresAt.Load()) }
