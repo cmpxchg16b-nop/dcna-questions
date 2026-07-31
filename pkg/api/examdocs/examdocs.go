@@ -37,6 +37,11 @@ func (h *ExamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
+	// X-Accel-Buffering is a magic header honored by nginx (and compatible
+	// proxies): "no" disables response buffering for this request so each
+	// streamed line is forwarded to the client immediately instead of being
+	// held until a buffer fills.
+	w.Header().Set("X-Accel-Buffering", "no")
 	enc := json.NewEncoder(w)
 	flusher, _ := w.(http.Flusher)
 

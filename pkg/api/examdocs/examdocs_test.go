@@ -105,6 +105,9 @@ func TestExamHandler(t *testing.T) {
 			wantStatus:      http.StatusOK,
 			wantContentType: "application/x-ndjson",
 			check: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				if got := rr.Header().Get("X-Accel-Buffering"); got != "no" {
+					t.Errorf("X-Accel-Buffering = %q, want no", got)
+				}
 				lines := parseLines(t, rr.Body.String())
 				if len(lines) != 2 {
 					t.Fatalf("got %d lines, want 2 (body %q)", len(lines), rr.Body.String())
