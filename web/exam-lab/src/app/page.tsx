@@ -1,52 +1,70 @@
-'use client';
+"use client";
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Box, Button } from '@mui/material';
-
-// The counter value lives on the server (see Go package counter). These helpers
-// talk to the /api/counter endpoint; relative URLs resolve against the Go server
-// in production (it serves the static export), and against the dev proxy in dev.
-
-async function fetchCounter(): Promise<number> {
-  const res = await fetch('/api/counter');
-  if (!res.ok) throw new Error(`failed to fetch counter: ${res.status}`);
-  const body = await res.json();
-  return body.data as number;
-}
-
-async function incrementCounter(): Promise<number> {
-  const res = await fetch('/api/counter', { method: 'POST' });
-  if (!res.ok) throw new Error(`failed to increment counter: ${res.status}`);
-  const body = await res.json();
-  return body.data as number;
-}
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  List,
+  ListItem,
+  Typography,
+} from "@mui/material";
+import { useExamDocs } from "@/hooks/useExamDocs";
 
 export default function Home() {
-  const queryClient = useQueryClient();
-
-  const { data: counter = 0, isPending } = useQuery({
-    queryKey: ['counter'],
-    queryFn: fetchCounter,
-  });
-
-  // Optimistically reflect the server-returned value: POST returns the new
-  // counter, so we set it directly on the cache instead of refetching.
-  const { mutate: addOne, isPending: isIncrementing } = useMutation({
-    mutationFn: incrementCounter,
-    onSuccess: (value) => {
-      queryClient.setQueryData(['counter'], value);
-    },
-  });
+  const { data: exams, isPending: isExamsPending } = useExamDocs();
 
   return (
     <Box>
-      <Box>{isPending ? '…' : counter}</Box>
-      <Button
-        onClick={() => addOne()}
-        disabled={isPending || isIncrementing}
-      >
-        Add One
-      </Button>
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h4" component="h2" gutterBottom>
+          Exams
+        </Typography>
+        {isExamsPending ? (
+          <Typography>…</Typography>
+        ) : (
+          <List>
+            {exams.map((exam) => (
+              <ListItem key={exam.Id} disableGutters sx={{ mb: 1 }}>
+                <Card sx={{ width: "100%" }}>
+                  <CardContent>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      {/* minWidth: 0 lets the text column shrink so the clamp can
+                          kick in instead of pushing the button off-card. */}
+                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <Typography variant="h6" component="div" noWrap>
+                          {exam.Title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {exam.ShortName} · {exam.Code}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {exam.Description}
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="contained"
+                        onClick={() => alert("unimplemented")}
+                      >
+                        Take
+                      </Button>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </Box>
     </Box>
   );
 }
