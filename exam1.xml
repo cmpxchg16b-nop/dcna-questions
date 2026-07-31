@@ -1,15 +1,19 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:noNamespaceSchemaLocation="exam.xsd">
+<?xml version="1.0" encoding="UTF-8" ?>
+<root
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="exam.xsd"
+>
   <exam id="1" shortname="DCNA" code="DC-01">
-    <title>Implementing Cisco Application Centric Infrastructure</title>
-    <description>Passing this exam earns you the Cisco Certified Specialist - Data Center ACI Implementation certification, and can also be used to meet the concentration exam requirements for the Cisco Certified Network Professional (CCNP) Data Center certification. Passing this exam also can be used towards your recertification goals.
-      Implementing Cisco Application Centric Infrastructure (300-620 DCACI) v1.1 is a 90-minute exam that certifies a candidate's knowledge of Cisco switches in Application Centric Infrastructure (ACI) mode, including configuration, implementation, and management.</description>
+    <title>DN42 Certified Network Associate</title>
+    <description
+    >Passing this exam earns you the DCNA certification, and can also can be used towards your recertification goals.
+    Mastering DN42 techniques (DC-01 DCNA) v1.1 is a 120-minute exam that tests a candidate's knowledge and skills related to network fundamentals, routing and switching, IP connectivity, BGP configuration, connectivity troubleshooting, and automation and programmability.</description>
     <questionset>
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
       <questioncollection>
         <question id="1" type="single-choice">
-          <description>An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix?</description>
+          <description
+          >An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix?</description>
           <options>
             <option
               id="1"
@@ -33,7 +37,8 @@
           </correctanswer>
         </question>
         <question id="2" type="multiple-choice">
-          <description>Refer to the exhibit. An engineer must configure an L3Out peering with the backbone network. The L3Out must forward unicast and multicast traffic over the link.
+          <description
+          >Refer to the exhibit. An engineer must configure an L3Out peering with the backbone network. The L3Out must forward unicast and multicast traffic over the link.
             Which two methods should be used to configure L3Out to meet these requirements? (Choose two.)</description>
           <exhibits>
             <exhibit>
@@ -57,7 +62,8 @@
           </correctanswer>
         </question>
         <question id="3" type="drag-and-drop">
-          <description>An engineer deploys a Cisco ACI fabric. The engineer created a VPC policy group named Allot_MET_RIO7_RIO8 for the enclosure and these objects have been configured:
+          <description
+          >An engineer deploys a Cisco ACI fabric. The engineer created a VPC policy group named Allot_MET_RIO7_RIO8 for the enclosure and these objects have been configured:
             &#8226; Physical Domain Bare_Metal_L3In_Dom
             &#8226; VLAN pool NFVI_VLPool
             &#8226; AAEP NFVI_AAEP
@@ -91,7 +97,8 @@
           </correctanswer>
         </question>
         <question id="4" type="single-choice">
-          <description>Refer to the exhibit. An engineer is investigating a reachability issue in an experimental BGP overlay network. ICMPv6 echo requests from the local router to fdea:6e46:2f1c::1 time out, and traceroute dies several hops into the path. The engineer verifies that the iBGP session to i-bzip9 is established, that no ACLs are blocking ICMPv6, and the rp_filter kernel parameter is set to 0 for all interfaces. Which statement best explains why the pings fail?</description>
+          <description
+          >Refer to the exhibit. An engineer is investigating a reachability issue in an experimental BGP overlay network. ICMPv6 echo requests from the local router to fdea:6e46:2f1c::1 time out, and traceroute dies several hops into the path. The engineer verifies that the iBGP session to i-bzip9 is established, that no ACLs are blocking ICMPv6, and the rp_filter kernel parameter is set to 0 for all interfaces. Which statement best explains why the pings fail?</description>
           <exhibits>
             <exhibit>
               <image src="assets/83b8f88a-0cc4-439f-b838-dca4b015a376.png" />
@@ -123,7 +130,8 @@
           </correctanswer>
         </question>
         <question id="5" type="drag-and-drop">
-          <description>Drag and drop the Cisco ACI filter entry options from the left onto the correct categories on the right indicating what are required or optional parameters.
+          <description
+          >Drag and drop the Cisco ACI filter entry options from the left onto the correct categories on the right indicating what are required or optional parameters.
             Select and Place:</description>
           <candidates>
             <candidate id="1">Name</candidate>
