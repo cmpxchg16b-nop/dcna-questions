@@ -37,6 +37,8 @@ func main() {
 	mux.Handle("/api/examdocs", examHandler)
 	mux.Handle("/api/examsessions", examSessionHandler)
 	mux.Handle("/api/examsessions/{exam_id}", examSessionHandler)
+	mux.Handle("/api/examsessions/{exam_id}/questions", examSessionHandler)
+	mux.Handle("/api/examsessions/{exam_id}/cursors", examSessionHandler)
 	mux.Handle("/", dcnaquestions.Handler())
 
 	const addr = ":8080"

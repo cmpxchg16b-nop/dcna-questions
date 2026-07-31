@@ -42,6 +42,20 @@ type fakeExamServer struct {
 
 	endErr error
 	ended  []examserver.ExamId
+
+	// GetNextQuestion
+	gnqQuestion *question.Question
+	gnqNext     *examserver.QuestionCursor
+	gnqErr      error
+	gnqExamID   string
+	gnqCursorIn *examserver.QuestionCursor
+
+	// SeekCursorTo
+	seekResult   *examserver.QuestionCursor
+	seekErr      error
+	seekExamID   string
+	seekCursorIn *examserver.QuestionCursor
+	seekIndex    int
 }
 
 func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userSessionId string, opts examserver.ExamOptions) (examserver.ExamId, error) {
@@ -67,12 +81,23 @@ func (s *fakeExamServer) EndExamSession(_ context.Context, examId examserver.Exa
 	return s.endErr
 }
 
-func (s *fakeExamServer) GetNextQuestion(context.Context, examserver.ExamId, *examserver.QuestionCursor) (*question.Question, *examserver.QuestionCursor, error) {
-	return nil, nil, nil
+func (s *fakeExamServer) GetNextQuestion(_ context.Context, examId examserver.ExamId, cursor *examserver.QuestionCursor) (*question.Question, *examserver.QuestionCursor, error) {
+	s.gnqExamID = string(examId)
+	s.gnqCursorIn = cursor
+	if s.gnqErr != nil {
+		return nil, nil, s.gnqErr
+	}
+	return s.gnqQuestion, s.gnqNext, nil
 }
 
-func (s *fakeExamServer) SeekCursorTo(context.Context, examserver.ExamId, *examserver.QuestionCursor, int) (*examserver.QuestionCursor, error) {
-	return nil, nil
+func (s *fakeExamServer) SeekCursorTo(_ context.Context, examId examserver.ExamId, cursor *examserver.QuestionCursor, index int) (*examserver.QuestionCursor, error) {
+	s.seekExamID = string(examId)
+	s.seekCursorIn = cursor
+	s.seekIndex = index
+	if s.seekErr != nil {
+		return nil, s.seekErr
+	}
+	return s.seekResult, nil
 }
 
 func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamId, string, bool) (string, error) {
@@ -90,6 +115,26 @@ func newTestExam(id string) *question.Exam {
 				}},
 			},
 		},
+	}
+}
+
+// testQuestion returns a minimal question for assertion targets.
+func testQuestion(id string) *question.Question {
+	return &question.Question{Id: id, Type: question.QuestionTypeSingleChoice}
+}
+
+// ptrCursor boxes a cursor string so it can populate a *examserver.QuestionCursor
+// field in a struct literal.
+func ptrCursor(s string) *examserver.QuestionCursor {
+	c := examserver.QuestionCursor(s)
+	return &c
+}
+
+// decodeJSON unmarshals body into v, failing the test on error.
+func decodeJSON(t *testing.T, body string, v any) {
+	t.Helper()
+	if err := json.Unmarshal([]byte(body), v); err != nil {
+		t.Fatalf("decode body %q: %v", body, err)
 	}
 }
 
@@ -124,6 +169,8 @@ func newTestEnv(t *testing.T, repo *question.ExamRepository, server *fakeExamSer
 	mux := http.NewServeMux()
 	mux.Handle("/api/examsessions", h)
 	mux.Handle("/api/examsessions/{exam_id}", h)
+	mux.Handle("/api/examsessions/{exam_id}/questions", h)
+	mux.Handle("/api/examsessions/{exam_id}/cursors", h)
 	return &testEnv{sm: sm, server: server, sess: sess, mux: mux}
 }
 
@@ -301,6 +348,130 @@ func TestExamSessionHandler(t *testing.T) {
 			target:     "/api/examsessions/sess-x",
 			server:     &fakeExamServer{endErr: errors.New("not found")},
 			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "get next question success",
+			method:     http.MethodGet,
+			target:     "/api/examsessions/sess-1/questions?cursor_id=cur-1",
+			server:     &fakeExamServer{gnqQuestion: testQuestion("q-1"), gnqNext: ptrCursor("cur-2")},
+			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				var got struct {
+					CursorID *string            `json:"cursor_id"`
+					Question *question.Question `json:"question"`
+				}
+				decodeJSON(t, body, &got)
+				if got.CursorID == nil || *got.CursorID != "cur-2" {
+					t.Errorf("cursor_id = %v, want cur-2", got.CursorID)
+				}
+				if got.Question == nil || got.Question.Id != "q-1" {
+					t.Errorf("question = %+v, want id q-1", got.Question)
+				}
+			},
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if s.gnqExamID != "sess-1" {
+					t.Errorf("GetNextQuestion exam id = %q, want sess-1", s.gnqExamID)
+				}
+				if s.gnqCursorIn == nil || string(*s.gnqCursorIn) != "cur-1" {
+					t.Errorf("GetNextQuestion cursor = %v, want cur-1", s.gnqCursorIn)
+				}
+			},
+		},
+		{
+			name:       "get next question no more",
+			method:     http.MethodGet,
+			target:     "/api/examsessions/sess-1/questions",
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				var got struct {
+					CursorID *string            `json:"cursor_id"`
+					Question *question.Question `json:"question"`
+				}
+				decodeJSON(t, body, &got)
+				if got.CursorID != nil {
+					t.Errorf("cursor_id = %v, want null", got.CursorID)
+				}
+				if got.Question != nil {
+					t.Errorf("question = %+v, want null", got.Question)
+				}
+			},
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if s.gnqCursorIn != nil {
+					t.Errorf("initial cursor = %v, want nil", s.gnqCursorIn)
+				}
+			},
+		},
+		{
+			name:       "get next question error",
+			method:     http.MethodGet,
+			target:     "/api/examsessions/sess-1/questions",
+			server:     &fakeExamServer{gnqErr: errors.New("exam not found")},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "seek cursor success",
+			method:     http.MethodPut,
+			target:     "/api/examsessions/sess-1/cursors?cursor_id=cur-1&index=3",
+			server:     &fakeExamServer{seekResult: ptrCursor("cur-2")},
+			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				var got struct {
+					CursorID string `json:"cursor_id"`
+				}
+				decodeJSON(t, body, &got)
+				if got.CursorID != "cur-2" {
+					t.Errorf("cursor_id = %q, want cur-2", got.CursorID)
+				}
+			},
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if s.seekExamID != "sess-1" {
+					t.Errorf("SeekCursorTo exam id = %q, want sess-1", s.seekExamID)
+				}
+				if s.seekIndex != 3 {
+					t.Errorf("SeekCursorTo index = %d, want 3", s.seekIndex)
+				}
+				if s.seekCursorIn == nil || string(*s.seekCursorIn) != "cur-1" {
+					t.Errorf("SeekCursorTo cursor = %v, want cur-1", s.seekCursorIn)
+				}
+			},
+		},
+		{
+			name:       "seek cursor missing index",
+			method:     http.MethodPut,
+			target:     "/api/examsessions/sess-1/cursors?cursor_id=cur-1",
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "seek cursor invalid index",
+			method:     http.MethodPut,
+			target:     "/api/examsessions/sess-1/cursors?index=-1",
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "seek cursor error",
+			method:     http.MethodPut,
+			target:     "/api/examsessions/sess-1/cursors?index=0",
+			server:     &fakeExamServer{seekErr: errors.New("exam is not seekable")},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "method not allowed on questions",
+			method:     http.MethodPost,
+			target:     "/api/examsessions/sess-1/questions",
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusMethodNotAllowed,
+			wantAllow:  "GET",
+		},
+		{
+			name:       "method not allowed on cursors",
+			method:     http.MethodGet,
+			target:     "/api/examsessions/sess-1/cursors",
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusMethodNotAllowed,
+			wantAllow:  "PUT",
 		},
 		{
 			name:       "method not allowed on collection",

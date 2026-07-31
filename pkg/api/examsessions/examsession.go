@@ -7,12 +7,19 @@
 //	GET    /api/examsessions           list the caller's sessions as
 //	        {"exam_session_ids": ["...", ...]}.
 //	DELETE /api/examsessions/{exam_id} terminate the named session.
+//	GET    /api/examsessions/{exam_id}/questions?cursor_id=<cursor>
+//	        fetch the next question via GetNextQuestion; responds
+//	        {"cursor_id": <next or null>, "question": {...} or null}.
+//	PUT    /api/examsessions/{exam_id}/cursors?cursor_id=<cursor>&index=<n>
+//	        reposition the cursor via SeekCursorTo; responds {"cursor_id": <new>}.
 //
 // Mount it with the Go 1.22+ ServeMux so the {exam_id} wildcard reaches
 // r.PathValue, e.g.:
 //
 //	mux.Handle("/api/examsessions", h)
 //	mux.Handle("/api/examsessions/{exam_id}", h)
+//	mux.Handle("/api/examsessions/{exam_id}/questions", h)
+//	mux.Handle("/api/examsessions/{exam_id}/cursors", h)
 //
 // The caller's user session is resolved from the request context via the
 // SessionManager (see package session); it must already be attached by the
@@ -23,6 +30,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"dcna-questions/pkg/models/examserver"
 	"dcna-questions/pkg/models/question"
@@ -70,8 +79,23 @@ type listResponse struct {
 	ExamSessionIDs []string `json:"exam_session_ids"`
 }
 
-// ServeHTTP routes the request by HTTP method and the presence of the {exam_id}
-// path value (populated when mounted at /api/examsessions/{exam_id}).
+// nextQuestionResponse is the JSON body of a successful GET .../questions. Both
+// fields are null when the session has no more questions.
+type nextQuestionResponse struct {
+	CursorID *string            `json:"cursor_id"`
+	Question *question.Question `json:"question"`
+}
+
+// seekCursorResponse is the JSON body of a successful PUT .../cursors.
+type seekCursorResponse struct {
+	CursorID string `json:"cursor_id"`
+}
+
+// ServeHTTP routes the request by HTTP method and path. The {exam_id} path
+// value is populated when mounted at /api/examsessions/{exam_id} (and its
+// sub-resources); the questions/cursors sub-resources are distinguished by the
+// URL path suffix. Exam session ids are UUIDs, so a suffix can never collide
+// with an id.
 func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sess, ok := h.sm.GetSessionFromContext(r.Context())
 	if !ok {
@@ -81,14 +105,35 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	examID := r.PathValue("exam_id")
 	switch {
-	case examID == "" && r.Method == http.MethodPost:
-		h.handleCreate(w, r, sess.Id())
-	case examID == "" && r.Method == http.MethodGet:
-		h.handleList(w, r, sess.Id())
-	case examID != "" && r.Method == http.MethodDelete:
-		h.handleDelete(w, r, examserver.ExamId(examID))
+	case examID == "":
+		// Collection: POST create, GET list.
+		switch r.Method {
+		case http.MethodPost:
+			h.handleCreate(w, r, sess.Id())
+		case http.MethodGet:
+			h.handleList(w, r, sess.Id())
+		default:
+			h.methodNotAllowed(w, "GET, POST")
+		}
+	case strings.HasSuffix(r.URL.Path, "/questions"):
+		if r.Method != http.MethodGet {
+			h.methodNotAllowed(w, "GET")
+			return
+		}
+		h.handleGetNextQuestion(w, r, examserver.ExamId(examID))
+	case strings.HasSuffix(r.URL.Path, "/cursors"):
+		if r.Method != http.MethodPut {
+			h.methodNotAllowed(w, "PUT")
+			return
+		}
+		h.handleSeekCursor(w, r, examserver.ExamId(examID))
 	default:
-		h.methodNotAllowed(w, examID != "")
+		// Item: DELETE.
+		if r.Method != http.MethodDelete {
+			h.methodNotAllowed(w, "DELETE")
+			return
+		}
+		h.handleDelete(w, r, examserver.ExamId(examID))
 	}
 }
 
@@ -157,13 +202,48 @@ func (h *ExamSessionHandler) handleDelete(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// methodNotAllowed reports 405 with an Allow header tailored to whether the
-// request targeted the collection or a single resource.
-func (h *ExamSessionHandler) methodNotAllowed(w http.ResponseWriter, itemLevel bool) {
-	allow := "GET, POST"
-	if itemLevel {
-		allow = "DELETE"
+// handleGetNextQuestion returns the next question in the session plus the cursor
+// to continue from. An absent cursor_id starts from the beginning; when no more
+// questions remain, both cursor_id and question are null.
+func (h *ExamSessionHandler) handleGetNextQuestion(w http.ResponseWriter, r *http.Request, examID examserver.ExamId) {
+	q, next, err := h.server.GetNextQuestion(r.Context(), examID, parseCursorID(r))
+	if err != nil {
+		// examserver's sentinels are unexported, so not-found cannot be told
+		// apart from an invalid cursor here; surface a generic server error.
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	var cursorID *string
+	if next != nil {
+		s := string(*next)
+		cursorID = &s
+	}
+	writeJSON(w, nextQuestionResponse{CursorID: cursorID, Question: q})
+}
+
+// handleSeekCursor repositions the session cursor to a new virtual index and
+// returns the fresh cursor to read from. The index is the required "index"
+// query parameter.
+func (h *ExamSessionHandler) handleSeekCursor(w http.ResponseWriter, r *http.Request, examID examserver.ExamId) {
+	index, ok := parseIndex(r)
+	if !ok {
+		http.Error(w, `invalid or missing "index" query parameter`, http.StatusBadRequest)
+		return
+	}
+	repositioned, err := h.server.SeekCursorTo(r.Context(), examID, parseCursorID(r), index)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	cursorID := ""
+	if repositioned != nil {
+		cursorID = string(*repositioned)
+	}
+	writeJSON(w, seekCursorResponse{CursorID: cursorID})
+}
+
+// methodNotAllowed reports 405 with the given methods in the Allow header.
+func (h *ExamSessionHandler) methodNotAllowed(w http.ResponseWriter, allow string) {
 	w.Header().Set("Allow", allow)
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
@@ -183,6 +263,31 @@ func decodeCreate(r *http.Request) (createRequest, bool) {
 		return req, false
 	}
 	return req, true
+}
+
+// parseCursorID reads the optional cursor_id query parameter. An empty or
+// absent cursor_id yields nil, which ExamServer treats as "start from the
+// beginning".
+func parseCursorID(r *http.Request) *examserver.QuestionCursor {
+	s := r.URL.Query().Get("cursor_id")
+	if s == "" {
+		return nil
+	}
+	c := examserver.QuestionCursor(s)
+	return &c
+}
+
+// parseIndex reads the required "index" query parameter as a non-negative int.
+func parseIndex(r *http.Request) (int, bool) {
+	s := r.URL.Query().Get("index")
+	if s == "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0, false
+	}
+	return n, true
 }
 
 // writeJSON encodes v as the response body.
