@@ -3,7 +3,9 @@ package main
 import (
 	dcnaquestions "dcna-questions"
 	pkgapicounter "dcna-questions/pkg/api/counter"
-	"dcna-questions/pkg/session"
+	pkgapiexam "dcna-questions/pkg/api/exam"
+	pkgmodelsquestion "dcna-questions/pkg/models/question"
+	pkgsession "dcna-questions/pkg/session"
 
 	pkglog "dcna-questions/pkg/log"
 	"log"
@@ -11,10 +13,20 @@ import (
 )
 
 func main() {
-	sm := session.NewOnMemorySessionManager()
+	sources := []pkgmodelsquestion.ExamSource{
+		{
+			Loader: pkgmodelsquestion.NewFileExamLoader(),
+			URLs:   []string{"exam1.xml"},
+		},
+	}
+	repo := pkgmodelsquestion.NewExamRepository(sources)
+	examHandler := pkgapiexam.NewExamHandler(repo)
+
+	sm := pkgsession.NewOnMemorySessionManager()
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/counter", pkgapicounter.NewHandler(sm))
+	mux.Handle("/api/examdocs", examHandler)
 	mux.Handle("/", dcnaquestions.Handler())
 
 	const addr = ":8080"
@@ -22,7 +34,7 @@ func main() {
 
 	var h http.Handler = mux
 	h = pkglog.WithSessionAwaredLog(nil, sm, h)
-	h = session.WithSessionId(h, sm)
+	h = pkgsession.WithSessionId(h, sm)
 
 	if err := http.ListenAndServe(addr, h); err != nil {
 		log.Fatal(err)
