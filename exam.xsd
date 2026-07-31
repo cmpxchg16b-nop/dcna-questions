@@ -278,11 +278,34 @@
       <xs:sequence>
         <xs:element ref="answer" minOccurs="0" maxOccurs="unbounded" />
       </xs:sequence>
-      <xs:attribute name="examCollectionIndex" type="xs:integer" use="required">
-        <xs:annotation>
-          <xs:documentation xml:lang="en">Zero-based index</xs:documentation>
-        </xs:annotation>
-      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+  <xs:simpleType name="OverallResultType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="pass" />
+      <xs:enumeration value="immediate" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="overallresult" type="OverallResultType" />
+  <xs:element name="scoreresult">
+    <xs:complexType>
+      <xs:attribute name="earnedScore" type="xs:float" use="required" />
+      <xs:attribute name="totalScore" type="xs:float" use="required" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="questionscore">
+    <xs:complexType>
+      <xs:attribute name="questionId" type="xs:string" />
+      <xs:attribute name="scoreEarned" type="xs:float" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="assessment">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="overallresult" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="scoreresult" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="questionscore" minOccurs="0" maxOccurs="unbounded" />
+      </xs:sequence>
     </xs:complexType>
   </xs:element>
   <xs:element name="root">
@@ -290,6 +313,7 @@
       <xs:sequence>
         <xs:element ref="exam" minOccurs="0" maxOccurs="unbounded" />
         <xs:element ref="examanswer" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="assessment" minOccurs="0" maxOccurs="1" />
       </xs:sequence>
     </xs:complexType>
   </xs:element>

@@ -33,18 +33,6 @@ var (
 	errEmptyExam     = errors.New("exam has no questions")
 )
 
-type UserExamSession struct {
-	// Point to an on-going exam
-	ExamId string
-
-	// TableVersion, increment at client-side before every update
-	TblVer int
-
-	// For example answer XML, see the <examanswer></examanswer> enclosure in exam1.xml
-	// When submitting, only <root><examanswer></examanswer></root> is needed, plus some necessary XML preamble in the beginning (see exam1.xml as well)
-	ExamAnswersXML string
-}
-
 type ExamServer interface {
 	// Start a new exam session
 	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error)
@@ -342,6 +330,11 @@ type OnMemoryExamSession struct {
 	// and each question's options. It is owned by the actor goroutine (touched
 	// only inside dispatch closures) and is therefore lock-free.
 	rng *rand.Rand
+
+	// For example answer XML, see the <examanswer></examanswer> enclosure in exam1.xml
+	// When submitting, only <root><examanswer></examanswer></root> is needed, plus some necessary XML preamble in the beginning (see exam1.xml as well)
+	// Saves the user's latest submitted answer, if checkOnly is set to true, this field won't be updated.
+	ExamAnswersXML string
 }
 
 // cachedQuestion returns the question at actualIdx, building and caching a copy
