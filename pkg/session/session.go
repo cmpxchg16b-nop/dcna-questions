@@ -25,13 +25,15 @@ const (
 	DefaultTTL = 7 * 24 * time.Hour
 )
 
-type ExamSession struct {
+type UserExamSession struct {
 	// Point to an on-going exam
 	ExamId string
 
 	// TableVersion, increment at client-side before every update
 	TblVer int
 
+	// For example answer XML, see the <examanswer></examanswer> enclosure in exam1.xml
+	// When submitting, only <root><examanswer></examanswer></root> is needed, plus some necessary XML preamble in the beginning (see exam1.xml as well)
 	ExamAnswersXML string
 }
 
@@ -69,22 +71,22 @@ func (s *Session) ListExams() []string {
 	return ids
 }
 
-// GetExamById returns the ExamSession for the given exam id. If no such exam is
+// GetUserExamSessionById returns the ExamSession for the given exam id. If no such exam is
 // tracked by this session yet, a fresh ExamSession seeded with the id is stored
 // and returned (LoadOrStore semantics); the result is therefore never nil.
 // Because ExamSession values are immutable, a returned pointer is a stable
 // snapshot that never races with later updates.
-func (s *Session) GetExamById(id string) *ExamSession {
-	v, _ := s.examSessions.LoadOrStore(id, ExamSession{ExamId: id})
-	sess := v.(ExamSession)
+func (s *Session) GetUserExamSessionById(id string) *UserExamSession {
+	v, _ := s.examSessions.LoadOrStore(id, UserExamSession{ExamId: id})
+	sess := v.(UserExamSession)
 	return &sess
 }
 
-// UpdateExam atomically replaces the ExamSession for id with new only if the
+// UpdateUserExamSession atomically replaces the ExamSession for id with new only if the
 // current value equals old. It reports whether the swap succeeded. On failure
 // the caller is responsible for resolving the conflict (e.g. re-reading and
 // retrying), since ExamSession values are immutable and updated via copy.
-func (s *Session) UpdateExam(id string, old, new ExamSession) bool {
+func (s *Session) UpdateUserExamSession(id string, old, new UserExamSession) bool {
 	return s.examSessions.CompareAndSwap(id, old, new)
 }
 
