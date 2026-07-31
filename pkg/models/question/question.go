@@ -158,6 +158,42 @@ type Exam struct {
 	QuestionSet QuestionSet `xml:"questionset" json:"questionSet"`
 }
 
+// ExamExcerpt is a lightweight projection of an Exam that carries its
+// identifying metadata plus aggregate counts derived from the first question
+// collection. It has no behavior: it exists to expose a small, stable summary
+// of an exam without handing consumers the full document graph.
+type ExamExcerpt struct {
+	Id           string
+	ShortName    string
+	Code         string
+	Title        PlainText
+	Description  PlainText
+	NumQuestions int
+	TotalScores  int
+}
+
+// ExamExcerptFrom builds an ExamExcerpt from an Exam. NumQuestions is the
+// number of questions in the first question collection and TotalScores is the
+// sum of their scores; both are zero when the exam has no question collections.
+func ExamExcerptFrom(e *Exam) ExamExcerpt {
+	excerpt := ExamExcerpt{
+		Id:          e.Id,
+		ShortName:   e.ShortName,
+		Code:        e.Code,
+		Title:       e.Title,
+		Description: e.Description,
+	}
+	if len(e.QuestionSet.QuestionCollections) == 0 {
+		return excerpt
+	}
+	qc := e.QuestionSet.QuestionCollections[0]
+	excerpt.NumQuestions = len(qc.Questions)
+	for _, q := range qc.Questions {
+		excerpt.TotalScores += q.Score
+	}
+	return excerpt
+}
+
 // namedEntities extends the predefined XML entities (amp, lt, gt, apos, quot,
 // which encoding/xml resolves by itself) with the full HTML named-entity table.
 //

@@ -8,8 +8,8 @@ import (
 	"dcna-questions/pkg/models/question"
 )
 
-// ExamHandler is an http.Handler that lists exam documents. It serves the exams
-// aggregated by an ExamRepository as JSON and is unconcerned with exam sessions
+// ExamHandler is an http.Handler that lists exam documents. It streams the exams
+// aggregated by an ExamRepository as NDJSON and is unconcerned with exam sessions
 // or user sessions.
 type ExamHandler struct {
 	repo *question.ExamRepository
@@ -20,36 +20,58 @@ func NewExamHandler(repo *question.ExamRepository) *ExamHandler {
 	return &ExamHandler{repo: repo}
 }
 
-// ServeHTTP implements http.Handler. A GET request responds with the
-// repository's exam documents encoded as a JSON array.
+// ServeHTTP implements http.Handler. A GET request streams the repository's exam
+// documents as NDJSON (Content-Type application/x-ndjson), one JSON object per
+// line, emitting each exam as soon as it is loaded rather than buffering the
+// whole set. Each line is either {"Data":{...}} for a loaded exam or
+// {"Err":"..."} when loading a URL failed; the consumer checks the Err field to
+// detect failures. Non-GET methods respond 405.
 //
-// The ExamRepository stream is fully drained before responding: even if a
-// source fails to load, the handler keeps reading so the producer goroutine
-// completes and closes its channel. If any error occurred the handler responds
-// 500 with the first error (rather than serving a silently partial list);
-// non-GET methods respond 405.
+// Because streaming begins before every source has been loaded, the status is
+// committed up front, so load failures are reported in-band as Err lines rather
+// than as an HTTP error status.
 func (h *ExamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	exams := make([]*question.Exam, 0)
-	var firstErr error
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	enc := json.NewEncoder(w)
+	flusher, _ := w.(http.Flusher)
+
+	// If the client disconnects mid-stream, keep draining the channel (discarding
+	// events) so the producer goroutine, which sends on an unbuffered channel,
+	// is not left blocked forever.
+	clientGone := false
 	for ev := range h.repo.ListExamDocuments() {
-		if ev.Err != nil {
-			if firstErr == nil {
-				firstErr = ev.Err
-			}
+		if clientGone {
 			continue
 		}
-		exams = append(exams, ev.Data)
+		var data *question.ExamExcerpt
+		if ev.Data != nil {
+			excerpt := question.ExamExcerptFrom(ev.Data)
+			data = &excerpt
+		}
+		line := ndjsonLine{Data: data}
+		if ev.Err != nil {
+			line.Err = ev.Err.Error()
+		}
+		if err := enc.Encode(line); err != nil {
+			clientGone = true
+			continue
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
 	}
-	if firstErr != nil {
-		http.Error(w, firstErr.Error(), http.StatusInternalServerError)
-		return
-	}
+}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(exams)
+// ndjsonLine is the on-the-wire form of one streamed ExamDataEvent. Err holds the
+// failure message when loading a URL failed; it is serialized as a string
+// because a raw error interface value marshals to {}. Exactly one of Err or Data
+// is set per line.
+type ndjsonLine struct {
+	Err  string                `json:"Err,omitempty"`
+	Data *question.ExamExcerpt `json:"Data,omitempty"`
 }
