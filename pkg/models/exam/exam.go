@@ -35,13 +35,13 @@ var (
 
 type ExamServer interface {
 	// Start a new exam session
-	StartNewExam(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error)
+	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error)
 
 	// List started exam sessions of a given user session
-	ListExams(ctx context.Context, userSessionId string) []ExamId
+	ListExamSessions(ctx context.Context, userSessionId string) []ExamId
 
 	// Terminate the specified exam session
-	EndExam(ctx context.Context, examId ExamId) error
+	EndExamSession(ctx context.Context, examId ExamId) error
 
 	// the initial cursor should be nil
 	// if has more, `nextCursor` won't be nil
@@ -64,7 +64,7 @@ type ExamServer interface {
 // make Shutdown idempotent) guard session state.
 //
 // The server holds no question bank and no RNG: both live per session (see
-// OnMemoryExamSession), supplied through StartNewExam. Each session's RNG is
+// OnMemoryExamSession), supplied through StartNewExamSession. Each session's RNG is
 // only ever touched inside closures run by the actor goroutine, so it remains
 // lock-free.
 type OnMemoryExamServer struct {
@@ -83,7 +83,7 @@ type OnMemoryExamServer struct {
 }
 
 // NewOnMemoryExamServer constructs an in-memory exam server. The exam options,
-// question bank, and RNG are all supplied per exam via StartNewExam, not held by
+// question bank, and RNG are all supplied per exam via StartNewExamSession, not held by
 // the server.
 func NewOnMemoryExamServer() *OnMemoryExamServer {
 	return &OnMemoryExamServer{
@@ -129,7 +129,7 @@ func (srv *OnMemoryExamServer) dispatch(ctx context.Context, cmd func()) error {
 	}
 }
 
-func (srv *OnMemoryExamServer) StartNewExam(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error) {
+func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error) {
 	type result struct {
 		examId ExamId
 		err    error
@@ -156,7 +156,7 @@ func (srv *OnMemoryExamServer) StartNewExam(ctx context.Context, exam *pkgmodelq
 	}
 }
 
-func (srv *OnMemoryExamServer) ListExams(ctx context.Context, userSessionId string) []ExamId {
+func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userSessionId string) []ExamId {
 	type result struct{ ids []ExamId }
 	resp := make(chan result, 1)
 	cmd := func() {
@@ -179,7 +179,7 @@ func (srv *OnMemoryExamServer) ListExams(ctx context.Context, userSessionId stri
 	}
 }
 
-func (srv *OnMemoryExamServer) EndExam(ctx context.Context, examId ExamId) error {
+func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamId) error {
 	type result struct{ err error }
 	resp := make(chan result, 1)
 	cmd := func() {

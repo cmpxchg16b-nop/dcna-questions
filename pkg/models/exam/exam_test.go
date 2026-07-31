@@ -8,9 +8,9 @@ import (
 	pkgmodelquestions "dcna-questions/pkg/models/question"
 )
 
-// TestStartNewExam_WalksAllQuestions loads the real exam1.xml and confirms that
+// TestStartNewExamSession_WalksAllQuestions loads the real exam1.xml and confirms that
 // a fresh session presents every question in its question collection, in order.
-func TestStartNewExam_WalksAllQuestions(t *testing.T) {
+func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 	exam, err := pkgmodelquestions.NewFileExamLoader().LoadFile(filepath.Join("..", "..", "..", "exam1.xml"))
 	if err != nil {
 		t.Fatalf("load exam: %v", err)
@@ -22,9 +22,9 @@ func TestStartNewExam_WalksAllQuestions(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExam(ctx, exam, "user-1", ExamOptionSeekable)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable)
 	if err != nil {
-		t.Fatalf("StartNewExam: %v", err)
+		t.Fatalf("StartNewExamSession: %v", err)
 	}
 
 	var seen []string
@@ -55,29 +55,29 @@ func TestStartNewExam_WalksAllQuestions(t *testing.T) {
 	}
 }
 
-// TestStartNewExam_EmptyExam verifies that an exam with no questions is rejected.
-func TestStartNewExam_EmptyExam(t *testing.T) {
+// TestStartNewExamSession_EmptyExam verifies that an exam with no questions is rejected.
+func TestStartNewExamSession_EmptyExam(t *testing.T) {
 	srv := NewOnMemoryExamServer()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	if _, err := srv.StartNewExam(ctx, nil, "user-1", 0); err != errEmptyExam {
+	if _, err := srv.StartNewExamSession(ctx, nil, "user-1", 0); err != errEmptyExam {
 		t.Fatalf("expected errEmptyExam for nil exam, got %v", err)
 	}
 
 	empty := &pkgmodelquestions.Exam{Id: "x"}
-	if _, err := srv.StartNewExam(ctx, empty, "user-1", 0); err != errEmptyExam {
+	if _, err := srv.StartNewExamSession(ctx, empty, "user-1", 0); err != errEmptyExam {
 		t.Fatalf("expected errEmptyExam for empty exam, got %v", err)
 	}
 }
 
-// TestStartNewExam_RandomCollPicksOneCollection builds a synthetic exam with
+// TestStartNewExamSession_RandomCollPicksOneCollection builds a synthetic exam with
 // several collections and, with ExamOptionRandomQuestionColl set, confirms the
 // session is backed by exactly one collection's questions (a subset), not the
 // flattened set.
-func TestStartNewExam_RandomCollPicksOneCollection(t *testing.T) {
+func TestStartNewExamSession_RandomCollPicksOneCollection(t *testing.T) {
 	mkQ := func(id string) pkgmodelquestions.Question {
 		return pkgmodelquestions.Question{Id: id, Type: pkgmodelquestions.QuestionTypeSingleChoice}
 	}
@@ -98,9 +98,9 @@ func TestStartNewExam_RandomCollPicksOneCollection(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExam(ctx, exam, "user-1", ExamOptionRandomQuestionColl|ExamOptionSeekable)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionRandomQuestionColl|ExamOptionSeekable)
 	if err != nil {
-		t.Fatalf("StartNewExam: %v", err)
+		t.Fatalf("StartNewExamSession: %v", err)
 	}
 
 	// All questions in the chosen collection share their leading letter; the
@@ -133,9 +133,9 @@ func TestStartNewExam_RandomCollPicksOneCollection(t *testing.T) {
 	}
 }
 
-// TestStartNewExam_FlattensCollectionsByDefault confirms that without
+// TestStartNewExamSession_FlattensCollectionsByDefault confirms that without
 // ExamOptionRandomQuestionColl, every question across all collections is shown.
-func TestStartNewExam_FlattensCollectionsByDefault(t *testing.T) {
+func TestStartNewExamSession_FlattensCollectionsByDefault(t *testing.T) {
 	mkQ := func(id string) pkgmodelquestions.Question {
 		return pkgmodelquestions.Question{Id: id, Type: pkgmodelquestions.QuestionTypeSingleChoice}
 	}
@@ -155,9 +155,9 @@ func TestStartNewExam_FlattensCollectionsByDefault(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExam(ctx, exam, "user-1", ExamOptionSeekable)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable)
 	if err != nil {
-		t.Fatalf("StartNewExam: %v", err)
+		t.Fatalf("StartNewExamSession: %v", err)
 	}
 
 	var n int
