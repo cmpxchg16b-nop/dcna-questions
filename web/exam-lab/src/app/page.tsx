@@ -32,54 +32,63 @@ export default function Home() {
         <Typography variant="h4" component="h2" gutterBottom>
           Exam Sessions
         </Typography>
-        <Typography gutterBottom>Here are the ongoing exam sessions</Typography>
-        <List>
-          {mockExamSessions.map((session) => (
-            <ListItem key={session.Id} disableGutters sx={{ mb: 1 }}>
-              <Card sx={{ width: "100%" }}>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                      <Typography variant="h6" component="div" noWrap>
-                        {session.ExamTitle}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {session.ExamShortName} · {session.ExamCode}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Started{" "}
-                        <Tooltip
-                          title={new Date(session.StartedAt).toLocaleString()}
-                        >
-                          <Box component="span">
-                            {formatDistanceToNow(new Date(session.StartedAt), {
-                              addSuffix: true,
-                            })}
-                          </Box>
-                        </Tooltip>
-                      </Typography>
+        <Typography gutterBottom>
+          {mockExamSessions.length > 0
+            ? "Here are the ongoing exam sessions"
+            : "No ongoing exam sessions."}
+        </Typography>
+        {mockExamSessions.length > 0 && (
+          <List>
+            {mockExamSessions.map((session) => (
+              <ListItem key={session.Id} disableGutters sx={{ mb: 1 }}>
+                <Card sx={{ width: "100%" }}>
+                  <CardContent>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <Typography variant="h6" component="div" noWrap>
+                          {session.ExamTitle}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {session.ExamShortName} · {session.ExamCode}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Started{" "}
+                          <Tooltip
+                            title={new Date(session.StartedAt).toLocaleString()}
+                          >
+                            <Box component="span">
+                              {formatDistanceToNow(
+                                new Date(session.StartedAt),
+                                {
+                                  addSuffix: true,
+                                },
+                              )}
+                            </Box>
+                          </Tooltip>
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="contained"
+                        sx={{ whiteSpace: "nowrap" }}
+                        onClick={() => alert("unimplemented")}
+                      >
+                        Resume
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="error"
+                        sx={{ whiteSpace: "nowrap" }}
+                        onClick={() => setSessionToEnd(session)}
+                      >
+                        End Exam
+                      </Button>
                     </Box>
-                    <Button
-                      variant="contained"
-                      sx={{ whiteSpace: "nowrap" }}
-                      onClick={() => alert("unimplemented")}
-                    >
-                      Resume
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="error"
-                      sx={{ whiteSpace: "nowrap" }}
-                      onClick={() => setSessionToEnd(session)}
-                    >
-                      End Exam
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            </ListItem>
-          ))}
-        </List>
+                  </CardContent>
+                </Card>
+              </ListItem>
+            ))}
+          </List>
+        )}
       </Box>
 
       <Dialog
