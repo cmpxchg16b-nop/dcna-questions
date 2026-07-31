@@ -120,50 +120,58 @@ export default function Home() {
         <Typography variant="h4" component="h2" gutterBottom>
           Exams
         </Typography>
-        <Typography gutterBottom>Here are the exams you can take</Typography>
+        <Typography gutterBottom>
+          {!isExamsPending && exams.length === 0
+            ? "No exam is found"
+            : "Here are the exams you can take"}
+        </Typography>
         {isExamsPending ? (
           <Typography>…</Typography>
         ) : (
-          <List>
-            {exams.map((exam) => (
-              <ListItem key={exam.Id} disableGutters sx={{ mb: 1 }}>
-                <Card sx={{ width: "100%" }}>
-                  <CardContent>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      {/* minWidth: 0 lets the text column shrink so the clamp can
-                          kick in instead of pushing the button off-card. */}
-                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <Typography variant="h6" component="div" noWrap>
-                          {exam.Title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {exam.ShortName} · {exam.Code}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                          }}
-                        >
-                          {exam.Description}
-                        </Typography>
-                      </Box>
-                      <Button
-                        variant="contained"
-                        onClick={() => alert("unimplemented")}
+          exams.length > 0 && (
+            <List>
+              {exams.map((exam) => (
+                <ListItem key={exam.Id} disableGutters sx={{ mb: 1 }}>
+                  <Card sx={{ width: "100%" }}>
+                    <CardContent>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 2 }}
                       >
-                        Take
-                      </Button>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </ListItem>
-            ))}
-          </List>
+                        {/* minWidth: 0 lets the text column shrink so the clamp can
+                          kick in instead of pushing the button off-card. */}
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                          <Typography variant="h6" component="div" noWrap>
+                            {exam.Title}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {exam.ShortName} · {exam.Code}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {exam.Description}
+                          </Typography>
+                        </Box>
+                        <Button
+                          variant="contained"
+                          onClick={() => alert("unimplemented")}
+                        >
+                          Take
+                        </Button>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </ListItem>
+              ))}
+            </List>
+          )
         )}
       </Box>
     </Box>
