@@ -1,6 +1,7 @@
 /* Body background/text colors and color-scheme are owned by MUI's CssBaseline
-   (see src/theme.ts and app/providers.tsx), which follows the OS theme via
-   prefers-color-scheme. Keep this file for layout-only resets. */
+   (see src/theme.ts and app/providers.tsx), driven by the user's lightness
+   preference (system / light / dark) via <html data-mui-color-scheme>.
+   Keep this file for layout-only resets. */
 
 html {
   height: 100%;

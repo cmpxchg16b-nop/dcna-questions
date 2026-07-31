@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Box } from "@mui/material";
+import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";
+import ColorModeToggle from "@/components/ColorModeToggle";
 import { Providers } from "./providers";
 import { Suspense } from "react";
 import "./globals.css";
@@ -26,9 +28,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    // suppressHydrationWarning: InitColorSchemeScript sets
+    // data-mui-color-scheme on <html> before hydration, which React would
+    // otherwise flag as a server/client attribute mismatch.
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
+    >
       <body>
+        {/* Applies the persisted lightness preference (localStorage
+            "mui-mode", default "system") before first paint so the page
+            never flashes the wrong scheme. */}
+        <InitColorSchemeScript />
         <Providers>
+          <ColorModeToggle />
           {/* Layout-level gutters so page content never touches the viewport
               edges. Responsive padding: 16px on phones, 24px on sm, 32px on
               md and up. flexGrow lets the main region fill the flex-column
