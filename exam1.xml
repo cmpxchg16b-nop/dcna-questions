@@ -1,4 +1,4 @@
-<exam id="1" shortname="DCACI" code="300-620">
+<exam id="1" shortname="DCNA" code="DC-01">
   <title>Implementing Cisco Application Centric Infrastructure</title>
   <description
   >Passing this exam earns you the Cisco Certified Specialist - Data Center ACI Implementation certification, and can also be used to meet the concentration exam requirements for the Cisco Certified Network Professional (CCNP) Data Center certification. Passing this exam also can be used towards your recertification goals.
@@ -89,6 +89,39 @@
 
             <!-- in some case, a drag-and-drop question can also have multiple correct answers, then we just define more connectionsolution objects -->
           </connectionsolutions>
+        </correctanswer>
+      </question>
+      <question id="4" num="4" type="single-choice">
+        <description
+        >Refer to the exhibit. An engineer is investigating a reachability issue in an experimental BGP overlay network. ICMPv6 echo requests from the local router to fdea:6e46:2f1c::1 time out, and traceroute dies several hops into the path. The engineer verifies that the iBGP session to i-bzip9 is established, that no ACLs are blocking ICMPv6, and the rp_filter kernel parameter is set to 0 for all interfaces. Which statement best explains why the pings fail?</description>
+        <exhibits>
+          <exhibit>
+            <image src="assets/83b8f88a-0cc4-439f-b838-dca4b015a376.png" />
+          </exhibit>
+        </exhibits>
+        <options>
+          <option
+            id="1"
+          >A link-local address cannot be used as the BGP next hop for a global unicast prefix.</option>
+          <option
+            id="2"
+          >The MED value of 100 prevents the route from being installed into the routing table.</option>
+          <option
+            id="3"
+          >The entry is a ghost route, and traffic is blackholed along the phantom path.</option>
+          <option
+            id="4"
+          >The community (64511,33) instructs downstream autonomous systems to filter the prefix.</option>
+          <option
+            id="5"
+          >The asterisk (*) indicates the route is valid but not selected as best, so it is not used for forwarding.</option>
+        </options>
+        <correctanswer>
+          <options>
+            <option
+              id="3"
+            >The entry is a ghost route, and traffic is blackholed along the phantom path.</option>
+          </options>
         </correctanswer>
       </question>
     </questioncollection>
