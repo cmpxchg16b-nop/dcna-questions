@@ -1,7 +1,11 @@
 <?xml version="1.0"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:element name="title" type="xs:string" />
-  <xs:element name="description" type="xs:string" />
+  <xs:element name="description" type="xs:string">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">Description of an exam object or a question object.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
   <xs:simpleType name="QuestionType">
     <xs:restriction base="xs:string">
       <xs:enumeration value="single-choice" />
@@ -10,15 +14,21 @@
     </xs:restriction>
   </xs:simpleType>
   <xs:element name="option">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">Representing an option in a single-choice or multiple-choice question. The &#x60;id&#x60; attribute have to be unique within the question scope.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:simpleContent>
         <xs:extension base="xs:string">
-          <xs:attribute name="id" type="xs:string" />
+          <xs:attribute name="id" type="xs:string" use="required" />
         </xs:extension>
       </xs:simpleContent>
     </xs:complexType>
   </xs:element>
   <xs:element name="options">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">A options enclosure is simply a container of options</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="option" minOccurs="1" maxOccurs="unbounded" />
@@ -80,6 +90,9 @@
     </xs:complexType>
   </xs:element>
   <xs:element name="correctanswer">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">A correctanswer object must contain enough information to enable it to test the correctness of submitting answer.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="options" minOccurs="0" maxOccurs="1" />
@@ -173,6 +186,9 @@
     </xs:complexType>
   </xs:element>
   <xs:element name="question">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">A question enclosure models a Cisco-flavor exam question: like a single-choice, a multiple-choice or a drag-and-drop question. The &#x60;id&#x60; attribute of the question has to be unique within the surrounding question collection scope.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="description" />
@@ -183,12 +199,15 @@
         <xs:element ref="drops" minOccurs="0" maxOccurs="1" />
         <xs:element ref="correctanswer" minOccurs="1" maxOccurs="1" />
       </xs:sequence>
-      <xs:attribute name="id" type="xs:string" />
-      <xs:attribute name="num" type="xs:integer" />
+      <xs:attribute name="id" type="xs:string" use="required" />
       <xs:attribute name="type" type="QuestionType" />
+      <xs:attribute name="score" type="xs:integer" default="1"></xs:attribute>
     </xs:complexType>
   </xs:element>
   <xs:element name="questioncollection">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">A question collection is just a ordered list of questions</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="question" minOccurs="1" maxOccurs="unbounded" />
@@ -196,27 +215,70 @@
     </xs:complexType>
   </xs:element>
   <xs:element name="questionset">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">A question set can have one or more question collections, to allow picking up a random question collection when starting a new exam.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="questioncollection" minOccurs="1" maxOccurs="unbounded" />
       </xs:sequence>
     </xs:complexType>
   </xs:element>
+  <xs:element name="exam">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">An exam is a container that contains a set of question collections that focus on a specific topic.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="title" />
+        <xs:element ref="description" />
+        <xs:element ref="questionset" minOccurs="1" maxOccurs="1" />
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string" use="required" />
+      <xs:attribute name="shortname" type="xs:string" />
+      <xs:attribute name="code" type="xs:string" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="answer">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">Answer targeting a single question</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="options" minOccurs="0" maxOccurs="1" />
+      </xs:sequence>
+      <xs:attribute name="questionId" type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation xml:lang="en">The &#x60;questionId&#x60; attribute targeting a specific question within a question collection which is specified by the parent examanswer object.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="questionType" type="QuestionType" use="required">
+        <xs:annotation>
+          <xs:documentation xml:lang="en">Specify the question type in the attribute of an answer object to facilitate the validation of the schema of a submitting answer.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="examanswer">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">An examanswer enclosure represents a submitting answer targeting the whole exam paper of the selected question collection index, the exam server use the correctanswer as defined in the question object to validate the correctness of the submitting answer.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="answer" minOccurs="0" maxOccurs="unbounded" />
+      </xs:sequence>
+      <xs:attribute name="examCollectionIndex" type="xs:integer" use="required">
+        <xs:annotation>
+          <xs:documentation xml:lang="en">Zero-based index</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
   <xs:element name="root">
     <xs:complexType>
       <xs:sequence>
-        <xs:element name="exam">
-          <xs:complexType>
-            <xs:sequence>
-              <xs:element ref="title" />
-              <xs:element ref="description" />
-              <xs:element ref="questionset" minOccurs="1" maxOccurs="1" />
-            </xs:sequence>
-            <xs:attribute name="id" type="xs:string" use="required" />
-            <xs:attribute name="shortname" type="xs:string" />
-            <xs:attribute name="code" type="xs:string" />
-          </xs:complexType>
-        </xs:element>
+        <xs:element ref="exam" minOccurs="0" maxOccurs="unbounded" />
+        <xs:element ref="examanswer" minOccurs="0" maxOccurs="1" />
       </xs:sequence>
     </xs:complexType>
   </xs:element>
