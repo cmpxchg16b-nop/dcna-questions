@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 )
 
 type QuestionType string
@@ -288,11 +289,49 @@ type ExamSource struct {
 // ExamRepository aggregates exam documents drawn from one or more ExamSources.
 type ExamRepository struct {
 	sources []ExamSource
+
+	// cache holds exams keyed by id (id -> *Exam) so lookups by id avoid
+	// re-reading from disk. It is a sync.Map because it is written
+	// incrementally as exams are loaded — by ListExamDocuments, which inserts
+	// each exam as it streams it, and by reload, which GetExamDocumentById runs
+	// on a miss — while GetExamDocumentById reads it concurrently.
+	cache sync.Map
 }
 
 // NewExamRepository constructs an ExamRepository over the given sources.
 func NewExamRepository(sources []ExamSource) *ExamRepository {
 	return &ExamRepository{sources: sources}
+}
+
+// cacheExam stores exam in the cache keyed by its id.
+func (r *ExamRepository) cacheExam(exam *Exam) {
+	r.cache.Store(exam.Id, exam)
+}
+
+// cachedExam returns the cached exam for id, or (nil, false) if none is cached.
+func (r *ExamRepository) cachedExam(id string) (*Exam, bool) {
+	v, ok := r.cache.Load(id)
+	if !ok {
+		return nil, false
+	}
+	return v.(*Exam), true
+}
+
+// reload reads every exam from every source and caches it by id. It does not
+// evict ids that were previously cached but are no longer present in the
+// sources. A source URL that fails to load is skipped: it contributes no id to
+// the cache, so a later lookup for an exam that failed to load reports "not
+// found" rather than its underlying load error.
+func (r *ExamRepository) reload() {
+	for _, src := range r.sources {
+		for _, url := range src.URLs {
+			exam, err := src.Loader.LoadFrom(url)
+			if err != nil {
+				continue
+			}
+			r.cacheExam(exam)
+		}
+	}
 }
 
 // ExamDataEvent is one item emitted by ListExamDocuments: a successfully loaded
@@ -306,10 +345,13 @@ type ExamDataEvent struct {
 
 // ListExamDocuments streams every exam from every source over a single
 // unbuffered channel of ExamDataEvent, multiplexing successes and failures so
-// the caller can consume them with a single range. On error the error is
-// emitted as an event and loading continues; the callee-spawned goroutine
-// closes the channel once every source has been exhausted. The caller tests for
-// failure by checking the event's Err field.
+// the caller can consume them with a single range. Each exam is loaded and
+// emitted one at a time; loading is lazy (nothing is materialized before it is
+// streamed), and each successfully loaded exam is also inserted into the cache,
+// so the disk read that powers the stream also feeds GetExamDocumentById. On
+// error the error is emitted as an event and loading continues; the
+// callee-spawned goroutine closes the channel once every source has been
+// exhausted. The caller tests for failure by checking the event's Err field.
 func (r *ExamRepository) ListExamDocuments() <-chan ExamDataEvent {
 	events := make(chan ExamDataEvent)
 	go func() {
@@ -321,9 +363,26 @@ func (r *ExamRepository) ListExamDocuments() <-chan ExamDataEvent {
 					events <- ExamDataEvent{Err: fmt.Errorf("load exam %q: %w", url, err)}
 					continue
 				}
+				r.cacheExam(exam) // refresh the cache as each exam loads
 				events <- ExamDataEvent{Data: exam}
 			}
 		}
 	}()
 	return events
+}
+
+// GetExamDocumentById returns the exam whose id matches. It consults the cache
+// first; only on a miss does it reload the entire collection and re-check. The
+// cache is also populated as a side effect of ListExamDocuments, so lookups for
+// already-streamed exams hit without touching the sources. A lookup that still
+// misses after a reload returns "not found".
+func (r *ExamRepository) GetExamDocumentById(id string) (*Exam, error) {
+	if exam, ok := r.cachedExam(id); ok {
+		return exam, nil
+	}
+	r.reload()
+	if exam, ok := r.cachedExam(id); ok {
+		return exam, nil
+	}
+	return nil, fmt.Errorf("exam %q not found", id)
 }

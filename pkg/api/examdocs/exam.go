@@ -1,5 +1,5 @@
 // Package exam exposes HTTP handlers for exam documents.
-package exam
+package examdocs
 
 import (
 	"encoding/json"

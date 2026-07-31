@@ -3,10 +3,13 @@ package main
 import (
 	dcnaquestions "dcna-questions"
 	pkgapicounter "dcna-questions/pkg/api/counter"
-	pkgapiexam "dcna-questions/pkg/api/exam"
+	pkgapiexamdocs "dcna-questions/pkg/api/examdocs"
+	pkgapiexamsessions "dcna-questions/pkg/api/examsessions"
+	pkgmodelsexamserver "dcna-questions/pkg/models/examserver"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
 	pkgsession "dcna-questions/pkg/session"
 
+	"context"
 	pkglog "dcna-questions/pkg/log"
 	"log"
 	"net/http"
@@ -20,13 +23,20 @@ func main() {
 		},
 	}
 	repo := pkgmodelsquestion.NewExamRepository(sources)
-	examHandler := pkgapiexam.NewExamHandler(repo)
+	examHandler := pkgapiexamdocs.NewExamHandler(repo)
+
+	examServer := pkgmodelsexamserver.NewOnMemoryExamServer()
+	go examServer.Run(context.Background())
+	defer examServer.Shutdown()
 
 	sm := pkgsession.NewOnMemorySessionManager()
+	examSessionHandler := pkgapiexamsessions.NewExamSessionHandler(sm, examServer, repo)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/counter", pkgapicounter.NewHandler(sm))
 	mux.Handle("/api/examdocs", examHandler)
+	mux.Handle("/api/examsessions", examSessionHandler)
+	mux.Handle("/api/examsessions/{exam_id}", examSessionHandler)
 	mux.Handle("/", dcnaquestions.Handler())
 
 	const addr = ":8080"
