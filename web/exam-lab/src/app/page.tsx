@@ -30,6 +30,7 @@ export default function Home() {
         <Typography variant="h4" component="h2" gutterBottom>
           Exam Sessions
         </Typography>
+        <Typography gutterBottom>Here are the ongoing exam sessions</Typography>
         <List>
           {mockExamSessions.map((session) => (
             <ListItem key={session.Id} disableGutters sx={{ mb: 1 }}>
@@ -98,6 +99,7 @@ export default function Home() {
         <Typography variant="h4" component="h2" gutterBottom>
           Exams
         </Typography>
+        <Typography gutterBottom>Here are the exams you can take</Typography>
         {isExamsPending ? (
           <Typography>…</Typography>
         ) : (
