@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Box } from "@mui/material";
 import { Providers } from "./providers";
 import { Suspense } from "react";
 import "./globals.css";
@@ -28,7 +29,16 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
         <Providers>
-          <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+          {/* Layout-level gutters so page content never touches the viewport
+              edges. Responsive padding: 16px on phones, 24px on sm, 32px on
+              md and up. flexGrow lets the main region fill the flex-column
+              body so short pages don't collapse. */}
+          <Box
+            component="main"
+            sx={{ p: { xs: 2, sm: 3, md: 4 }, flexGrow: 1 }}
+          >
+            <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+          </Box>
         </Providers>
       </body>
     </html>
