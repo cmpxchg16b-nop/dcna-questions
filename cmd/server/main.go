@@ -36,9 +36,7 @@ func main() {
 	mux.Handle("/api/counter", pkgapicounter.NewHandler(sm))
 	mux.Handle("/api/examdocs", examHandler)
 	mux.Handle("/api/examsessions", examSessionHandler)
-	mux.Handle("/api/examsessions/{exam_id}", examSessionHandler)
-	mux.Handle("/api/examsessions/{exam_id}/questions", examSessionHandler)
-	mux.Handle("/api/examsessions/{exam_id}/cursors", examSessionHandler)
+	mux.Handle("/api/examsessions/", examSessionHandler)
 	mux.Handle("/", dcnaquestions.Handler())
 
 	const addr = ":8080"

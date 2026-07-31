@@ -168,9 +168,7 @@ func newTestEnv(t *testing.T, repo *question.ExamRepository, server *fakeExamSer
 	h := examsessions.NewExamSessionHandler(sm, server, repo)
 	mux := http.NewServeMux()
 	mux.Handle("/api/examsessions", h)
-	mux.Handle("/api/examsessions/{exam_id}", h)
-	mux.Handle("/api/examsessions/{exam_id}/questions", h)
-	mux.Handle("/api/examsessions/{exam_id}/cursors", h)
+	mux.Handle("/api/examsessions/", h)
 	return &testEnv{sm: sm, server: server, sess: sess, mux: mux}
 }
 
@@ -472,6 +470,13 @@ func TestExamSessionHandler(t *testing.T) {
 			server:     &fakeExamServer{},
 			wantStatus: http.StatusMethodNotAllowed,
 			wantAllow:  "PUT",
+		},
+		{
+			name:       "unknown sub-path not found",
+			method:     http.MethodGet,
+			target:     "/api/examsessions/sess-1/unknown",
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusNotFound,
 		},
 		{
 			name:       "method not allowed on collection",

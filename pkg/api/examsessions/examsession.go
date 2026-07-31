@@ -13,13 +13,11 @@
 //	PUT    /api/examsessions/{exam_id}/cursors?cursor_id=<cursor>&index=<n>
 //	        reposition the cursor via SeekCursorTo; responds {"cursor_id": <new>}.
 //
-// Mount it with the Go 1.22+ ServeMux so the {exam_id} wildcard reaches
-// r.PathValue, e.g.:
+// Mount it as a subtree so the handler receives every path beneath
+// /api/examsessions and resolves the routes internally, e.g.:
 //
 //	mux.Handle("/api/examsessions", h)
-//	mux.Handle("/api/examsessions/{exam_id}", h)
-//	mux.Handle("/api/examsessions/{exam_id}/questions", h)
-//	mux.Handle("/api/examsessions/{exam_id}/cursors", h)
+//	mux.Handle("/api/examsessions/", h)
 //
 // The caller's user session is resolved from the request context via the
 // SessionManager (see package session); it must already be attached by the
@@ -91,11 +89,21 @@ type seekCursorResponse struct {
 	CursorID string `json:"cursor_id"`
 }
 
-// ServeHTTP routes the request by HTTP method and path. The {exam_id} path
-// value is populated when mounted at /api/examsessions/{exam_id} (and its
-// sub-resources); the questions/cursors sub-resources are distinguished by the
-// URL path suffix. Exam session ids are UUIDs, so a suffix can never collide
-// with an id.
+// apiPrefix is the path the handler is mounted under. Every route beneath it is
+// resolved inside ServeHTTP, so the handler owns its own route tree rather than
+// relying on the ServeMux's wildcard captures.
+const apiPrefix = "/api/examsessions"
+
+// ServeHTTP routes the request by parsing the path beneath apiPrefix. The
+// handler is mounted as a subtree and resolves the collection root, a single
+// item, and the questions/cursors sub-resources itself:
+//
+//	""                     -> collection (POST create, GET list)
+//	"/{exam_id}"           -> item (DELETE)
+//	"/{exam_id}/questions" -> next question (GET)
+//	"/{exam_id}/cursors"   -> seek cursor (PUT)
+//
+// Anything else beneath the prefix responds 404.
 func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sess, ok := h.sm.GetSessionFromContext(r.Context())
 	if !ok {
@@ -103,9 +111,17 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	examID := r.PathValue("exam_id")
+	// segments is the path beneath /api/examsessions split on '/', e.g.
+	// [] (collection), [{exam_id}], or [{exam_id}, "questions"].
+	rel := strings.TrimPrefix(r.URL.Path, apiPrefix)
+	trimmed := strings.Trim(rel, "/")
+	var segments []string
+	if trimmed != "" {
+		segments = strings.Split(trimmed, "/")
+	}
+
 	switch {
-	case examID == "":
+	case len(segments) == 0:
 		// Collection: POST create, GET list.
 		switch r.Method {
 		case http.MethodPost:
@@ -115,25 +131,27 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			h.methodNotAllowed(w, "GET, POST")
 		}
-	case strings.HasSuffix(r.URL.Path, "/questions"):
-		if r.Method != http.MethodGet {
-			h.methodNotAllowed(w, "GET")
-			return
-		}
-		h.handleGetNextQuestion(w, r, examserver.ExamId(examID))
-	case strings.HasSuffix(r.URL.Path, "/cursors"):
-		if r.Method != http.MethodPut {
-			h.methodNotAllowed(w, "PUT")
-			return
-		}
-		h.handleSeekCursor(w, r, examserver.ExamId(examID))
-	default:
+	case len(segments) == 1:
 		// Item: DELETE.
 		if r.Method != http.MethodDelete {
 			h.methodNotAllowed(w, "DELETE")
 			return
 		}
-		h.handleDelete(w, r, examserver.ExamId(examID))
+		h.handleDelete(w, r, examserver.ExamId(segments[0]))
+	case len(segments) == 2 && segments[1] == "questions":
+		if r.Method != http.MethodGet {
+			h.methodNotAllowed(w, "GET")
+			return
+		}
+		h.handleGetNextQuestion(w, r, examserver.ExamId(segments[0]))
+	case len(segments) == 2 && segments[1] == "cursors":
+		if r.Method != http.MethodPut {
+			h.methodNotAllowed(w, "PUT")
+			return
+		}
+		h.handleSeekCursor(w, r, examserver.ExamId(segments[0]))
+	default:
+		http.NotFound(w, r)
 	}
 }
 
