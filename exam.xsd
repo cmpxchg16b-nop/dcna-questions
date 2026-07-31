@@ -47,8 +47,18 @@
       <xs:documentation xml:lang="en">Represent a connection line in Cisco-flavor drag-and-drop exam question.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="dst" type="xs:string" />
-      <xs:attribute name="src" type="xs:string" />
+      <xs:attribute name="dst" type="xs:string" use="required" />
+      <xs:attribute name="src" type="xs:string" use="required" />
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="connections">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">A connections object is simply a container of a list of connects that occurs in a submitting answer.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="connect" minOccurs="1" maxOccurs="unbounded" />
+      </xs:sequence>
     </xs:complexType>
   </xs:element>
   <xs:element name="connectsource">
@@ -246,6 +256,7 @@
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="options" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="connections" minOccurs="0" maxOccurs="1" />
       </xs:sequence>
       <xs:attribute name="questionId" type="xs:string" use="required">
         <xs:annotation>

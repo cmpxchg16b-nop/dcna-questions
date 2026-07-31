@@ -181,6 +181,7 @@
       </questioncollection>
     </questionset>
   </exam>
+  <!-- we write some example answers below, they are not the standard answer, which is included in eact question object under the exam's hierachy -->
   <examanswer examCollectionIndex="0">
     <answer questionId="1" questionType="single-choice">
       <options>
@@ -192,6 +193,13 @@
         <option id="1" />
         <option id="2" />
       </options>
+    </answer>
+    <answer questionId="3" questionType="drag-and-drop">
+      <connections>
+        <connect dst="1" src="2" />
+        <connect dst="2" src="1" />
+        <connect dst="3" src="3" />
+      </connections>
     </answer>
   </examanswer>
 </root>
