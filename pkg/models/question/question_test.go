@@ -16,7 +16,7 @@ func TestExamLoader_LoadDecodesNumericEntities(t *testing.T) {
   <description>x</description>
   <questionset>
     <questioncollection>
-      <question id="1" num="1" type="single-choice">
+      <question id="1" type="single-choice">
         <description>step &#8226; one</description>
         <options><option id="1">a</option></options>
         <correctanswer><options><option id="1">a</option></options></correctanswer>
@@ -46,11 +46,11 @@ func TestExamLoader_LoadMultipleCollections(t *testing.T) {
   <title>t</title><description>d</description>
   <questionset>
     <questioncollection>
-      <question id="1" num="1" type="single-choice"><description>a</description></question>
-      <question id="2" num="2" type="single-choice"><description>b</description></question>
+      <question id="1" type="single-choice"><description>a</description></question>
+      <question id="2" type="single-choice"><description>b</description></question>
     </questioncollection>
     <questioncollection>
-      <question id="3" num="3" type="multiple-choice"><description>c</description></question>
+      <question id="3" type="multiple-choice"><description>c</description></question>
     </questioncollection>
   </questionset>
 </exam>
@@ -80,7 +80,7 @@ func TestExamLoader_LoadRejectsUnknownQuestionType(t *testing.T) {
   <title>t</title><description>d</description>
   <questionset>
     <questioncollection>
-      <question id="1" num="1" type="bogus-type">
+      <question id="1" type="bogus-type">
         <description>x</description>
       </question>
     </questioncollection>

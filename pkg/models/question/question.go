@@ -50,6 +50,20 @@ type Drop struct {
 
 type Drops []Drop
 
+// DropArea is one labeled sub-section of a multi-area drop zone. It carries its
+// own set of drop targets, which share the question-wide drop id namespace.
+type DropArea struct {
+	Id    string    `xml:"id,attr" json:"id"`
+	Label PlainText `xml:"droparealabel" json:"label,omitempty"`
+	Drops Drops     `xml:"drop" json:"drops"`
+}
+
+// MultiAreaDrop models a <multiareadrop>: a drag-and-drop drop area split into
+// one or more labeled sub-sections, in contrast to the flat <drops> list.
+type MultiAreaDrop struct {
+	DropAreas []DropArea `xml:"droparea" json:"dropAreas"`
+}
+
 type Image struct {
 	Src string `xml:"src,attr" json:"src"`
 }
@@ -65,8 +79,29 @@ type Connect struct {
 	Dst string `xml:"dst,attr" json:"dst"`
 }
 
+type ConnectSource struct {
+	Id string `xml:"id,attr" json:"id"`
+}
+
+type ConnectDestination struct {
+	Id string `xml:"id,attr" json:"id"`
+}
+
+// ConnectCombination models a <connectcombination>: the Cartesian product of its
+// ConnectSources and ConnectDestinations yields the set of connections that are
+// considered correct.
+type ConnectCombination struct {
+	ConnectSources      []ConnectSource      `xml:"connectsource" json:"connectSources,omitempty"`
+	ConnectDestinations []ConnectDestination `xml:"connectdestination" json:"connectDestinations,omitempty"`
+}
+
+// ConnectionSolution models a <connectionsolution>. Its correctness is
+// determined by meeting requiredUniqueConnections unique connections, drawn from
+// either explicit Connects or the products of ConnectCombinations.
 type ConnectionSolution struct {
-	Connects []Connect `xml:"connect" json:"connects"`
+	RequiredUniqueConnections int                  `xml:"requiredUniqueConnections,attr" json:"requiredUniqueConnections"`
+	Connects                  []Connect            `xml:"connect" json:"connects,omitempty"`
+	ConnectCombinations       []ConnectCombination `xml:"connectcombination" json:"connectCombinations,omitempty"`
 }
 
 type Combination struct {
@@ -88,12 +123,13 @@ type QuestionDescription struct {
 
 type Question struct {
 	Id            string              `xml:"id,attr" json:"id"`
-	Num           int                 `xml:"num,attr" json:"num"`
 	Type          QuestionType        `xml:"type,attr" json:"type"`
+	Score         int                 `xml:"score,attr" json:"score,omitempty"`
 	Description   QuestionDescription `xml:"description" json:"description"`
 	Exhibits      Exhibits            `xml:"exhibits>exhibit" json:"exhibits,omitempty"`
 	Options       Options             `xml:"options>option" json:"options,omitempty"`
 	Candidates    Candidates          `xml:"candidates>candidate" json:"candidates,omitempty"`
+	MultiAreaDrop *MultiAreaDrop      `xml:"multiareadrop" json:"multiAreaDrop,omitempty"`
 	Drops         Drops               `xml:"drops>drop" json:"drops,omitempty"`
 	CorrectAnswer CorrectAnswer       `xml:"correctanswer" json:"correctAnswer"`
 }
@@ -113,13 +149,13 @@ type QuestionSet struct {
 // Exam is the root <exam> document: a named certification exam carrying
 // metadata and exactly one question set.
 type Exam struct {
-	XMLName     xml.Name     `xml:"exam" json:"-"`
-	Id          string       `xml:"id,attr" json:"id"`
-	ShortName   string       `xml:"shortname,attr" json:"shortName"`
-	Code        string       `xml:"code,attr" json:"code"`
-	Title       PlainText    `xml:"title" json:"title"`
-	Description PlainText    `xml:"description" json:"description"`
-	QuestionSet QuestionSet  `xml:"questionset" json:"questionSet"`
+	XMLName     xml.Name    `xml:"exam" json:"-"`
+	Id          string      `xml:"id,attr" json:"id"`
+	ShortName   string      `xml:"shortname,attr" json:"shortName"`
+	Code        string      `xml:"code,attr" json:"code"`
+	Title       PlainText   `xml:"title" json:"title"`
+	Description PlainText   `xml:"description" json:"description"`
+	QuestionSet QuestionSet `xml:"questionset" json:"questionSet"`
 }
 
 // namedEntities extends the predefined XML entities (amp, lt, gt, apos, quot,
