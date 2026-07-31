@@ -1,4 +1,4 @@
-// Package exam exposes HTTP handlers for exam documents.
+// Package examdocs exposes HTTP handlers for exam documents.
 package examdocs
 
 import (
