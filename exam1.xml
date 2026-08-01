@@ -11,7 +11,7 @@
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
       <questioncollection>
         <question id="1" type="single-choice">
-          <description>An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix?</description>
+          <description>An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix? (Choose one.)</description>
           <options>
             <option
               id="1"
@@ -178,6 +178,22 @@
 
               <!-- in some case, a drag-and-drop question can also have multiple correct answers, then we just define more connectionsolution objects -->
             </connectionsolutions>
+          </correctanswer>
+        </question>
+        <question id="6" type="single-choice">
+          <description>Which protocol is used to dynamically assign IP addresses to hosts on a network? (Chooce one.)</description>
+          <options>
+            <option id="1">DNS</option>
+            <option id="2">DHCP</option>
+            <option id="3">NAT</option>
+            <option id="4">ARP</option>
+            <option id="5">SCP</option>
+          </options>
+          <correctanswer>
+            <options>
+              <!-- In some case, more that one option is correct, even it's a single-choice question. -->
+              <option id="2">DHCP</option>
+            </options>
           </correctanswer>
         </question>
       </questioncollection>
