@@ -10,6 +10,7 @@ import {
   Typography,
 } from "@mui/material";
 import { formatDistanceToNow } from "date-fns";
+import { useRouter } from "next/navigation";
 import { ExamSessionSummary } from "@/api/types";
 
 type ExamSessionCardProps = {
@@ -19,13 +20,24 @@ type ExamSessionCardProps = {
 
 // One entry in the Exam Sessions list: the exam's metadata plus when the
 // session was started, with Resume and End Exam actions. End Exam is reported
-// via onEnd so the parent can ask for confirmation first; Resume is not wired
-// up yet.
+// via onEnd so the parent can ask for confirmation first; Resume navigates to
+// the exam session page.
 export default function ExamSessionCard({
   session,
   onEnd,
 }: ExamSessionCardProps) {
+  const router = useRouter();
   const excerpt = session.exam_excerpt;
+
+  const resumeParams = new URLSearchParams({
+    exam_session_id: session.exam_session_id,
+    title: excerpt.Title,
+    shortname: excerpt.ShortName,
+    code: excerpt.Code,
+    num_questions: String(excerpt.NumQuestions),
+    // Mocked until the session API reports real progress.
+    current_question_index: "0",
+  });
   return (
     <ListItem disableGutters sx={{ mb: 1 }}>
       <Card sx={{ width: "100%" }}>
@@ -52,7 +64,7 @@ export default function ExamSessionCard({
             <Button
               variant="contained"
               sx={{ whiteSpace: "nowrap" }}
-              onClick={() => alert("unimplemented")}
+              onClick={() => router.push(`/examsession?${resumeParams}`)}
             >
               Resume
             </Button>
