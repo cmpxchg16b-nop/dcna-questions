@@ -22,7 +22,7 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -63,12 +63,12 @@ func TestStartNewExamSession_EmptyExam(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	if _, err := srv.StartNewExamSession(ctx, nil, "user-1", 0); err != errEmptyExam {
+	if _, err := srv.StartNewExamSession(ctx, nil, "user-1", 0, nil); err != errEmptyExam {
 		t.Fatalf("expected errEmptyExam for nil exam, got %v", err)
 	}
 
 	empty := &pkgmodelquestions.Exam{Id: "x"}
-	if _, err := srv.StartNewExamSession(ctx, empty, "user-1", 0); err != errEmptyExam {
+	if _, err := srv.StartNewExamSession(ctx, empty, "user-1", 0, nil); err != errEmptyExam {
 		t.Fatalf("expected errEmptyExam for empty exam, got %v", err)
 	}
 }
@@ -98,7 +98,7 @@ func TestStartNewExamSession_RandomCollPicksOneCollection(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionRandomQuestionColl|ExamOptionSeekable)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionRandomQuestionColl|ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestStartNewExamSession_FlattensCollectionsByDefault(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestGetExamSessionById_CurrentQuestionIndex(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestOwnershipEnforcement(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -299,5 +299,76 @@ func TestOwnershipEnforcement(t *testing.T) {
 	// The owner can still use their own session.
 	if q, _, err := srv.GetNextQuestion(ctx, examId, "user-1", nil); err != nil || q == nil {
 		t.Fatalf("GetNextQuestion by owner: q=%v err=%v", q, err)
+	}
+}
+
+// TestStartNewExamSession_AcceptQuestionTypes loads the real exam1.xml and
+// confirms that acceptQuestionTypes restricts the served questions to the
+// listed types, that the session excerpt reports the filtered question count,
+// and that a filter matching nothing fails like an empty exam.
+func TestStartNewExamSession_AcceptQuestionTypes(t *testing.T) {
+	exam, err := pkgmodelquestions.NewFileExamLoader().LoadFile(filepath.Join("..", "..", "..", "exam1.xml"))
+	if err != nil {
+		t.Fatalf("load exam: %v", err)
+	}
+
+	srv := NewOnMemoryExamServer()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	// exam1.xml: questions 1, 4, 6 are single-choice, 2 is multiple-choice,
+	// and 3, 5 are drag-and-drop. Accepting only the choice types must skip
+	// the drag-and-drop questions.
+	accept := []pkgmodelquestions.QuestionType{
+		pkgmodelquestions.QuestionTypeSingleChoice,
+		pkgmodelquestions.QuestionTypeMultipleChoice,
+	}
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, accept)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+
+	var seen []string
+	var cursor *QuestionCursor
+	for {
+		q, next, err := srv.GetNextQuestion(ctx, examId, "user-1", cursor)
+		if err != nil {
+			t.Fatalf("GetNextQuestion: %v", err)
+		}
+		if q == nil {
+			break // no more questions
+		}
+		seen = append(seen, q.Id)
+		cursor = next
+		if cursor == nil {
+			break
+		}
+	}
+
+	want := []string{"1", "2", "4", "6"}
+	if len(seen) != len(want) {
+		t.Fatalf("expected %d questions, got %d (%v)", len(want), len(seen), seen)
+	}
+	for i, id := range want {
+		if seen[i] != id {
+			t.Errorf("question %d: got id %q, want %q", i, seen[i], id)
+		}
+	}
+
+	// The session excerpt must describe the filtered question set, not the
+	// exam document's full collection, so clients can bound navigation.
+	ex, err := srv.GetExamSessionById(ctx, examId, "user-1")
+	if err != nil {
+		t.Fatalf("GetExamSessionById: %v", err)
+	}
+	if ex.ExamExcerpt.NumQuestions != len(want) {
+		t.Errorf("excerpt NumQuestions = %d, want %d", ex.ExamExcerpt.NumQuestions, len(want))
+	}
+
+	// A filter matching no question at all is rejected like an empty exam.
+	if _, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, []pkgmodelquestions.QuestionType{"essay"}); err != errEmptyExam {
+		t.Errorf("StartNewExamSession with unmatched filter = %v, want errEmptyExam", err)
 	}
 }

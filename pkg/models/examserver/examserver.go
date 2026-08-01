@@ -53,8 +53,11 @@ type ExamSessionExcerpt struct {
 }
 
 type ExamServer interface {
-	// Start a new exam session
-	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions) (ExamSessionId, error)
+	// Start a new exam session. acceptQuestionTypes restricts which question
+	// types the session serves; an empty slice accepts every type. If no
+	// question remains after filtering, the call fails as if the exam were
+	// empty.
+	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) (ExamSessionId, error)
 
 	// List started exam sessions of a given user
 	ListExamSessions(ctx context.Context, userId string) []ExamSessionExcerpt
@@ -161,7 +164,7 @@ func (srv *OnMemoryExamServer) dispatch(ctx context.Context, cmd func()) error {
 	}
 }
 
-func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions) (ExamSessionId, error) {
+func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) (ExamSessionId, error) {
 	type result struct {
 		examId ExamSessionId
 		err    error
@@ -174,7 +177,14 @@ func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pk
 		}
 		opts := examOptions
 		examId := ExamSessionId(uuid.NewString())
-		srv.sessionsStore[examId] = newExamSession(examId, userId, exam, opts)
+		sess := newExamSession(examId, userId, exam, opts, acceptQuestionTypes)
+		if len(sess.QuestionPermutation) == 0 {
+			// Question-type filtering (or collections that were empty to begin
+			// with) left nothing to serve.
+			resp <- result{err: errEmptyExam}
+			return
+		}
+		srv.sessionsStore[examId] = sess
 		sessions, ok := srv.userSessions[userId]
 		if !ok {
 			sessions = make(map[ExamSessionId]struct{})
@@ -202,13 +212,7 @@ func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId stri
 		excerpts := make([]ExamSessionExcerpt, 0, len(sessions))
 		for id := range sessions {
 			sess := srv.sessionsStore[id]
-			excerpts = append(excerpts, ExamSessionExcerpt{
-				Id:                   id,
-				ExamExcerpt:          pkgmodelquestions.ExamExcerptFrom(sess.Exam),
-				StartedAt:            sess.StartedAt,
-				Options:              sess.Options,
-				CurrentQuestionIndex: sess.CurrentQuestionIndex,
-			})
+			excerpts = append(excerpts, sessionExcerpt(sess))
 		}
 		resp <- result{excerpts: excerpts}
 	}
@@ -239,13 +243,7 @@ func (srv *OnMemoryExamServer) GetExamSessionById(ctx context.Context, examId Ex
 			resp <- result{err: errNotOwner}
 			return
 		}
-		resp <- result{excerpt: ExamSessionExcerpt{
-			Id:                   examId,
-			ExamExcerpt:          pkgmodelquestions.ExamExcerptFrom(sess.Exam),
-			StartedAt:            sess.StartedAt,
-			Options:              sess.Options,
-			CurrentQuestionIndex: sess.CurrentQuestionIndex,
-		}}
+		resp <- result{excerpt: sessionExcerpt(sess)}
 	}
 	if err := srv.dispatch(ctx, cmd); err != nil {
 		return ExamSessionExcerpt{}, err
@@ -489,12 +487,14 @@ func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int) *pkgmodelquestion
 }
 
 // newExamSession allocates a session backed by exam's question set, selecting
-// the question collection to present and computing its permutation up front
-// (the order in which questions are presented). Option permutations are derived
-// lazily, per question, as it is first requested.
-func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions.Exam, opts ExamOptions) *OnMemoryExamSession {
+// the question collection to present, dropping questions whose type the caller
+// does not accept, and computing the question permutation up front (the order
+// in which questions are presented). Option permutations are derived lazily,
+// per question, as it is first requested.
+func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions.Exam, opts ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) *OnMemoryExamSession {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	qc := selectQuestionCollection(exam.QuestionSet, opts, rng)
+	qc.Questions = filterQuestionsByType(qc.Questions, acceptQuestionTypes)
 	n := len(qc.Questions)
 	var qPerm []int
 	if opts&ExamOptionRandomQuestions != 0 {
@@ -542,6 +542,49 @@ func selectQuestionCollection(qs pkgmodelquestions.QuestionSet, opts ExamOptions
 		flat = append(flat, c.Questions...)
 	}
 	return pkgmodelquestions.QuestionCollection{Questions: flat}
+}
+
+// filterQuestionsByType returns the questions whose type is in accept,
+// preserving their order. An empty accept list accepts every type. The input
+// slice is never mutated; a fresh slice is returned whenever filtering
+// applies.
+func filterQuestionsByType(questions []pkgmodelquestions.Question, accept []pkgmodelquestions.QuestionType) []pkgmodelquestions.Question {
+	if len(accept) == 0 {
+		return questions
+	}
+	accepted := make(map[pkgmodelquestions.QuestionType]struct{}, len(accept))
+	for _, t := range accept {
+		accepted[t] = struct{}{}
+	}
+	filtered := make([]pkgmodelquestions.Question, 0, len(questions))
+	for _, q := range questions {
+		if _, ok := accepted[q.Type]; ok {
+			filtered = append(filtered, q)
+		}
+	}
+	return filtered
+}
+
+// sessionExcerpt projects a session into an ExamSessionExcerpt. Unlike
+// pkgmodelquestions.ExamExcerptFrom, which derives its counts from the exam
+// document's first collection, NumQuestions and TotalScores describe the
+// session's actual question set — after collection selection and
+// question-type filtering — so clients can rely on NumQuestions to bound
+// navigation.
+func sessionExcerpt(sess *OnMemoryExamSession) ExamSessionExcerpt {
+	excerpt := pkgmodelquestions.ExamExcerptFrom(sess.Exam)
+	excerpt.NumQuestions = len(sess.Questions.Questions)
+	excerpt.TotalScores = 0
+	for _, q := range sess.Questions.Questions {
+		excerpt.TotalScores += q.Score
+	}
+	return ExamSessionExcerpt{
+		Id:                   sess.ExamId,
+		ExamExcerpt:          excerpt,
+		StartedAt:            sess.StartedAt,
+		Options:              sess.Options,
+		CurrentQuestionIndex: sess.CurrentQuestionIndex,
+	}
 }
 
 // buildOnMemoryQuestion returns a shallow copy of orig whose Options are

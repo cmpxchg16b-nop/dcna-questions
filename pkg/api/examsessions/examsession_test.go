@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -31,11 +32,12 @@ func (l *fakeExamLoader) LoadFrom(url string) (*question.Exam, error) {
 // Only the methods the handler exercises have meaningful state; the rest are
 // stubs present solely to satisfy the ExamServer interface.
 type fakeExamServer struct {
-	startErr    error
-	startID     examserver.ExamSessionId
-	startedExam *question.Exam
-	startedUser string
-	startedOpts examserver.ExamOptions
+	startErr      error
+	startID       examserver.ExamSessionId
+	startedExam   *question.Exam
+	startedUser   string
+	startedOpts   examserver.ExamOptions
+	startedAccept []question.QuestionType
 
 	listResult []examserver.ExamSessionExcerpt
 	listCalls  []string
@@ -63,10 +65,11 @@ type fakeExamServer struct {
 	getExamID string
 }
 
-func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userSessionId string, opts examserver.ExamOptions) (examserver.ExamSessionId, error) {
+func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userSessionId string, opts examserver.ExamOptions, acceptQuestionTypes []question.QuestionType) (examserver.ExamSessionId, error) {
 	s.startedExam = exam
 	s.startedUser = userSessionId
 	s.startedOpts = opts
+	s.startedAccept = acceptQuestionTypes
 	if s.startErr != nil {
 		return "", s.startErr
 	}
@@ -250,6 +253,49 @@ func TestExamSessionHandler(t *testing.T) {
 				want := examserver.ExamOptionRandomQuestions | examserver.ExamOptionRandomOptions
 				if s.startedOpts != want {
 					t.Errorf("started opts = %d, want %d", s.startedOpts, want)
+				}
+			},
+		},
+		{
+			name:       "create success with accept_question_types",
+			method:     http.MethodPost,
+			target:     "/api/examsessions",
+			body:       `{"exam_id":"exam-1","accept_question_types":["single-choice","multiple-choice"]}`,
+			exam:       newTestExam("exam-1"),
+			server:     &fakeExamServer{startID: "sess-1"},
+			wantStatus: http.StatusCreated,
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				want := []question.QuestionType{question.QuestionTypeSingleChoice, question.QuestionTypeMultipleChoice}
+				if !slices.Equal(s.startedAccept, want) {
+					t.Errorf("started accept types = %v, want %v", s.startedAccept, want)
+				}
+			},
+		},
+		{
+			name:       "create invalid accept_question_types",
+			method:     http.MethodPost,
+			target:     "/api/examsessions",
+			body:       `{"exam_id":"exam-1","accept_question_types":["essay"]}`,
+			exam:       newTestExam("exam-1"),
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusBadRequest,
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if s.startedExam != nil {
+					t.Errorf("server should not be called, got startedExam id %q", s.startedExam.Id)
+				}
+			},
+		},
+		{
+			name:       "create accept_question_types matches nothing",
+			method:     http.MethodPost,
+			target:     "/api/examsessions",
+			body:       `{"exam_id":"exam-1","accept_question_types":["drag-and-drop"]}`,
+			exam:       newTestExam("exam-1"), // holds only a single-choice question
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusBadRequest,
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if s.startedExam != nil {
+					t.Errorf("server should not be called, got startedExam id %q", s.startedExam.Id)
 				}
 			},
 		},

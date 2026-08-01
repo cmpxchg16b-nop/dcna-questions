@@ -63,12 +63,20 @@ export const ExamOptionRandomOptions = 1 << 1; // randomized options ordering
 export const ExamOptionSeekable = 1 << 2; // allows seeking to a question by index at will
 export const ExamOptionRandomQuestionColl = 1 << 3; // randomized question collection picking
 
+// QuestionType mirrors the Go question.QuestionType string enum
+// (pkg/models/question/question.go).
+export type QuestionType =
+  "single-choice" | "multiple-choice" | "drag-and-drop";
+
 // CreateExamSessionRequest is the JSON body of POST /api/examsessions:
-// {"exam_id": "...", "options": <bitmask>}. options defaults to 0 (document
-// order, not seekable) when absent.
+// {"exam_id": "...", "options": <bitmask>, "accept_question_types": [...]}.
+// options defaults to 0 (document order, not seekable) when absent;
+// accept_question_types restricts which question types the session serves
+// (absent or empty accepts every type).
 export type CreateExamSessionRequest = {
   exam_id: string;
   options?: number;
+  accept_question_types?: QuestionType[];
 };
 
 // CreateExamSessionResponse is the JSON body of a successful
@@ -93,7 +101,7 @@ export type QuestionOption = {
 // it is part of the wire payload but must never influence the client.
 export type Question = {
   id: string;
-  type: "single-choice" | "multiple-choice" | "drag-and-drop";
+  type: QuestionType;
   score?: number;
   description: { text: string };
   exhibits?: { image: { src: string } }[];

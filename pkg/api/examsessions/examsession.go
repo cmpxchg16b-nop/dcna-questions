@@ -2,10 +2,12 @@
 // CRUD over exam sessions scoped to the caller's user session.
 //
 //	POST   /api/examsessions           create a session for the exam whose id is
-//	        given in the request body as {"exam_id": "...", "options": <n>};
-//	        "options" is an examserver.ExamOptions bitmask applied to the new
-//	        session (0 when absent); returns the new session id as
-//	        {"exam_session_id": "..."}.
+//	        given in the request body as {"exam_id": "...", "options": <n>,
+//	        "accept_question_types": ["single-choice", ...]}; "options" is an
+//	        examserver.ExamOptions bitmask applied to the new session (0 when
+//	        absent); "accept_question_types" restricts which question types the
+//	        session serves (absent or empty accepts every type); returns the new
+//	        session id as {"exam_session_id": "..."}.
 //	GET    /api/examsessions           list the caller's sessions as
 //	        {"exam_sessions": [{...}, ...]}.
 //	GET    /api/examsessions/{exam_id} fetch a single session as
@@ -63,10 +65,13 @@ func NewExamSessionHandler(sm session.SessionManager, server examserver.ExamServ
 // createRequest is the JSON body of a POST /api/examsessions request. Options
 // is the examserver.ExamOptions bitmask applied to the new session; it is 0
 // when the field is absent, meaning questions and options are presented in
-// document order and the session is not seekable.
+// document order and the session is not seekable. AcceptQuestionTypes
+// restricts which question types the session serves; it accepts every type
+// when absent or empty.
 type createRequest struct {
-	ExamID  string                 `json:"exam_id"`
-	Options examserver.ExamOptions `json:"options"`
+	ExamID              string                  `json:"exam_id"`
+	Options             examserver.ExamOptions  `json:"options"`
+	AcceptQuestionTypes []question.QuestionType `json:"accept_question_types"`
 }
 
 // createResponse is the JSON body of a successful POST.
@@ -203,6 +208,12 @@ func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request
 		http.Error(w, "exam_id is required", http.StatusBadRequest)
 		return
 	}
+	for _, t := range req.AcceptQuestionTypes {
+		if !t.Valid() {
+			http.Error(w, "invalid question type: "+string(t), http.StatusBadRequest)
+			return
+		}
+	}
 
 	exam, err := h.repo.GetExamDocumentById(req.ExamID)
 	if err != nil {
@@ -217,8 +228,15 @@ func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request
 		http.Error(w, "exam has no questions", http.StatusBadRequest)
 		return
 	}
+	// Likewise reject up front when no question in the exam matches the
+	// caller's accepted types, instead of letting the session creation fail
+	// as empty server-side.
+	if len(req.AcceptQuestionTypes) > 0 && !examHasAnyType(exam, req.AcceptQuestionTypes) {
+		http.Error(w, "exam has no questions of the accepted types", http.StatusBadRequest)
+		return
+	}
 
-	sessionID, err := h.server.StartNewExamSession(r.Context(), exam, userSessionID, req.Options)
+	sessionID, err := h.server.StartNewExamSession(r.Context(), exam, userSessionID, req.Options, req.AcceptQuestionTypes)
 	if err != nil {
 		// With the empty-exam case handled above, the realistic remaining
 		// failures are the server shutting down or the request being canceled,
@@ -331,6 +349,23 @@ func decodeCreate(r *http.Request) (createRequest, bool) {
 		return req, false
 	}
 	return req, true
+}
+
+// examHasAnyType reports whether any question in any of the exam's question
+// collections has a type in accept.
+func examHasAnyType(exam *question.Exam, accept []question.QuestionType) bool {
+	accepted := make(map[question.QuestionType]struct{}, len(accept))
+	for _, t := range accept {
+		accepted[t] = struct{}{}
+	}
+	for _, qc := range exam.QuestionSet.QuestionCollections {
+		for _, q := range qc.Questions {
+			if _, ok := accepted[q.Type]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // parseCursorID reads the optional cursor_id query parameter. An empty or

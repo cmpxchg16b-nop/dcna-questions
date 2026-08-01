@@ -2,23 +2,33 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CreateExamSessionRequest,
   CreateExamSessionResponse,
+  QuestionType,
 } from "@/api/types";
 
-// CreateExamSessionInput is what the mutation consumes: the exam document id
-// plus an ExamOptions bitmask (see the ExamOption* constants in @/api/types).
+// CreateExamSessionInput is what the mutation consumes: the exam document id,
+// an ExamOptions bitmask (see the ExamOption* constants in @/api/types), and
+// the question types the session should serve (an empty array accepts every
+// type).
 export type CreateExamSessionInput = {
   examId: string;
   options: number;
+  acceptQuestionTypes: QuestionType[];
 };
 
 // createExamSession calls POST /api/examsessions with
-// {"exam_id": "...", "options": <bitmask>} and resolves to the new session id.
-// The caller's session_id cookie is sent automatically (same-origin fetch).
+// {"exam_id": "...", "options": <bitmask>, "accept_question_types": [...]} and
+// resolves to the new session id. The caller's session_id cookie is sent
+// automatically (same-origin fetch).
 async function createExamSession({
   examId,
   options,
+  acceptQuestionTypes,
 }: CreateExamSessionInput): Promise<string> {
-  const payload: CreateExamSessionRequest = { exam_id: examId, options };
+  const payload: CreateExamSessionRequest = {
+    exam_id: examId,
+    options,
+    accept_question_types: acceptQuestionTypes,
+  };
   const res = await fetch("/api/examsessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

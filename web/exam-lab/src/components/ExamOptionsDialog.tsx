@@ -18,6 +18,7 @@ import {
   ExamOptionRandomOptions,
   ExamOptionRandomQuestions,
   ExamOptionSeekable,
+  QuestionType,
 } from "@/api/types";
 
 type ExamOptionsDialogProps = {
@@ -27,7 +28,8 @@ type ExamOptionsDialogProps = {
 
 // Confirmation dialog shown before starting an exam: displays the exam's
 // metadata and lets the user pick ExamOptions (randomized question/option
-// order) for the new session. Renders nothing visible when exam is null.
+// order, seekability) and restrict the question types for the new session.
+// Renders nothing visible when exam is null.
 export default function ExamOptionsDialog({
   exam,
   onClose,
@@ -52,11 +54,23 @@ function ExamOptionsForm({
   const [randomQuestions, setRandomQuestions] = useState(false);
   const [randomOptions, setRandomOptions] = useState(false);
   const [seekable, setSeekable] = useState(false);
+  const [singleChoice, setSingleChoice] = useState(true);
+  const [multipleChoice, setMultipleChoice] = useState(true);
+  const [dragAndDrop, setDragAndDrop] = useState(true);
 
   const options =
     (randomQuestions ? ExamOptionRandomQuestions : 0) |
     (randomOptions ? ExamOptionRandomOptions : 0) |
     (seekable ? ExamOptionSeekable : 0);
+
+  // The accepted question types, in the order the checkboxes appear. An empty
+  // array would mean "accept every type" to the server, so the Take button is
+  // disabled instead when nothing is selected.
+  const acceptQuestionTypes: QuestionType[] = [
+    ...(singleChoice ? ["single-choice" as const] : []),
+    ...(multipleChoice ? ["multiple-choice" as const] : []),
+    ...(dragAndDrop ? ["drag-and-drop" as const] : []),
+  ];
 
   return (
     <>
@@ -94,15 +108,46 @@ function ExamOptionsForm({
             label="Seekable (allow going back to previous questions)"
           />
         </Box>
+        <DialogContentText sx={{ mt: 2 }}>Question types</DialogContentText>
+        <Box sx={{ display: "flex", flexDirection: "column" }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={singleChoice}
+                onChange={(e) => setSingleChoice(e.target.checked)}
+              />
+            }
+            label="Single-choice"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={multipleChoice}
+                onChange={(e) => setMultipleChoice(e.target.checked)}
+              />
+            }
+            label="Multiple-choice"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={dragAndDrop}
+                onChange={(e) => setDragAndDrop(e.target.checked)}
+              />
+            }
+            label="Drag-and-drop"
+          />
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="contained"
           loading={createSession.isPending}
+          disabled={acceptQuestionTypes.length === 0}
           onClick={() =>
             createSession.mutate(
-              { examId: exam.Id, options },
+              { examId: exam.Id, options, acceptQuestionTypes },
               {
                 onSuccess: onClose,
               },
