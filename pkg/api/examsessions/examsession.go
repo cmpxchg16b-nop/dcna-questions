@@ -13,6 +13,9 @@
 //	GET    /api/examsessions/{exam_id} fetch a single session as
 //	        {"exam_session": {...}}, including its current question index.
 //	DELETE /api/examsessions/{exam_id} terminate the named session.
+//	GET    /api/examsessions/{exam_id}/my_answer fetch the caller's last saved
+//	        submitting answer via GetMyAnswer; responds {"exam_answer": {...}}
+//	        or {"exam_answer": null} when no answer has been submitted.
 //	GET    /api/examsessions/{exam_id}/questions?cursor_id=<cursor>
 //	        fetch the next question via GetNextQuestion; responds
 //	        {"cursor_id": <next or null>, "question": {...} or null}.
@@ -127,6 +130,12 @@ type seekCursorResponse struct {
 	CursorID string `json:"cursor_id"`
 }
 
+// myAnswerResponse is the JSON body of a successful GET .../my_answer. The
+// exam_answer field is null when no answer has been submitted yet.
+type myAnswerResponse struct {
+	ExamAnswer *question.ExamAnswer `json:"exam_answer"`
+}
+
 // apiPrefix is the path the handler is mounted under. Every route beneath it is
 // resolved inside ServeHTTP, so the handler owns its own route tree rather than
 // relying on the ServeMux's wildcard captures.
@@ -136,10 +145,11 @@ const apiPrefix = "/api/examsessions"
 // handler is mounted as a subtree and resolves the collection root, a single
 // item, and the questions/cursors sub-resources itself:
 //
-//	""                     -> collection (POST create, GET list)
-//	"/{exam_id}"           -> item (GET single, DELETE)
-//	"/{exam_id}/questions" -> next question (GET)
-//	"/{exam_id}/cursors"   -> seek cursor (PUT)
+//	""                       -> collection (POST create, GET list)
+//	"/{exam_id}"             -> item (GET single, DELETE)
+//	"/{exam_id}/questions"   -> next question (GET)
+//	"/{exam_id}/cursors"     -> seek cursor (PUT)
+//	"/{exam_id}/my_answer"   -> last saved answer (GET)
 //
 // Anything else beneath the prefix responds 404.
 func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -191,6 +201,12 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.handleSeekCursor(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+	case len(segments) == 2 && segments[1] == "my_answer":
+		if r.Method != http.MethodGet {
+			h.methodNotAllowed(w, "GET")
+			return
+		}
+		h.handleGetMyAnswer(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
 	default:
 		http.NotFound(w, r)
 	}
@@ -326,6 +342,22 @@ func (h *ExamSessionHandler) handleSeekCursor(w http.ResponseWriter, r *http.Req
 		cursorID = string(*repositioned)
 	}
 	writeJSON(w, seekCursorResponse{CursorID: cursorID})
+}
+
+// handleGetMyAnswer returns the caller's last saved submitting answer for the
+// session. The caller's user id is forwarded to GetMyAnswer so ownership is
+// enforced by the server. A session that has not yet been answered responds
+// with a null exam_answer rather than an error.
+func (h *ExamSessionHandler) handleGetMyAnswer(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
+	ans, err := h.server.GetMyAnswer(r.Context(), examID, userSessionID)
+	if err != nil {
+		// GetMyAnswer fails when the session is missing or doesn't belong to the
+		// caller; both are reported as 404 (examserver keeps its sentinels
+		// unexported, so the two can't be told apart here).
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, myAnswerResponse{ExamAnswer: ans})
 }
 
 // methodNotAllowed reports 405 with the given methods in the Allow header.

@@ -63,6 +63,11 @@ type fakeExamServer struct {
 	getResult examserver.ExamSessionExcerpt
 	getErr    error
 	getExamID string
+
+	// GetMyAnswer
+	gmaResult *question.ExamAnswer
+	gmaErr    error
+	gmaExamID string
 }
 
 func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userSessionId string, opts examserver.ExamOptions, acceptQuestionTypes []question.QuestionType) (examserver.ExamSessionId, error) {
@@ -117,8 +122,9 @@ func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamSessionId,
 	return nil, nil
 }
 
-func (s *fakeExamServer) GetMyAnswer(context.Context, examserver.ExamSessionId, string) (*question.ExamAnswer, error) {
-	return nil, nil
+func (s *fakeExamServer) GetMyAnswer(_ context.Context, examId examserver.ExamSessionId, _ string) (*question.ExamAnswer, error) {
+	s.gmaExamID = string(examId)
+	return s.gmaResult, s.gmaErr
 }
 
 // newTestExam builds a minimal valid exam with id and one single-choice question.
@@ -565,6 +571,69 @@ func TestExamSessionHandler(t *testing.T) {
 			server:     &fakeExamServer{},
 			wantStatus: http.StatusMethodNotAllowed,
 			wantAllow:  "PUT",
+		},
+		{
+			name:   "get my answer success",
+			method: http.MethodGet,
+			target: "/api/examsessions/sess-1/my_answer",
+			server: &fakeExamServer{gmaResult: &question.ExamAnswer{
+				Answers: []question.Answer{
+					{QuestionId: "q1", QuestionType: question.QuestionTypeSingleChoice,
+						Options: question.Options{{Id: "3"}}},
+				},
+			}},
+			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				var got struct {
+					ExamAnswer *question.ExamAnswer `json:"exam_answer"`
+				}
+				decodeJSON(t, body, &got)
+				if got.ExamAnswer == nil {
+					t.Fatal("exam_answer = nil, want non-nil")
+				}
+				if len(got.ExamAnswer.Answers) != 1 {
+					t.Fatalf("len(answers) = %d, want 1", len(got.ExamAnswer.Answers))
+				}
+				if got.ExamAnswer.Answers[0].QuestionId != "q1" {
+					t.Errorf("answers[0].questionId = %q, want q1", got.ExamAnswer.Answers[0].QuestionId)
+				}
+			},
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if s.gmaExamID != "sess-1" {
+					t.Errorf("GetMyAnswer exam id = %q, want sess-1", s.gmaExamID)
+				}
+			},
+		},
+		{
+			name:       "get my answer none submitted",
+			method:     http.MethodGet,
+			target:     "/api/examsessions/sess-1/my_answer",
+			server:     &fakeExamServer{}, // gmaResult stays nil
+			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				var got struct {
+					ExamAnswer *question.ExamAnswer `json:"exam_answer"`
+				}
+				decodeJSON(t, body, &got)
+				if got.ExamAnswer != nil {
+					t.Errorf("exam_answer = %+v, want null", got.ExamAnswer)
+				}
+			},
+		},
+		{
+			name:       "get my answer not found",
+			method:     http.MethodGet,
+			target:     "/api/examsessions/sess-x/my_answer",
+			server:     &fakeExamServer{gmaErr: errors.New("exam not found")},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "method not allowed on my_answer",
+			method:     http.MethodPost,
+			target:     "/api/examsessions/sess-1/my_answer",
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusMethodNotAllowed,
+			wantAllow:  "GET",
 		},
 		{
 			name:       "unknown sub-path not found",
