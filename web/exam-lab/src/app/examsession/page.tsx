@@ -1,39 +1,23 @@
 "use client";
 
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
-  FormControlLabel,
-  Radio,
-  RadioGroup,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { useExamSession } from "@/hooks/useExamSession";
 import { useEndExamSession } from "@/hooks/useEndExamSession";
-
-// Mocked single-choice question, mirroring the Go question.Question shape
-// (pkg/models/question/question.go) until the session API serves real ones.
-const mockQuestion = {
-  id: "q1",
-  type: "single-choice",
-  description:
-    "Which protocol is used to dynamically assign IP addresses to hosts on a network?",
-  options: [
-    { id: "a", content: "DNS" },
-    { id: "b", content: "DHCP" },
-    { id: "c", content: "NAT" },
-    { id: "d", content: "ARP" },
-  ],
-};
+import { useNavigateQuestion } from "@/hooks/useNavigateQuestion";
+import QuestionCard from "@/components/QuestionCard";
+import { ExamOptionSeekable } from "@/api/types";
 
 export default function Page() {
   const router = useRouter();
@@ -46,16 +30,26 @@ export default function Page() {
 
   const { data: session, isPending, isError } = useExamSession(examSessionId);
   const endSession = useEndExamSession();
+  const navigate = useNavigateQuestion(examSessionId ?? "");
 
-  const [selected, setSelected] = useState("");
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
 
+  // position is the question currently on screen plus the cursor to continue
+  // from; it doubles as the cursor store the navigation API flows require. It
+  // is null until this page view has served a question, in which case the
+  // server-side current_question_index is the fallback: a non-negative server
+  // index then means the session was interrupted (e.g. the page was reloaded)
+  // and its question/cursor must be recovered through a seek.
+  const position = navigate.data ?? null;
   const serverIndex = session?.current_question_index ?? -1;
-  const currentQuestionIndex = serverIndex;
+  const currentQuestionIndex = position?.index ?? serverIndex;
+  const interrupted = position === null && serverIndex >= 0;
 
   const numQuestions = session?.exam_excerpt.NumQuestions ?? 0;
   const isLastQuestion = currentQuestionIndex >= numQuestions - 1;
-  const cursorRef = useRef<string>("");
+  const seekable = session
+    ? (session.options & ExamOptionSeekable) !== 0
+    : false;
 
   if (!examSessionId) {
     return (
@@ -84,32 +78,38 @@ export default function Page() {
   }
 
   const excerpt = session.exam_excerpt;
+
   const goToQuestion = (nextIndex: number) => {
     if (nextIndex === currentQuestionIndex + 1) {
-      // go next
-      // todo:
-      // 1. call api to get next question using the cursor in cursorRef, it's fine even if cursorRef currently stores an empty cursor
-      // 2. update the cursorRef with the server returned cursor at step 2
+      // go next: read through the current forward cursor. A null cursor reads
+      // from the beginning of the session, which is what Start Exam relies on.
+      navigate.mutate({
+        index: nextIndex,
+        cursor: position?.nextCursor ?? null,
+        seek: false,
+      });
     } else if (nextIndex === currentQuestionIndex - 1) {
-      // go previous
-      // todo:
-      // 1. call api to seek cursor to previous index, update the cursorRef with the server returned cursor
-      // 2. call api to get next question using the cursor obtained at step 1
-      // 3. update the cursorRef with the server returned cursor at step 2
+      // go previous: reposition the cursor to the previous index (requires a
+      // seekable session and invalidates the current cursor), then read the
+      // question through the repositioned cursor the server returned.
+      navigate.mutate({
+        index: nextIndex,
+        cursor: position?.nextCursor ?? null,
+        seek: true,
+      });
     } else {
       // unsupported
       console.error(`Unsupported index: ${nextIndex}`);
     }
   };
 
-  const startExam = () => {
-    if (currentQuestionIndex !== -1) {
-      console.error("Cannot start exam: already in progress");
-      return;
-    } else {
-      goToQuestion(0);
-    }
-  };
+  const startExam = () => goToQuestion(0);
+
+  // resumeExam recovers the interrupted session by seeking to the server's
+  // current question index with no cursor (SeekCursorTo mints a fresh one)
+  // and reading the question there. Only possible for seekable sessions.
+  const resumeExam = () =>
+    navigate.mutate({ index: serverIndex, cursor: null, seek: true });
 
   return (
     <Box>
@@ -124,51 +124,84 @@ export default function Page() {
       </Box>
 
       <Box sx={{ mt: 4 }}>
-        {currentQuestionIndex === -1 ? (
+        {interrupted ? (
+          <Typography>
+            {seekable
+              ? "This exam session is already in progress. Click “Resume” to continue where you left off."
+              : "This exam session is already in progress and cannot be resumed because it is not seekable. You can end it instead."}
+          </Typography>
+        ) : position === null ? (
           <Typography>
             Welcome! After you are prepared, click the &quot;Start Exam&quot;
             Button to start exam.
           </Typography>
         ) : (
           <Fragment>
-            {/* Todo: Render the question using real server-side data (obtained by calling GetNextQuestion() ) */}
             <Typography gutterBottom>
               Question {currentQuestionIndex + 1} of {numQuestions}
             </Typography>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" component="div" gutterBottom>
-                  {mockQuestion.description}
-                </Typography>
-                <RadioGroup
-                  value={selected}
-                  onChange={(e) => setSelected(e.target.value)}
-                >
-                  {mockQuestion.options.map((option) => (
-                    <FormControlLabel
-                      key={option.id}
-                      value={option.id}
-                      control={<Radio />}
-                      label={option.content}
-                    />
-                  ))}
-                </RadioGroup>
-              </CardContent>
-            </Card>
+            {/* Keying by question id resets the card's selection state every
+                time a new question is served. */}
+            <QuestionCard
+              key={position.question.id}
+              question={position.question}
+            />
           </Fragment>
+        )}
+
+        {navigate.isError && (
+          <Typography color="error" sx={{ mt: 1 }}>
+            {navigate.error.message}
+          </Typography>
         )}
 
         {/* End Exam replaces Next in the same flex slot on the last question,
             so it occupies exactly the same position. */}
         <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2 }}>
-          <Button
-            variant="contained"
-            disabled={currentQuestionIndex === 0}
-            onClick={() => goToQuestion(currentQuestionIndex - 1)}
-          >
-            Previous
-          </Button>
-          {isLastQuestion ? (
+          <Tooltip title={seekable ? "" : "This exam session is not seekable"}>
+            {/* MUI Tooltips don't fire on disabled buttons, hence the span. */}
+            <span>
+              <Button
+                variant="contained"
+                disabled={
+                  position === null ||
+                  currentQuestionIndex === 0 ||
+                  !seekable ||
+                  navigate.isPending
+                }
+                onClick={() => goToQuestion(currentQuestionIndex - 1)}
+              >
+                Previous
+              </Button>
+            </span>
+          </Tooltip>
+          {interrupted ? (
+            seekable ? (
+              <Button
+                variant="contained"
+                loading={navigate.isPending}
+                onClick={resumeExam}
+              >
+                Resume
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                color="error"
+                onClick={() => setConfirmEndOpen(true)}
+              >
+                End Exam
+              </Button>
+            )
+          ) : position === null ? (
+            <Button
+              variant="contained"
+              loading={navigate.isPending}
+              onClick={startExam}
+            >
+              Start Exam
+            </Button>
+          ) : isLastQuestion ? (
             <Button
               variant="contained"
               color="error"
@@ -176,13 +209,10 @@ export default function Page() {
             >
               End Exam
             </Button>
-          ) : currentQuestionIndex === -1 ? (
-            <Button variant="contained" onClick={() => startExam()}>
-              Start Exam
-            </Button>
           ) : (
             <Button
               variant="contained"
+              loading={navigate.isPending}
               onClick={() => goToQuestion(currentQuestionIndex + 1)}
             >
               Next

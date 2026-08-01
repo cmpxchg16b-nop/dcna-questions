@@ -17,6 +17,7 @@ import {
   ExamExcerpt,
   ExamOptionRandomOptions,
   ExamOptionRandomQuestions,
+  ExamOptionSeekable,
 } from "@/api/types";
 
 type ExamOptionsDialogProps = {
@@ -50,10 +51,12 @@ function ExamOptionsForm({
   const createSession = useCreateExamSession();
   const [randomQuestions, setRandomQuestions] = useState(false);
   const [randomOptions, setRandomOptions] = useState(false);
+  const [seekable, setSeekable] = useState(false);
 
   const options =
     (randomQuestions ? ExamOptionRandomQuestions : 0) |
-    (randomOptions ? ExamOptionRandomOptions : 0);
+    (randomOptions ? ExamOptionRandomOptions : 0) |
+    (seekable ? ExamOptionSeekable : 0);
 
   return (
     <>
@@ -81,6 +84,15 @@ function ExamOptionsForm({
             }
             label="Randomized options order"
           />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={seekable}
+                onChange={(e) => setSeekable(e.target.checked)}
+              />
+            }
+            label="Seekable (allow going back to previous questions)"
+          />
         </Box>
       </DialogContent>
       <DialogActions>
@@ -89,9 +101,12 @@ function ExamOptionsForm({
           variant="contained"
           loading={createSession.isPending}
           onClick={() =>
-            createSession.mutate({ examId: exam.Id, options }, {
-              onSuccess: onClose,
-            })
+            createSession.mutate(
+              { examId: exam.Id, options },
+              {
+                onSuccess: onClose,
+              },
+            )
           }
         >
           Take

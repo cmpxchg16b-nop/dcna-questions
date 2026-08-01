@@ -80,13 +80,15 @@ type listResponse struct {
 }
 
 // examSessionSummary is one entry in a list response: the session id, the
-// projected exam metadata, when the session was started, and the virtual index
-// of the question most recently served by GetNextQuestion (-1 before the first
-// question has been fetched).
+// projected exam metadata, when the session was started, the ExamOptions
+// bitmask the session was created with, and the virtual index of the question
+// most recently served by GetNextQuestion (-1 before the first question has
+// been fetched).
 type examSessionSummary struct {
 	ExamSessionID        string                       `json:"exam_session_id"`
 	ExamExcerpt          question.ExamDocumentExcerpt `json:"exam_excerpt"`
 	StartedAt            uint64                       `json:"started_at"`
+	Options              examserver.ExamOptions       `json:"options"`
 	CurrentQuestionIndex int                          `json:"current_question_index"`
 }
 
@@ -103,6 +105,7 @@ func toSummary(e examserver.ExamSessionExcerpt) examSessionSummary {
 		ExamSessionID:        string(e.Id),
 		ExamExcerpt:          e.ExamExcerpt,
 		StartedAt:            e.StartedAt,
+		Options:              e.Options,
 		CurrentQuestionIndex: e.CurrentQuestionIndex,
 	}
 }

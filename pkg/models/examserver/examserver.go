@@ -42,6 +42,9 @@ type ExamSessionExcerpt struct {
 	// millisecond-resolution unix timestamp
 	StartedAt uint64
 
+	// Options is the ExamOptions bitmask the session was created with.
+	Options ExamOptions
+
 	// CurrentQuestionIndex is the virtual index of the question most recently
 	// served by GetNextQuestion. It is -1 before the first question has been
 	// fetched, since the client must call GetNextQuestion even to obtain the
@@ -203,6 +206,7 @@ func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId stri
 				Id:                   id,
 				ExamExcerpt:          pkgmodelquestions.ExamExcerptFrom(sess.Exam),
 				StartedAt:            sess.StartedAt,
+				Options:              sess.Options,
 				CurrentQuestionIndex: sess.CurrentQuestionIndex,
 			})
 		}
@@ -239,6 +243,7 @@ func (srv *OnMemoryExamServer) GetExamSessionById(ctx context.Context, examId Ex
 			Id:                   examId,
 			ExamExcerpt:          pkgmodelquestions.ExamExcerptFrom(sess.Exam),
 			StartedAt:            sess.StartedAt,
+			Options:              sess.Options,
 			CurrentQuestionIndex: sess.CurrentQuestionIndex,
 		}}
 	}

@@ -36,6 +36,10 @@ export type ExamSessionSummary = {
   exam_session_id: string;
   exam_excerpt: ExamExcerpt;
   started_at: number;
+  // options is the examserver.ExamOptions bitmask the session was created
+  // with; test its bits with the ExamOption* constants below (e.g. a session
+  // only supports seeking when (options & ExamOptionSeekable) !== 0).
+  options: number;
   current_question_index: number;
 };
 
@@ -56,6 +60,8 @@ export type ExamSessionResponse = {
 // "options" field of POST /api/examsessions.
 export const ExamOptionRandomQuestions = 1 << 0; // randomized questions ordering within a collection
 export const ExamOptionRandomOptions = 1 << 1; // randomized options ordering
+export const ExamOptionSeekable = 1 << 2; // allows seeking to a question by index at will
+export const ExamOptionRandomQuestionColl = 1 << 3; // randomized question collection picking
 
 // CreateExamSessionRequest is the JSON body of POST /api/examsessions:
 // {"exam_id": "...", "options": <bitmask>}. options defaults to 0 (document
@@ -74,3 +80,40 @@ export type CreateExamSessionResponse = {
 // ExamSessions is the resolved list of session summaries exposed by
 // useExamSessions.
 export type ExamSessions = ExamSessionSummary[];
+
+// QuestionOption mirrors the Go question.Option struct {"id", "content"}.
+export type QuestionOption = {
+  id: string;
+  content: string;
+};
+
+// Question mirrors the subset of the Go question.Question struct
+// (pkg/models/question/question.go) that the client renders. Its json tags
+// produce camelCase wire fields. correctAnswer is deliberately not modeled:
+// it is part of the wire payload but must never influence the client.
+export type Question = {
+  id: string;
+  type: "single-choice" | "multiple-choice" | "drag-and-drop";
+  score?: number;
+  description: { text: string };
+  exhibits?: { image: { src: string } }[];
+  options?: QuestionOption[];
+};
+
+// NextQuestionResponse is the JSON body of a successful
+// GET /api/examsessions/{exam_session_id}/questions?cursor_id=<cursor>:
+// {"cursor_id": <next or null>, "question": {...} or null}. cursor_id is the
+// opaque token to continue forward with; both fields are null once the session
+// has no more questions.
+export type NextQuestionResponse = {
+  cursor_id: string | null;
+  question: Question | null;
+};
+
+// SeekCursorResponse is the JSON body of a successful
+// PUT /api/examsessions/{exam_session_id}/cursors?cursor_id=<cursor>&index=<n>:
+// {"cursor_id": "..."}. The returned cursor must be used for the next read;
+// any cursor passed in is invalidated by the seek.
+export type SeekCursorResponse = {
+  cursor_id: string;
+};
