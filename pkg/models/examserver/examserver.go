@@ -410,8 +410,15 @@ func (srv *OnMemoryExamServer) SubmitAnswer(ctx context.Context, examId ExamSess
 			resp <- result{err: errNotOwner}
 			return
 		}
-		// Grading is not yet implemented.
-		resp <- result{}
+		assessment, err := sess.Grader.Grade(answer)
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		if !checkOnly {
+			sess.ExamAnswer = answer
+		}
+		resp <- result{assessment: assessment}
 	}
 	if err := srv.dispatch(ctx, cmd); err != nil {
 		return nil, err
@@ -437,6 +444,10 @@ type OnMemoryExamSession struct {
 	UserId    string
 	Exam      *pkgmodelquestions.Exam
 	Questions *pkgmodelquestions.QuestionCollection
+
+	// Grader grades submissions against this session's question collection;
+	// it is instantiated once the collection is resolved at session start.
+	Grader SimpleGrader
 
 	// StartedAt is the millisecond-resolution unix timestamp captured when the
 	// session was created; it is surfaced unchanged through ListExamSessions.
@@ -514,6 +525,7 @@ func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions
 		Cursors:              make(map[string]int),
 		CurrentQuestionIndex: -1,
 		rng:                  rng,
+		Grader:               NewSimpleOnMemoryGrader(&qc, exam.PassingScore),
 	}
 }
 
