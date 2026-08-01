@@ -223,6 +223,24 @@ func TestExamSessionHandler(t *testing.T) {
 				if s.startedUser != sessID {
 					t.Errorf("started user = %q, want %q", s.startedUser, sessID)
 				}
+				if s.startedOpts != 0 {
+					t.Errorf("started opts = %d, want 0 when options absent", s.startedOpts)
+				}
+			},
+		},
+		{
+			name:       "create success with options",
+			method:     http.MethodPost,
+			target:     "/api/examsessions",
+			body:       `{"exam_id":"exam-1","options":3}`,
+			exam:       newTestExam("exam-1"),
+			server:     &fakeExamServer{startID: "sess-1"},
+			wantStatus: http.StatusCreated,
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				want := examserver.ExamOptionRandomQuestions | examserver.ExamOptionRandomOptions
+				if s.startedOpts != want {
+					t.Errorf("started opts = %d, want %d", s.startedOpts, want)
+				}
 			},
 		},
 		{

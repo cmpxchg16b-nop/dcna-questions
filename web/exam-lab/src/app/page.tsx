@@ -6,11 +6,13 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControlLabel,
   List,
   ListItem,
   Tooltip,
@@ -18,13 +20,27 @@ import {
 } from "@mui/material";
 import { formatDistanceToNow } from "date-fns";
 import { useExamDocs } from "@/hooks/useExamDocs";
-import { ExamSessionExcerpt, mockExamSessions } from "@/api/mockExamSessions";
+import { useExamSessions } from "@/hooks/useExamSessions";
+import { useCreateExamSession } from "@/hooks/useCreateExamSession";
+import { useEndExamSession } from "@/hooks/useEndExamSession";
+import {
+  ExamExcerpt,
+  ExamOptionRandomOptions,
+  ExamOptionRandomQuestions,
+  ExamSessionSummary,
+} from "@/api/types";
 
 export default function Home() {
   const { data: exams, isPending: isExamsPending } = useExamDocs();
-  const [sessionToEnd, setSessionToEnd] = useState<ExamSessionExcerpt | null>(
+  const { data: sessions, isPending: isSessionsPending } = useExamSessions();
+  const createSession = useCreateExamSession();
+  const endSession = useEndExamSession();
+  const [sessionToEnd, setSessionToEnd] = useState<ExamSessionSummary | null>(
     null,
   );
+  const [examToTake, setExamToTake] = useState<ExamExcerpt | null>(null);
+  const [randomQuestions, setRandomQuestions] = useState(false);
+  const [randomOptions, setRandomOptions] = useState(false);
 
   return (
     <Box>
@@ -33,63 +49,124 @@ export default function Home() {
           Exam Sessions
         </Typography>
         <Typography gutterBottom>
-          {mockExamSessions.length > 0
-            ? "Here are the ongoing exam sessions"
-            : "No ongoing exam sessions."}
+          {!isSessionsPending && sessions.length === 0
+            ? "No ongoing exam sessions."
+            : "Here are the ongoing exam sessions"}
         </Typography>
-        {mockExamSessions.length > 0 && (
-          <List>
-            {mockExamSessions.map((session) => (
-              <ListItem key={session.Id} disableGutters sx={{ mb: 1 }}>
-                <Card sx={{ width: "100%" }}>
-                  <CardContent>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <Typography variant="h6" component="div" noWrap>
-                          {session.ExamTitle}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {session.ExamShortName} · {session.ExamCode}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Started{" "}
-                          <Tooltip
-                            title={new Date(session.StartedAt).toLocaleString()}
-                          >
-                            <Box component="span">
-                              {formatDistanceToNow(
-                                new Date(session.StartedAt),
-                                {
-                                  addSuffix: true,
-                                },
-                              )}
-                            </Box>
-                          </Tooltip>
-                        </Typography>
+        {isSessionsPending ? (
+          <Typography>…</Typography>
+        ) : (
+          sessions.length > 0 && (
+            <List>
+              {sessions.map((session) => (
+                <ListItem
+                  key={session.exam_session_id}
+                  disableGutters
+                  sx={{ mb: 1 }}
+                >
+                  <Card sx={{ width: "100%" }}>
+                    <CardContent>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 2 }}
+                      >
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                          <Typography variant="h6" component="div" noWrap>
+                            {session.exam_excerpt.Title}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {session.exam_excerpt.ShortName} ·{" "}
+                            {session.exam_excerpt.Code}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Started{" "}
+                            <Tooltip
+                              title={new Date(
+                                session.started_at,
+                              ).toLocaleString()}
+                            >
+                              <Box component="span">
+                                {formatDistanceToNow(
+                                  new Date(session.started_at),
+                                  {
+                                    addSuffix: true,
+                                  },
+                                )}
+                              </Box>
+                            </Tooltip>
+                          </Typography>
+                        </Box>
+                        <Button
+                          variant="contained"
+                          sx={{ whiteSpace: "nowrap" }}
+                          onClick={() => alert("unimplemented")}
+                        >
+                          Resume
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="error"
+                          sx={{ whiteSpace: "nowrap" }}
+                          onClick={() => setSessionToEnd(session)}
+                        >
+                          End Exam
+                        </Button>
                       </Box>
-                      <Button
-                        variant="contained"
-                        sx={{ whiteSpace: "nowrap" }}
-                        onClick={() => alert("unimplemented")}
-                      >
-                        Resume
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="error"
-                        sx={{ whiteSpace: "nowrap" }}
-                        onClick={() => setSessionToEnd(session)}
-                      >
-                        End Exam
-                      </Button>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </ListItem>
-            ))}
-          </List>
+                    </CardContent>
+                  </Card>
+                </ListItem>
+              ))}
+            </List>
+          )
         )}
       </Box>
+
+      <Dialog open={examToTake !== null} onClose={() => setExamToTake(null)}>
+        <DialogTitle>{examToTake?.Title}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {examToTake?.ShortName} · {examToTake?.Code}
+          </DialogContentText>
+          <Box sx={{ display: "flex", flexDirection: "column" }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={randomQuestions}
+                  onChange={(e) => setRandomQuestions(e.target.checked)}
+                />
+              }
+              label="Randomized questions order"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={randomOptions}
+                  onChange={(e) => setRandomOptions(e.target.checked)}
+                />
+              }
+              label="Randomized options order"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExamToTake(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            loading={createSession.isPending}
+            onClick={() => {
+              if (!examToTake) return;
+              const options =
+                (randomQuestions ? ExamOptionRandomQuestions : 0) |
+                (randomOptions ? ExamOptionRandomOptions : 0);
+              createSession.mutate(
+                { examId: examToTake.Id, options },
+                { onSuccess: () => setExamToTake(null) },
+              );
+            }}
+          >
+            Take
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={sessionToEnd !== null}
@@ -98,8 +175,8 @@ export default function Home() {
         <DialogTitle>End exam session?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            End session {sessionToEnd?.Id} for {sessionToEnd?.ExamTitle}? This
-            cannot be undone.
+            End session {sessionToEnd?.exam_session_id} for{" "}
+            {sessionToEnd?.exam_excerpt.Title}? This cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -107,9 +184,12 @@ export default function Home() {
           <Button
             color="error"
             variant="contained"
+            loading={endSession.isPending}
             onClick={() => {
-              alert("unimplemented");
-              setSessionToEnd(null);
+              if (!sessionToEnd) return;
+              endSession.mutate(sessionToEnd.exam_session_id, {
+                onSuccess: () => setSessionToEnd(null),
+              });
             }}
           >
             End Exam
@@ -161,7 +241,11 @@ export default function Home() {
                         </Box>
                         <Button
                           variant="contained"
-                          onClick={() => alert("unimplemented")}
+                          onClick={() => {
+                            setRandomQuestions(false);
+                            setRandomOptions(false);
+                            setExamToTake(exam);
+                          }}
                         >
                           Take
                         </Button>

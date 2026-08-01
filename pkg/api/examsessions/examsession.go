@@ -2,8 +2,10 @@
 // CRUD over exam sessions scoped to the caller's user session.
 //
 //	POST   /api/examsessions           create a session for the exam whose id is
-//	        given in the request body as {"exam_id": "..."}; returns the new
-//	        session id as {"exam_session_id": "..."}.
+//	        given in the request body as {"exam_id": "...", "options": <n>};
+//	        "options" is an examserver.ExamOptions bitmask applied to the new
+//	        session (0 when absent); returns the new session id as
+//	        {"exam_session_id": "..."}.
 //	GET    /api/examsessions           list the caller's sessions as
 //	        {"exam_sessions": [{...}, ...]}.
 //	DELETE /api/examsessions/{exam_id} terminate the named session.
@@ -40,12 +42,6 @@ import (
 // small JSON object, so this comfortably rejects oversized payloads.
 const maxBodyBytes = 1 << 20 // 1 MiB
 
-// defaultExamOptions is the ExamOptions applied to newly created sessions. Zero
-// means questions and options are presented in document order and the session is
-// not seekable; override by extending the request payload if richer behavior is
-// needed.
-const defaultExamOptions examserver.ExamOptions = 0
-
 // ExamSessionHandler serves the /api/examsessions API. It resolves the exam
 // document to run from an ExamRepository and drives session lifecycle through an
 // ExamServer, both scoped to the caller's user session.
@@ -62,9 +58,13 @@ func NewExamSessionHandler(sm session.SessionManager, server examserver.ExamServ
 	return &ExamSessionHandler{sm: sm, server: server, repo: repo}
 }
 
-// createRequest is the JSON body of a POST /api/examsessions request.
+// createRequest is the JSON body of a POST /api/examsessions request. Options
+// is the examserver.ExamOptions bitmask applied to the new session; it is 0
+// when the field is absent, meaning questions and options are presented in
+// document order and the session is not seekable.
 type createRequest struct {
-	ExamID string `json:"exam_id"`
+	ExamID  string                 `json:"exam_id"`
+	Options examserver.ExamOptions `json:"options"`
 }
 
 // createResponse is the JSON body of a successful POST.
@@ -190,7 +190,7 @@ func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sessionID, err := h.server.StartNewExamSession(r.Context(), exam, userSessionID, defaultExamOptions)
+	sessionID, err := h.server.StartNewExamSession(r.Context(), exam, userSessionID, req.Options)
 	if err != nil {
 		// With the empty-exam case handled above, the realistic remaining
 		// failures are the server shutting down or the request being canceled,
