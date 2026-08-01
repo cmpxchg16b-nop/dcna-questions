@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Box,
+  Button,
   Card,
   CardContent,
   FormControlLabel,
@@ -28,6 +29,7 @@ const mockQuestion = {
 };
 
 export default function Page() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const title = searchParams.get("title") ?? "";
@@ -38,6 +40,16 @@ export default function Page() {
     Number(searchParams.get("current_question_index")) || 0;
 
   const [selected, setSelected] = useState("");
+
+  const isLastQuestion = currentQuestionIndex >= numQuestions - 1;
+
+  // Navigates within the session by rewriting current_question_index while
+  // preserving the other query params.
+  const goToQuestion = (index: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("current_question_index", String(index));
+    router.push(`/examsession?${params}`);
+  };
 
   return (
     <Box>
@@ -75,6 +87,33 @@ export default function Page() {
             </RadioGroup>
           </CardContent>
         </Card>
+        {/* End Exam replaces Next in the same flex slot on the last question,
+            so it occupies exactly the same position. */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2 }}>
+          <Button
+            variant="contained"
+            disabled={currentQuestionIndex === 0}
+            onClick={() => goToQuestion(currentQuestionIndex - 1)}
+          >
+            Previous
+          </Button>
+          {isLastQuestion ? (
+            <Button
+              variant="contained"
+              color="error"
+              onClick={() => router.push("/")}
+            >
+              End Exam
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              onClick={() => goToQuestion(currentQuestionIndex + 1)}
+            >
+              Next
+            </Button>
+          )}
+        </Box>
       </Box>
     </Box>
   );
