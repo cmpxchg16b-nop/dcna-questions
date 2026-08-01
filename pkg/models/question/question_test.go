@@ -126,8 +126,8 @@ func TestExamLoader_LoadFileRealRepoExam(t *testing.T) {
 		t.Fatalf("unexpected exam meta: %+v", exam)
 	}
 	qs := exam.QuestionSet.QuestionCollections
-	if len(qs) != 1 || len(qs[0].Questions) != 5 {
-		t.Fatalf("expected 1 collection with 5 questions, got %d collections", len(qs))
+	if len(qs) != 1 || len(qs[0].Questions) != 6 {
+		t.Fatalf("expected 1 collection with 6 questions, got %d collections", len(qs))
 	}
 	// Question 3 is the drag-and-drop with a bullet (&#8226;) in its description.
 	q3 := qs[0].Questions[2]

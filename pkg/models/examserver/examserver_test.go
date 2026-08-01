@@ -44,11 +44,11 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 		}
 	}
 
-	// exam1.xml has one collection with 5 questions (ids 1, 2, 3, 4, 5).
-	if len(seen) != 5 {
-		t.Fatalf("expected 5 questions, got %d (%v)", len(seen), seen)
+	// exam1.xml has one collection with 6 questions (ids 1, 2, 3, 4, 5, 6).
+	if len(seen) != 6 {
+		t.Fatalf("expected 6 questions, got %d (%v)", len(seen), seen)
 	}
-	for i, want := range []string{"1", "2", "3", "4", "5"} {
+	for i, want := range []string{"1", "2", "3", "4", "5", "6"} {
 		if seen[i] != want {
 			t.Errorf("question %d: got id %q, want %q", i, seen[i], want)
 		}
