@@ -211,7 +211,7 @@
       </xs:sequence>
       <xs:attribute name="id" type="xs:string" use="required" />
       <xs:attribute name="type" type="QuestionType" />
-      <xs:attribute name="score" type="xs:integer" default="1"></xs:attribute>
+      <xs:attribute name="score" type="xs:float" use="required"></xs:attribute>
     </xs:complexType>
   </xs:element>
   <xs:element name="questioncollection">
@@ -242,6 +242,7 @@
       <xs:sequence>
         <xs:element ref="title" />
         <xs:element ref="description" />
+        <xs:element name="passingscore" minOccurs="0" maxOccurs="1" type="xs:float" />
         <xs:element ref="questionset" minOccurs="1" maxOccurs="1" />
       </xs:sequence>
       <xs:attribute name="id" type="xs:string" use="required" />

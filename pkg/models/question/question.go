@@ -125,7 +125,7 @@ type QuestionDescription struct {
 type Question struct {
 	Id            string              `xml:"id,attr" json:"id"`
 	Type          QuestionType        `xml:"type,attr" json:"type"`
-	Score         int                 `xml:"score,attr" json:"score,omitempty"`
+	Score         float32             `xml:"score,attr" json:"score,omitempty"`
 	Description   QuestionDescription `xml:"description" json:"description"`
 	Exhibits      Exhibits            `xml:"exhibits>exhibit" json:"exhibits,omitempty"`
 	Options       Options             `xml:"options>option" json:"options,omitempty"`
@@ -150,13 +150,14 @@ type QuestionSet struct {
 // Exam is the root <exam> document: a named certification exam carrying
 // metadata and exactly one question set.
 type Exam struct {
-	XMLName     xml.Name    `xml:"exam" json:"-"`
-	Id          string      `xml:"id,attr" json:"id"`
-	ShortName   string      `xml:"shortname,attr" json:"shortName"`
-	Code        string      `xml:"code,attr" json:"code"`
-	Title       PlainText   `xml:"title" json:"title"`
-	Description PlainText   `xml:"description" json:"description"`
-	QuestionSet QuestionSet `xml:"questionset" json:"questionSet"`
+	XMLName      xml.Name    `xml:"exam" json:"-"`
+	Id           string      `xml:"id,attr" json:"id"`
+	ShortName    string      `xml:"shortname,attr" json:"shortName"`
+	Code         string      `xml:"code,attr" json:"code"`
+	Title        PlainText   `xml:"title" json:"title"`
+	Description  PlainText   `xml:"description" json:"description"`
+	PassingScore *float32    `xml:"passingscore" json:"passingScore,omitempty"`
+	QuestionSet  QuestionSet `xml:"questionset" json:"questionSet"`
 }
 
 // OverallResult is the value of the <overallresult> element in an assessment.
@@ -226,14 +227,14 @@ type ExamAnswer struct {
 // of an exam without handing consumers the full document graph.
 type ExamDocumentExcerpt struct {
 	// Id of the exam document, not the id of the exam session
-	Id           string
+	Id string
 
 	ShortName    string
 	Code         string
 	Title        PlainText
 	Description  PlainText
 	NumQuestions int
-	TotalScores  int
+	TotalScores  float32
 }
 
 // ExamExcerptFrom builds an ExamExcerpt from an Exam. NumQuestions is the

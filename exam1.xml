@@ -7,10 +7,11 @@
     <title>DN42 Certified Network Associate</title>
     <description>Passing this exam earns you the DCNA certification, and can also can be used towards your recertification goals.
     Mastering DN42 techniques (DC-01 DCNA) v1.1 is a 120-minute exam that tests a candidate's knowledge and skills related to network fundamentals, routing and switching, IP connectivity, BGP configuration, connectivity troubleshooting, and automation and programmability.</description>
+    <passingscore>4.0</passingscore>
     <questionset>
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
       <questioncollection>
-        <question id="1" type="single-choice">
+        <question id="1" type="single-choice" score="1">
           <description>An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix? (Choose one.)</description>
           <options>
             <option
@@ -34,7 +35,7 @@
             </options>
           </correctanswer>
         </question>
-        <question id="2" type="multiple-choice">
+        <question id="2" type="multiple-choice" score="1">
           <description>Refer to the exhibit. An engineer must configure an L3Out peering with the backbone network. The L3Out must forward unicast and multicast traffic over the link.
             Which two methods should be used to configure L3Out to meet these requirements? (Choose two.)</description>
           <exhibits>
@@ -58,7 +59,7 @@
             </combination>
           </correctanswer>
         </question>
-        <question id="3" type="drag-and-drop">
+        <question id="3" type="drag-and-drop" score="1">
           <description>An engineer deploys a Cisco ACI fabric. The engineer created a VPC policy group named Allot_MET_RIO7_RIO8 for the enclosure and these objects have been configured:
             &#8226; Physical Domain Bare_Metal_L3In_Dom
             &#8226; VLAN pool NFVI_VLPool
@@ -92,7 +93,7 @@
             </connectionsolutions>
           </correctanswer>
         </question>
-        <question id="4" type="single-choice">
+        <question id="4" type="single-choice" score="1">
           <description>Refer to the exhibit. An engineer is investigating a reachability issue in an experimental BGP overlay network. ICMPv6 echo requests from the local router to fdea:6e46:2f1c::1 time out, and traceroute dies several hops into the path. The engineer verifies that the iBGP session to i-bzip9 is established, that no ACLs are blocking ICMPv6, and the rp_filter kernel parameter is set to 0 for all interfaces. Which statement best explains why the pings fail?</description>
           <exhibits>
             <exhibit>
@@ -124,7 +125,7 @@
             </options>
           </correctanswer>
         </question>
-        <question id="5" type="drag-and-drop">
+        <question id="5" type="drag-and-drop" score="1">
           <description>Drag and drop the Cisco ACI filter entry options from the left onto the correct categories on the right indicating what are required or optional parameters.
             Select and Place:</description>
           <candidates>
@@ -180,7 +181,7 @@
             </connectionsolutions>
           </correctanswer>
         </question>
-        <question id="6" type="single-choice">
+        <question id="6" type="single-choice" score="1">
           <description>Which protocol is used to dynamically assign IP addresses to hosts on a network? (Chooce one.)</description>
           <options>
             <option id="1">DNS</option>

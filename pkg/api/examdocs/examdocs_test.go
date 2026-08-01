@@ -43,7 +43,7 @@ type ndLine struct {
 // examWith builds a minimal exam whose first (and only) question collection
 // holds one single-choice question per score; ExamExcerptFrom therefore reports
 // NumQuestions = len(scores) and TotalScores = sum(scores).
-func examWith(id, code string, scores ...int) *question.Exam {
+func examWith(id, code string, scores ...float32) *question.Exam {
 	qs := make([]question.Question, len(scores))
 	for i, s := range scores {
 		qs[i] = question.Question{
@@ -113,8 +113,9 @@ func TestExamHandler(t *testing.T) {
 					t.Fatalf("got %d lines, want 2 (body %q)", len(lines), rr.Body.String())
 				}
 				cases := []struct {
-					id         string
-					num, total int
+					id    string
+					num   int
+					total float32
 				}{
 					{"A", 1, 1},
 					{"B", 2, 3},
@@ -127,7 +128,7 @@ func TestExamHandler(t *testing.T) {
 						t.Fatalf("line %d: nil Data", i)
 					}
 					if lines[i].Data.Id != c.id || lines[i].Data.NumQuestions != c.num || lines[i].Data.TotalScores != c.total {
-						t.Errorf("line %d: Data = %+v, want {Id:%s NumQuestions:%d TotalScores:%d}",
+						t.Errorf("line %d: Data = %+v, want {Id:%s NumQuestions:%d TotalScores:%g}",
 							i, lines[i].Data, c.id, c.num, c.total)
 					}
 				}
