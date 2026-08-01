@@ -72,6 +72,14 @@ type OnMemoryExamServer struct {
 	// actor goroutine.
 	sessionsStore map[ExamId]*OnMemoryExamSession
 
+	// userSessions is the reverse index of sessionsStore: it maps a user
+	// session id to the set of exam ids that user has started, so that
+	// ListExamSessions is O(sessions-for-user) instead of scanning every
+	// session. Like sessionsStore, it is only ever touched inside closures run
+	// by the actor goroutine, so it stays in lock-step with sessionsStore
+	// without any locking of its own.
+	userSessions map[string]map[ExamId]struct{}
+
 	// serviceChan carries closures for the actor goroutine to run.
 	serviceChan chan func()
 
@@ -88,6 +96,7 @@ type OnMemoryExamServer struct {
 func NewOnMemoryExamServer() *OnMemoryExamServer {
 	return &OnMemoryExamServer{
 		sessionsStore: make(map[ExamId]*OnMemoryExamSession),
+		userSessions:  make(map[string]map[ExamId]struct{}),
 		serviceChan:   make(chan func()),
 		done:          make(chan struct{}),
 	}
@@ -143,6 +152,12 @@ func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pk
 		opts := examOptions
 		examId := ExamId(uuid.NewString())
 		srv.sessionsStore[examId] = newExamSession(examId, userId, exam, opts)
+		sessions, ok := srv.userSessions[userId]
+		if !ok {
+			sessions = make(map[ExamId]struct{})
+			srv.userSessions[userId] = sessions
+		}
+		sessions[examId] = struct{}{}
 		resp <- result{examId: examId}
 	}
 	if err := srv.dispatch(ctx, cmd); err != nil {
@@ -160,11 +175,10 @@ func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId stri
 	type result struct{ ids []ExamId }
 	resp := make(chan result, 1)
 	cmd := func() {
-		var ids []ExamId
-		for id, s := range srv.sessionsStore {
-			if s.UserSessionId == userId {
-				ids = append(ids, id)
-			}
+		sessions := srv.userSessions[userId]
+		ids := make([]ExamId, 0, len(sessions))
+		for id := range sessions {
+			ids = append(ids, id)
 		}
 		resp <- result{ids: ids}
 	}
@@ -183,11 +197,18 @@ func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamId
 	type result struct{ err error }
 	resp := make(chan result, 1)
 	cmd := func() {
-		if _, ok := srv.sessionsStore[examId]; !ok {
+		sess, ok := srv.sessionsStore[examId]
+		if !ok {
 			resp <- result{err: errExamNotFound}
 			return
 		}
 		delete(srv.sessionsStore, examId)
+		if sessions, ok := srv.userSessions[sess.UserId]; ok {
+			delete(sessions, examId)
+			if len(sessions) == 0 {
+				delete(srv.userSessions, sess.UserId)
+			}
+		}
 		resp <- result{}
 	}
 	if err := srv.dispatch(ctx, cmd); err != nil {
@@ -309,7 +330,7 @@ type OnMemoryQuestion struct {
 // the singleton OnMemoryExamServer should be the sole ownership holder of every OnMemoryExamSession
 type OnMemoryExamSession struct {
 	ExamId        ExamId
-	UserSessionId string
+	UserId        string
 	Questions     *pkgmodelquestions.QuestionCollection
 
 	// Options captured for this exam; drives seekable checks and option
@@ -366,7 +387,7 @@ func newExamSession(examId ExamId, userSessionId string, exam *pkgmodelquestions
 	}
 	return &OnMemoryExamSession{
 		ExamId:              examId,
-		UserSessionId:       userSessionId,
+		UserId:       userSessionId,
 		Questions:           &qc,
 		Options:             opts,
 		QuestionPermutation: qPerm,
