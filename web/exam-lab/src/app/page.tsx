@@ -223,8 +223,13 @@ export default function Home() {
                           <Typography variant="h6" component="div" noWrap>
                             {exam.Title}
                           </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {exam.ShortName} · {exam.Code}
+                          <Typography
+                            gutterBottom
+                            variant="body2"
+                            color="text.secondary"
+                          >
+                            {exam.ShortName} · {exam.Code} · {exam.NumQuestions}{" "}
+                            {exam.NumQuestions === 1 ? "question" : "questions"}
                           </Typography>
                           <Typography
                             variant="body2"

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 export default function Page() {
   const searchParams = useSearchParams();
 
-  const examid = searchParams.get("examid");
+  const exam_session_id = searchParams.get("exam_session_id");
 
-  return <p>examid: {examid}</p>;
+  return <p>exam_session_id: {exam_session_id}</p>;
 }
