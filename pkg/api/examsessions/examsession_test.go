@@ -100,8 +100,8 @@ func (s *fakeExamServer) SeekCursorTo(_ context.Context, examId examserver.ExamI
 	return s.seekResult, nil
 }
 
-func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamId, string, bool) (string, error) {
-	return "", nil
+func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamId, *question.ExamAnswer, bool) (*question.Assessment, error) {
+	return nil, nil
 }
 
 // newTestExam builds a minimal valid exam with id and one single-choice question.

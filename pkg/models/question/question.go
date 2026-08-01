@@ -159,6 +159,67 @@ type Exam struct {
 	QuestionSet QuestionSet `xml:"questionset" json:"questionSet"`
 }
 
+// OverallResult is the value of the <overallresult> element in an assessment.
+// It mirrors the XSD OverallResultType enumeration.
+type OverallResult string
+
+const (
+	OverallResultPass      OverallResult = "pass"
+	OverallResultImmediate OverallResult = "immediate"
+)
+
+// Valid reports whether r is one of the recognized overall results.
+func (r OverallResult) Valid() bool {
+	switch r {
+	case OverallResultPass, OverallResultImmediate:
+		return true
+	}
+	return false
+}
+
+// ScoreResult is the <scoreresult> element: the aggregate earned and total
+// score for a graded submission.
+type ScoreResult struct {
+	EarnedScore float32 `xml:"earnedScore,attr" json:"earnedScore"`
+	TotalScore  float32 `xml:"totalScore,attr" json:"totalScore"`
+}
+
+// QuestionScore is one <questionscore> element: the score earned on a single
+// question, identified by its questionId.
+type QuestionScore struct {
+	QuestionId  string  `xml:"questionId,attr" json:"questionId"`
+	ScoreEarned float32 `xml:"scoreEarned,attr" json:"scoreEarned"`
+}
+
+// Assessment is the <assessment> element: the score report produced after a
+// submission is graded. It carries the overall result, the aggregate score,
+// and a per-question score breakdown. All children are optional (0..1 / 0..n).
+type Assessment struct {
+	XMLName        xml.Name        `xml:"assessment" json:"-"`
+	OverallResult  *OverallResult  `xml:"overallresult" json:"overallResult,omitempty"`
+	ScoreResult    *ScoreResult    `xml:"scoreresult" json:"scoreResult,omitempty"`
+	QuestionScores []QuestionScore `xml:"questionscore" json:"questionScores,omitempty"`
+}
+
+// Answer is one <answer> element within an examanswer: a candidate's response
+// to a single question. For single-choice and multiple-choice questions it
+// carries the selected options; for drag-and-drop questions it carries the
+// connections. QuestionType is recorded on the answer so a submission can be
+// validated against the schema without re-reading the question.
+type Answer struct {
+	QuestionId   string       `xml:"questionId,attr" json:"questionId"`
+	QuestionType QuestionType `xml:"questionType,attr" json:"questionType"`
+	Options      Options      `xml:"options>option" json:"options,omitempty"`
+	Connections  []Connect    `xml:"connections>connect" json:"connections,omitempty"`
+}
+
+// ExamAnswer is the <examanswer> element: a complete submission carrying one
+// answer per answered question for the chosen question collection.
+type ExamAnswer struct {
+	XMLName xml.Name `xml:"examanswer" json:"-"`
+	Answers []Answer `xml:"answer" json:"answers,omitempty"`
+}
+
 // ExamExcerpt is a lightweight projection of an Exam that carries its
 // identifying metadata plus aggregate counts derived from the first question
 // collection. It has no behavior: it exists to expose a small, stable summary

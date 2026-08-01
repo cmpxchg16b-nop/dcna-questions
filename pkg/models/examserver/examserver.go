@@ -35,10 +35,10 @@ var (
 
 type ExamServer interface {
 	// Start a new exam session
-	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error)
+	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions) (ExamId, error)
 
 	// List started exam sessions of a given user session
-	ListExamSessions(ctx context.Context, userSessionId string) []ExamId
+	ListExamSessions(ctx context.Context, userId string) []ExamId
 
 	// Terminate the specified exam session
 	EndExamSession(ctx context.Context, examId ExamId) error
@@ -52,7 +52,7 @@ type ExamServer interface {
 	// the content of cursor is opaque, the client should never assume anything about it.
 	SeekCursorTo(ctx context.Context, examId ExamId, cursor *QuestionCursor, newVirtualIndex int) (repositionedCursor *QuestionCursor, err error)
 
-	SubmitAnswer(ctx context.Context, examId ExamId, answerXML string, checkOnly bool) (assessmentXML string, err error)
+	SubmitAnswer(ctx context.Context, examId ExamId, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error)
 }
 
 // OnMemoryExamServer implements ExamServer as a single CSP actor.
@@ -129,7 +129,7 @@ func (srv *OnMemoryExamServer) dispatch(ctx context.Context, cmd func()) error {
 	}
 }
 
-func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userSessionId string, examOptions ExamOptions) (ExamId, error) {
+func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions) (ExamId, error) {
 	type result struct {
 		examId ExamId
 		err    error
@@ -142,7 +142,7 @@ func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pk
 		}
 		opts := examOptions
 		examId := ExamId(uuid.NewString())
-		srv.sessionsStore[examId] = newExamSession(examId, userSessionId, exam, opts)
+		srv.sessionsStore[examId] = newExamSession(examId, userId, exam, opts)
 		resp <- result{examId: examId}
 	}
 	if err := srv.dispatch(ctx, cmd); err != nil {
@@ -156,13 +156,13 @@ func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pk
 	}
 }
 
-func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userSessionId string) []ExamId {
+func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId string) []ExamId {
 	type result struct{ ids []ExamId }
 	resp := make(chan result, 1)
 	cmd := func() {
 		var ids []ExamId
 		for id, s := range srv.sessionsStore {
-			if s.UserSessionId == userSessionId {
+			if s.UserSessionId == userId {
 				ids = append(ids, id)
 			}
 		}
@@ -295,8 +295,8 @@ func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamId, 
 }
 
 // SubmitAnswer is not yet implemented.
-func (srv *OnMemoryExamServer) SubmitAnswer(ctx context.Context, examId ExamId, answerXML string, checkOnly bool) (assessmentXML string, err error) {
-	return "", nil
+func (srv *OnMemoryExamServer) SubmitAnswer(ctx context.Context, examId ExamId, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error) {
+	return nil, nil
 }
 
 type OnMemoryQuestion struct {
@@ -331,10 +331,10 @@ type OnMemoryExamSession struct {
 	// only inside dispatch closures) and is therefore lock-free.
 	rng *rand.Rand
 
-	// For example answer XML, see the <examanswer></examanswer> enclosure in exam1.xml
-	// When submitting, only <root><examanswer></examanswer></root> is needed, plus some necessary XML preamble in the beginning (see exam1.xml as well)
-	// Saves the user's latest submitted answer, if checkOnly is set to true, this field won't be updated.
-	ExamAnswersXML string
+	// ExamAnswer holds the user's latest submitted answer (the parsed <examanswer>
+	// element; see exam1.xml for its shape). When SubmitAnswer is called with
+	// checkOnly set to true, this field is not updated.
+	ExamAnswer *pkgmodelquestions.ExamAnswer
 }
 
 // cachedQuestion returns the question at actualIdx, building and caching a copy
