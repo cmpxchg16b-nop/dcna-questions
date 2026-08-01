@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type ExamId string
+type ExamSessionId string
 type QuestionCursor string
 
 type ExamOptions uint32
@@ -34,26 +34,35 @@ var (
 	errEmptyExam     = errors.New("exam has no questions")
 )
 
+type ExamSessionExcerpt struct {
+	// This Id is the id of exam session, by which the exam server use to keep track of exam sessions
+	Id      ExamSessionId
+
+	ExamExcerpt pkgmodelquestions.ExamExcerpt
+	// millisecond-resolution unix timestamp
+	StartedAt uint64
+}
+
 type ExamServer interface {
 	// Start a new exam session
-	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions) (ExamId, error)
+	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions) (ExamSessionId, error)
 
 	// List started exam sessions of a given user
-	ListExamSessions(ctx context.Context, userId string) []ExamId
+	ListExamSessions(ctx context.Context, userId string) []ExamSessionExcerpt
 
 	// Terminate the specified exam session
-	EndExamSession(ctx context.Context, examId ExamId, userId string) error
+	EndExamSession(ctx context.Context, examId ExamSessionId, userId string) error
 
 	// the initial cursor should be nil
 	// if has more, `nextCursor` won't be nil
-	GetNextQuestion(ctx context.Context, examId ExamId, userId string, cursor *QuestionCursor) (question *pkgmodelquestions.Question, nextCursor *QuestionCursor, err error)
+	GetNextQuestion(ctx context.Context, examId ExamSessionId, userId string, cursor *QuestionCursor) (question *pkgmodelquestions.Question, nextCursor *QuestionCursor, err error)
 
 	// if the cursor is nil, a brand-new cursor will be created, you should always use the `repositionedCursor` to get the next question, whether it was succeeded or not.
 	// if the exam is un-seekable, the operation will fail.
 	// the content of cursor is opaque, the client should never assume anything about it.
-	SeekCursorTo(ctx context.Context, examId ExamId, userId string, cursor *QuestionCursor, newVirtualIndex int) (repositionedCursor *QuestionCursor, err error)
+	SeekCursorTo(ctx context.Context, examId ExamSessionId, userId string, cursor *QuestionCursor, newVirtualIndex int) (repositionedCursor *QuestionCursor, err error)
 
-	SubmitAnswer(ctx context.Context, examId ExamId, userId string, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error)
+	SubmitAnswer(ctx context.Context, examId ExamSessionId, userId string, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error)
 }
 
 // OnMemoryExamServer implements ExamServer as a single CSP actor.
@@ -71,7 +80,7 @@ type ExamServer interface {
 type OnMemoryExamServer struct {
 	// sessionsStore is only ever read or written inside closures run by the
 	// actor goroutine.
-	sessionsStore map[ExamId]*OnMemoryExamSession
+	sessionsStore map[ExamSessionId]*OnMemoryExamSession
 
 	// userSessions is the reverse index of sessionsStore: it maps a user id
 	// to the set of exam ids that user has started, so that ListExamSessions
@@ -79,7 +88,7 @@ type OnMemoryExamServer struct {
 	// sessionsStore, it is only ever touched inside closures run by the actor
 	// goroutine, so it stays in lock-step with sessionsStore without any
 	// locking of its own.
-	userSessions map[string]map[ExamId]struct{}
+	userSessions map[string]map[ExamSessionId]struct{}
 
 	// serviceChan carries closures for the actor goroutine to run.
 	serviceChan chan func()
@@ -96,8 +105,8 @@ type OnMemoryExamServer struct {
 // the server.
 func NewOnMemoryExamServer() *OnMemoryExamServer {
 	return &OnMemoryExamServer{
-		sessionsStore: make(map[ExamId]*OnMemoryExamSession),
-		userSessions:  make(map[string]map[ExamId]struct{}),
+		sessionsStore: make(map[ExamSessionId]*OnMemoryExamSession),
+		userSessions:  make(map[string]map[ExamSessionId]struct{}),
 		serviceChan:   make(chan func()),
 		done:          make(chan struct{}),
 	}
@@ -139,9 +148,9 @@ func (srv *OnMemoryExamServer) dispatch(ctx context.Context, cmd func()) error {
 	}
 }
 
-func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions) (ExamId, error) {
+func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions) (ExamSessionId, error) {
 	type result struct {
-		examId ExamId
+		examId ExamSessionId
 		err    error
 	}
 	resp := make(chan result, 1)
@@ -151,11 +160,11 @@ func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pk
 			return
 		}
 		opts := examOptions
-		examId := ExamId(uuid.NewString())
+		examId := ExamSessionId(uuid.NewString())
 		srv.sessionsStore[examId] = newExamSession(examId, userId, exam, opts)
 		sessions, ok := srv.userSessions[userId]
 		if !ok {
-			sessions = make(map[ExamId]struct{})
+			sessions = make(map[ExamSessionId]struct{})
 			srv.userSessions[userId] = sessions
 		}
 		sessions[examId] = struct{}{}
@@ -172,29 +181,34 @@ func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pk
 	}
 }
 
-func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId string) []ExamId {
-	type result struct{ ids []ExamId }
+func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId string) []ExamSessionExcerpt {
+	type result struct{ excerpts []ExamSessionExcerpt }
 	resp := make(chan result, 1)
 	cmd := func() {
 		sessions := srv.userSessions[userId]
-		ids := make([]ExamId, 0, len(sessions))
+		excerpts := make([]ExamSessionExcerpt, 0, len(sessions))
 		for id := range sessions {
-			ids = append(ids, id)
+			sess := srv.sessionsStore[id]
+			excerpts = append(excerpts, ExamSessionExcerpt{
+				Id:      id,
+				ExamExcerpt: pkgmodelquestions.ExamExcerptFrom(sess.Exam),
+				StartedAt:   sess.StartedAt,
+			})
 		}
-		resp <- result{ids: ids}
+		resp <- result{excerpts: excerpts}
 	}
 	if err := srv.dispatch(ctx, cmd); err != nil {
 		return nil
 	}
 	select {
 	case r := <-resp:
-		return r.ids
+		return r.excerpts
 	case <-ctx.Done():
 		return nil
 	}
 }
 
-func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamId, userId string) error {
+func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamSessionId, userId string) error {
 	type result struct{ err error }
 	resp := make(chan result, 1)
 	cmd := func() {
@@ -227,7 +241,7 @@ func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamId
 	}
 }
 
-func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamId, userId string, cursor *QuestionCursor) (question *pkgmodelquestions.Question, nextCursor *QuestionCursor, err error) {
+func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamSessionId, userId string, cursor *QuestionCursor) (question *pkgmodelquestions.Question, nextCursor *QuestionCursor, err error) {
 	type result struct {
 		question   *pkgmodelquestions.Question
 		nextCursor *QuestionCursor
@@ -283,7 +297,7 @@ func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamI
 	}
 }
 
-func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamId, userId string, cursor *QuestionCursor, newIndex int) (*QuestionCursor, error) {
+func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamSessionId, userId string, cursor *QuestionCursor, newIndex int) (*QuestionCursor, error) {
 	type result struct {
 		cursor *QuestionCursor
 		err    error
@@ -331,7 +345,7 @@ func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamId, 
 // SubmitAnswer is not yet fully implemented: it resolves and authorizes the
 // session, but does not yet grade the submitted answer. A successful call
 // returns a nil assessment until grading is added.
-func (srv *OnMemoryExamServer) SubmitAnswer(ctx context.Context, examId ExamId, userId string, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error) {
+func (srv *OnMemoryExamServer) SubmitAnswer(ctx context.Context, examId ExamSessionId, userId string, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error) {
 	type result struct {
 		assessment *pkgmodelquestions.Assessment
 		err        error
@@ -370,9 +384,14 @@ type OnMemoryQuestion struct {
 
 // the singleton OnMemoryExamServer should be the sole ownership holder of every OnMemoryExamSession
 type OnMemoryExamSession struct {
-	ExamId    ExamId
+	ExamId    ExamSessionId
 	UserId    string
+	Exam      *pkgmodelquestions.Exam
 	Questions *pkgmodelquestions.QuestionCollection
+
+	// StartedAt is the millisecond-resolution unix timestamp captured when the
+	// session was created; it is surfaced unchanged through ListExamSessions.
+	StartedAt uint64
 
 	// Options captured for this exam; drives seekable checks and option
 	// shuffling when a question is first materialized.
@@ -416,7 +435,7 @@ func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int) *pkgmodelquestion
 // the question collection to present and computing its permutation up front
 // (the order in which questions are presented). Option permutations are derived
 // lazily, per question, as it is first requested.
-func newExamSession(examId ExamId, userId string, exam *pkgmodelquestions.Exam, opts ExamOptions) *OnMemoryExamSession {
+func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions.Exam, opts ExamOptions) *OnMemoryExamSession {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	qc := selectQuestionCollection(exam.QuestionSet, opts, rng)
 	n := len(qc.Questions)
@@ -429,6 +448,8 @@ func newExamSession(examId ExamId, userId string, exam *pkgmodelquestions.Exam, 
 	return &OnMemoryExamSession{
 		ExamId:              examId,
 		UserId:              userId,
+		Exam:                exam,
+		StartedAt:           uint64(time.Now().UnixMilli()),
 		Questions:           &qc,
 		Options:             opts,
 		QuestionPermutation: qPerm,

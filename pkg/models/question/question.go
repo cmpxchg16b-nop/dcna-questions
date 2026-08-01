@@ -225,7 +225,9 @@ type ExamAnswer struct {
 // collection. It has no behavior: it exists to expose a small, stable summary
 // of an exam without handing consumers the full document graph.
 type ExamExcerpt struct {
+	// Id of the exam document, not the id of the exam session
 	Id           string
+
 	ShortName    string
 	Code         string
 	Title        PlainText

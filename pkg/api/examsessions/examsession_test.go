@@ -32,16 +32,16 @@ func (l *fakeExamLoader) LoadFrom(url string) (*question.Exam, error) {
 // stubs present solely to satisfy the ExamServer interface.
 type fakeExamServer struct {
 	startErr    error
-	startID     examserver.ExamId
+	startID     examserver.ExamSessionId
 	startedExam *question.Exam
 	startedUser string
 	startedOpts examserver.ExamOptions
 
-	listResult []examserver.ExamId
+	listResult []examserver.ExamSessionExcerpt
 	listCalls  []string
 
 	endErr error
-	ended  []examserver.ExamId
+	ended  []examserver.ExamSessionId
 
 	// GetNextQuestion
 	gnqQuestion *question.Question
@@ -58,7 +58,7 @@ type fakeExamServer struct {
 	seekIndex    int
 }
 
-func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userSessionId string, opts examserver.ExamOptions) (examserver.ExamId, error) {
+func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userSessionId string, opts examserver.ExamOptions) (examserver.ExamSessionId, error) {
 	s.startedExam = exam
 	s.startedUser = userSessionId
 	s.startedOpts = opts
@@ -71,17 +71,17 @@ func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.E
 	return "default-session", nil
 }
 
-func (s *fakeExamServer) ListExamSessions(_ context.Context, userSessionId string) []examserver.ExamId {
+func (s *fakeExamServer) ListExamSessions(_ context.Context, userSessionId string) []examserver.ExamSessionExcerpt {
 	s.listCalls = append(s.listCalls, userSessionId)
 	return s.listResult
 }
 
-func (s *fakeExamServer) EndExamSession(_ context.Context, examId examserver.ExamId, userId string) error {
+func (s *fakeExamServer) EndExamSession(_ context.Context, examId examserver.ExamSessionId, userId string) error {
 	s.ended = append(s.ended, examId)
 	return s.endErr
 }
 
-func (s *fakeExamServer) GetNextQuestion(_ context.Context, examId examserver.ExamId, userId string, cursor *examserver.QuestionCursor) (*question.Question, *examserver.QuestionCursor, error) {
+func (s *fakeExamServer) GetNextQuestion(_ context.Context, examId examserver.ExamSessionId, userId string, cursor *examserver.QuestionCursor) (*question.Question, *examserver.QuestionCursor, error) {
 	s.gnqExamID = string(examId)
 	s.gnqCursorIn = cursor
 	if s.gnqErr != nil {
@@ -90,7 +90,7 @@ func (s *fakeExamServer) GetNextQuestion(_ context.Context, examId examserver.Ex
 	return s.gnqQuestion, s.gnqNext, nil
 }
 
-func (s *fakeExamServer) SeekCursorTo(_ context.Context, examId examserver.ExamId, userId string, cursor *examserver.QuestionCursor, index int) (*examserver.QuestionCursor, error) {
+func (s *fakeExamServer) SeekCursorTo(_ context.Context, examId examserver.ExamSessionId, userId string, cursor *examserver.QuestionCursor, index int) (*examserver.QuestionCursor, error) {
 	s.seekExamID = string(examId)
 	s.seekCursorIn = cursor
 	s.seekIndex = index
@@ -100,7 +100,7 @@ func (s *fakeExamServer) SeekCursorTo(_ context.Context, examId examserver.ExamI
 	return s.seekResult, nil
 }
 
-func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamId, string, *question.ExamAnswer, bool) (*question.Assessment, error) {
+func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamSessionId, string, *question.ExamAnswer, bool) (*question.Assessment, error) {
 	return nil, nil
 }
 
@@ -282,25 +282,42 @@ func TestExamSessionHandler(t *testing.T) {
 			wantStatus: http.StatusServiceUnavailable,
 		},
 		{
-			name:       "list success",
-			method:     http.MethodGet,
-			target:     "/api/examsessions",
-			server:     &fakeExamServer{listResult: []examserver.ExamId{"a", "b"}},
+			name:   "list success",
+			method: http.MethodGet,
+			target: "/api/examsessions",
+			server: &fakeExamServer{listResult: []examserver.ExamSessionExcerpt{
+				{Id: "a", ExamExcerpt: question.ExamExcerpt{Id: "exam-a"}, StartedAt: 1000},
+				{Id: "b", ExamExcerpt: question.ExamExcerpt{Id: "exam-b"}, StartedAt: 2000},
+			}},
 			wantStatus: http.StatusOK,
 			checkBody: func(t *testing.T, body string) {
 				var got struct {
-					ExamSessionIDs []string `json:"exam_session_ids"`
+					ExamSessions []struct {
+						ExamSessionID string               `json:"exam_session_id"`
+						ExamExcerpt   question.ExamExcerpt `json:"exam_excerpt"`
+						StartedAt     uint64               `json:"started_at"`
+					} `json:"exam_sessions"`
 				}
 				if err := json.Unmarshal([]byte(body), &got); err != nil {
 					t.Fatalf("decode body %q: %v", body, err)
 				}
-				want := []string{"a", "b"}
-				if len(got.ExamSessionIDs) != len(want) {
-					t.Fatalf("exam_session_ids = %v, want %v", got.ExamSessionIDs, want)
+				want := []struct {
+					examSessionID string
+					examID        string
+					startedAt     uint64
+				}{{"a", "exam-a", 1000}, {"b", "exam-b", 2000}}
+				if len(got.ExamSessions) != len(want) {
+					t.Fatalf("exam_sessions = %+v, want %d entries", got.ExamSessions, len(want))
 				}
-				for i := range want {
-					if got.ExamSessionIDs[i] != want[i] {
-						t.Errorf("exam_session_ids[%d] = %q, want %q", i, got.ExamSessionIDs[i], want[i])
+				for i, w := range want {
+					if got.ExamSessions[i].ExamSessionID != w.examSessionID {
+						t.Errorf("exam_sessions[%d].exam_session_id = %q, want %q", i, got.ExamSessions[i].ExamSessionID, w.examSessionID)
+					}
+					if got.ExamSessions[i].ExamExcerpt.Id != w.examID {
+						t.Errorf("exam_sessions[%d].exam_excerpt.Id = %q, want %q", i, got.ExamSessions[i].ExamExcerpt.Id, w.examID)
+					}
+					if got.ExamSessions[i].StartedAt != w.startedAt {
+						t.Errorf("exam_sessions[%d].started_at = %d, want %d", i, got.ExamSessions[i].StartedAt, w.startedAt)
 					}
 				}
 			},
@@ -318,13 +335,13 @@ func TestExamSessionHandler(t *testing.T) {
 			wantStatus: http.StatusOK,
 			checkBody: func(t *testing.T, body string) {
 				var got struct {
-					ExamSessionIDs []string `json:"exam_session_ids"`
+					ExamSessions []json.RawMessage `json:"exam_sessions"`
 				}
 				if err := json.Unmarshal([]byte(body), &got); err != nil {
 					t.Fatalf("decode body %q: %v", body, err)
 				}
-				if len(got.ExamSessionIDs) != 0 {
-					t.Errorf("exam_session_ids = %v, want empty", got.ExamSessionIDs)
+				if len(got.ExamSessions) != 0 {
+					t.Errorf("exam_sessions = %v, want empty", got.ExamSessions)
 				}
 			},
 		},

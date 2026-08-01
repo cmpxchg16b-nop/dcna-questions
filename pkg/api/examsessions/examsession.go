@@ -5,7 +5,7 @@
 //	        given in the request body as {"exam_id": "..."}; returns the new
 //	        session id as {"exam_session_id": "..."}.
 //	GET    /api/examsessions           list the caller's sessions as
-//	        {"exam_session_ids": ["...", ...]}.
+//	        {"exam_sessions": [{...}, ...]}.
 //	DELETE /api/examsessions/{exam_id} terminate the named session.
 //	GET    /api/examsessions/{exam_id}/questions?cursor_id=<cursor>
 //	        fetch the next question via GetNextQuestion; responds
@@ -74,7 +74,15 @@ type createResponse struct {
 
 // listResponse is the JSON body of a successful GET.
 type listResponse struct {
-	ExamSessionIDs []string `json:"exam_session_ids"`
+	ExamSessions []examSessionSummary `json:"exam_sessions"`
+}
+
+// examSessionSummary is one entry in a list response: the session id, the
+// projected exam metadata, and when the session was started.
+type examSessionSummary struct {
+	ExamSessionID string               `json:"exam_session_id"`
+	ExamExcerpt   question.ExamExcerpt `json:"exam_excerpt"`
+	StartedAt     uint64               `json:"started_at"`
 }
 
 // nextQuestionResponse is the JSON body of a successful GET .../questions. Both
@@ -137,19 +145,19 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.methodNotAllowed(w, "DELETE")
 			return
 		}
-		h.handleDelete(w, r, examserver.ExamId(segments[0]), sess.Id())
+		h.handleDelete(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
 	case len(segments) == 2 && segments[1] == "questions":
 		if r.Method != http.MethodGet {
 			h.methodNotAllowed(w, "GET")
 			return
 		}
-		h.handleGetNextQuestion(w, r, examserver.ExamId(segments[0]), sess.Id())
+		h.handleGetNextQuestion(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
 	case len(segments) == 2 && segments[1] == "cursors":
 		if r.Method != http.MethodPut {
 			h.methodNotAllowed(w, "PUT")
 			return
 		}
-		h.handleSeekCursor(w, r, examserver.ExamId(segments[0]), sess.Id())
+		h.handleSeekCursor(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
 	default:
 		http.NotFound(w, r)
 	}
@@ -199,17 +207,21 @@ func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request
 
 // handleList returns the caller's active exam sessions.
 func (h *ExamSessionHandler) handleList(w http.ResponseWriter, r *http.Request, userSessionID string) {
-	ids := h.server.ListExamSessions(r.Context(), userSessionID)
-	out := make([]string, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, string(id))
+	excerpts := h.server.ListExamSessions(r.Context(), userSessionID)
+	out := make([]examSessionSummary, 0, len(excerpts))
+	for _, e := range excerpts {
+		out = append(out, examSessionSummary{
+			ExamSessionID: string(e.Id),
+			ExamExcerpt:   e.ExamExcerpt,
+			StartedAt:     e.StartedAt,
+		})
 	}
-	writeJSON(w, listResponse{ExamSessionIDs: out})
+	writeJSON(w, listResponse{ExamSessions: out})
 }
 
 // handleDelete terminates a single exam session by id. The caller's user id is
 // forwarded to EndExamSession so ownership can be enforced by the server.
-func (h *ExamSessionHandler) handleDelete(w http.ResponseWriter, r *http.Request, examID examserver.ExamId, userSessionID string) {
+func (h *ExamSessionHandler) handleDelete(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
 	if err := h.server.EndExamSession(r.Context(), examID, userSessionID); err != nil {
 		// The only failure is a missing session (or the server shutting down);
 		// treat both as not found so a repeated delete converges to 404.
@@ -222,7 +234,7 @@ func (h *ExamSessionHandler) handleDelete(w http.ResponseWriter, r *http.Request
 // handleGetNextQuestion returns the next question in the session plus the cursor
 // to continue from. An absent cursor_id starts from the beginning; when no more
 // questions remain, both cursor_id and question are null.
-func (h *ExamSessionHandler) handleGetNextQuestion(w http.ResponseWriter, r *http.Request, examID examserver.ExamId, userSessionID string) {
+func (h *ExamSessionHandler) handleGetNextQuestion(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
 	q, next, err := h.server.GetNextQuestion(r.Context(), examID, userSessionID, parseCursorID(r))
 	if err != nil {
 		// examserver's sentinels are unexported, so not-found cannot be told
@@ -241,7 +253,7 @@ func (h *ExamSessionHandler) handleGetNextQuestion(w http.ResponseWriter, r *htt
 // handleSeekCursor repositions the session cursor to a new virtual index and
 // returns the fresh cursor to read from. The index is the required "index"
 // query parameter.
-func (h *ExamSessionHandler) handleSeekCursor(w http.ResponseWriter, r *http.Request, examID examserver.ExamId, userSessionID string) {
+func (h *ExamSessionHandler) handleSeekCursor(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
 	index, ok := parseIndex(r)
 	if !ok {
 		http.Error(w, `invalid or missing "index" query parameter`, http.StatusBadRequest)
