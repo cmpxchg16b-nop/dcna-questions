@@ -293,9 +293,9 @@ func TestExamSessionHandler(t *testing.T) {
 			checkBody: func(t *testing.T, body string) {
 				var got struct {
 					ExamSessions []struct {
-						ExamSessionID string               `json:"exam_session_id"`
+						ExamSessionID string                       `json:"exam_session_id"`
 						ExamExcerpt   question.ExamDocumentExcerpt `json:"exam_excerpt"`
-						StartedAt     uint64               `json:"started_at"`
+						StartedAt     uint64                       `json:"started_at"`
 					} `json:"exam_sessions"`
 				}
 				if err := json.Unmarshal([]byte(body), &got); err != nil {

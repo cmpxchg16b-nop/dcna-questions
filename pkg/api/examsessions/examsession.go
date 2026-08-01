@@ -80,9 +80,9 @@ type listResponse struct {
 // examSessionSummary is one entry in a list response: the session id, the
 // projected exam metadata, and when the session was started.
 type examSessionSummary struct {
-	ExamSessionID string               `json:"exam_session_id"`
+	ExamSessionID string                       `json:"exam_session_id"`
 	ExamExcerpt   question.ExamDocumentExcerpt `json:"exam_excerpt"`
-	StartedAt     uint64               `json:"started_at"`
+	StartedAt     uint64                       `json:"started_at"`
 }
 
 // nextQuestionResponse is the JSON body of a successful GET .../questions. Both
