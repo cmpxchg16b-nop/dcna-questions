@@ -7,6 +7,11 @@ import {
   Button,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   FormControlLabel,
   Radio,
   RadioGroup,
@@ -40,6 +45,7 @@ export default function Page() {
     Number(searchParams.get("current_question_index")) || 0;
 
   const [selected, setSelected] = useState("");
+  const [confirmEndOpen, setConfirmEndOpen] = useState(false);
 
   const isLastQuestion = currentQuestionIndex >= numQuestions - 1;
 
@@ -101,7 +107,7 @@ export default function Page() {
             <Button
               variant="contained"
               color="error"
-              onClick={() => router.push("/")}
+              onClick={() => setConfirmEndOpen(true)}
             >
               End Exam
             </Button>
@@ -115,6 +121,26 @@ export default function Page() {
           )}
         </Box>
       </Box>
+
+      <Dialog open={confirmEndOpen} onClose={() => setConfirmEndOpen(false)}>
+        <DialogTitle>End exam?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to end the exam? Your answers will be
+            submitted for grading. This cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmEndOpen(false)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => router.push("/")}
+          >
+            End Exam
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
