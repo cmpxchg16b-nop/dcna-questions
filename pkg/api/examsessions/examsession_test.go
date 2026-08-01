@@ -286,15 +286,15 @@ func TestExamSessionHandler(t *testing.T) {
 			method: http.MethodGet,
 			target: "/api/examsessions",
 			server: &fakeExamServer{listResult: []examserver.ExamSessionExcerpt{
-				{Id: "a", ExamExcerpt: question.ExamExcerpt{Id: "exam-a"}, StartedAt: 1000},
-				{Id: "b", ExamExcerpt: question.ExamExcerpt{Id: "exam-b"}, StartedAt: 2000},
+				{Id: "a", ExamExcerpt: question.ExamDocumentExcerpt{Id: "exam-a"}, StartedAt: 1000},
+				{Id: "b", ExamExcerpt: question.ExamDocumentExcerpt{Id: "exam-b"}, StartedAt: 2000},
 			}},
 			wantStatus: http.StatusOK,
 			checkBody: func(t *testing.T, body string) {
 				var got struct {
 					ExamSessions []struct {
 						ExamSessionID string               `json:"exam_session_id"`
-						ExamExcerpt   question.ExamExcerpt `json:"exam_excerpt"`
+						ExamExcerpt   question.ExamDocumentExcerpt `json:"exam_excerpt"`
 						StartedAt     uint64               `json:"started_at"`
 					} `json:"exam_sessions"`
 				}

@@ -53,7 +53,7 @@ func (h *ExamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if clientGone {
 			continue
 		}
-		var data *question.ExamExcerpt
+		var data *question.ExamDocumentExcerpt
 		if ev.Data != nil {
 			excerpt := question.ExamExcerptFrom(ev.Data)
 			data = &excerpt
@@ -78,5 +78,5 @@ func (h *ExamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // is set per line.
 type ndjsonLine struct {
 	Err  string                `json:"Err,omitempty"`
-	Data *question.ExamExcerpt `json:"Data,omitempty"`
+	Data *question.ExamDocumentExcerpt `json:"Data,omitempty"`
 }

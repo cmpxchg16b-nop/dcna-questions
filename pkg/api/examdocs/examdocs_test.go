@@ -37,7 +37,7 @@ func (l *fakeLoader) LoadFrom(url string) (*question.Exam, error) {
 // ExamExcerpt's exported fields carry no JSON tags.
 type ndLine struct {
 	Err  string                `json:"Err,omitempty"`
-	Data *question.ExamExcerpt `json:"Data,omitempty"`
+	Data *question.ExamDocumentExcerpt `json:"Data,omitempty"`
 }
 
 // examWith builds a minimal exam whose first (and only) question collection

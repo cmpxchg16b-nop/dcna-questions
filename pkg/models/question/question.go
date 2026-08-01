@@ -220,11 +220,11 @@ type ExamAnswer struct {
 	Answers []Answer `xml:"answer" json:"answers,omitempty"`
 }
 
-// ExamExcerpt is a lightweight projection of an Exam that carries its
+// ExamDocumentExcerpt is a lightweight projection of an Exam that carries its
 // identifying metadata plus aggregate counts derived from the first question
 // collection. It has no behavior: it exists to expose a small, stable summary
 // of an exam without handing consumers the full document graph.
-type ExamExcerpt struct {
+type ExamDocumentExcerpt struct {
 	// Id of the exam document, not the id of the exam session
 	Id           string
 
@@ -239,8 +239,8 @@ type ExamExcerpt struct {
 // ExamExcerptFrom builds an ExamExcerpt from an Exam. NumQuestions is the
 // number of questions in the first question collection and TotalScores is the
 // sum of their scores; both are zero when the exam has no question collections.
-func ExamExcerptFrom(e *Exam) ExamExcerpt {
-	excerpt := ExamExcerpt{
+func ExamExcerptFrom(e *Exam) ExamDocumentExcerpt {
+	excerpt := ExamDocumentExcerpt{
 		Id:          e.Id,
 		ShortName:   e.ShortName,
 		Code:        e.Code,

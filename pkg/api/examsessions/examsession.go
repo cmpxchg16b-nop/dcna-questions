@@ -81,7 +81,7 @@ type listResponse struct {
 // projected exam metadata, and when the session was started.
 type examSessionSummary struct {
 	ExamSessionID string               `json:"exam_session_id"`
-	ExamExcerpt   question.ExamExcerpt `json:"exam_excerpt"`
+	ExamExcerpt   question.ExamDocumentExcerpt `json:"exam_excerpt"`
 	StartedAt     uint64               `json:"started_at"`
 }
 

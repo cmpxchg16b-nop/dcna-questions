@@ -36,9 +36,9 @@ var (
 
 type ExamSessionExcerpt struct {
 	// This Id is the id of exam session, by which the exam server use to keep track of exam sessions
-	Id      ExamSessionId
+	Id ExamSessionId
 
-	ExamExcerpt pkgmodelquestions.ExamExcerpt
+	ExamExcerpt pkgmodelquestions.ExamDocumentExcerpt
 	// millisecond-resolution unix timestamp
 	StartedAt uint64
 }
@@ -190,7 +190,7 @@ func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId stri
 		for id := range sessions {
 			sess := srv.sessionsStore[id]
 			excerpts = append(excerpts, ExamSessionExcerpt{
-				Id:      id,
+				Id:          id,
 				ExamExcerpt: pkgmodelquestions.ExamExcerptFrom(sess.Exam),
 				StartedAt:   sess.StartedAt,
 			})
