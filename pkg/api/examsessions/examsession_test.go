@@ -76,12 +76,12 @@ func (s *fakeExamServer) ListExamSessions(_ context.Context, userSessionId strin
 	return s.listResult
 }
 
-func (s *fakeExamServer) EndExamSession(_ context.Context, examId examserver.ExamId) error {
+func (s *fakeExamServer) EndExamSession(_ context.Context, examId examserver.ExamId, userId string) error {
 	s.ended = append(s.ended, examId)
 	return s.endErr
 }
 
-func (s *fakeExamServer) GetNextQuestion(_ context.Context, examId examserver.ExamId, cursor *examserver.QuestionCursor) (*question.Question, *examserver.QuestionCursor, error) {
+func (s *fakeExamServer) GetNextQuestion(_ context.Context, examId examserver.ExamId, userId string, cursor *examserver.QuestionCursor) (*question.Question, *examserver.QuestionCursor, error) {
 	s.gnqExamID = string(examId)
 	s.gnqCursorIn = cursor
 	if s.gnqErr != nil {
@@ -90,7 +90,7 @@ func (s *fakeExamServer) GetNextQuestion(_ context.Context, examId examserver.Ex
 	return s.gnqQuestion, s.gnqNext, nil
 }
 
-func (s *fakeExamServer) SeekCursorTo(_ context.Context, examId examserver.ExamId, cursor *examserver.QuestionCursor, index int) (*examserver.QuestionCursor, error) {
+func (s *fakeExamServer) SeekCursorTo(_ context.Context, examId examserver.ExamId, userId string, cursor *examserver.QuestionCursor, index int) (*examserver.QuestionCursor, error) {
 	s.seekExamID = string(examId)
 	s.seekCursorIn = cursor
 	s.seekIndex = index
@@ -100,7 +100,7 @@ func (s *fakeExamServer) SeekCursorTo(_ context.Context, examId examserver.ExamI
 	return s.seekResult, nil
 }
 
-func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamId, *question.ExamAnswer, bool) (*question.Assessment, error) {
+func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamId, string, *question.ExamAnswer, bool) (*question.Assessment, error) {
 	return nil, nil
 }
 

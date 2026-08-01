@@ -18,14 +18,15 @@ type QuestionCursor string
 type ExamOptions uint32
 
 const (
-	ExamOptionRandomQuestions ExamOptions = 1 << iota // randomized questions ordering within a collection
-	ExamOptionRandomOptions // randomized options ordering
-	ExamOptionSeekable // the 'Seekable' allows the client to seek to question with given number at will
-	ExamOptionRandomQuestionColl // Randomized question collection picking
+	ExamOptionRandomQuestions    ExamOptions = 1 << iota // randomized questions ordering within a collection
+	ExamOptionRandomOptions                              // randomized options ordering
+	ExamOptionSeekable                                   // the 'Seekable' allows the client to seek to question with given number at will
+	ExamOptionRandomQuestionColl                         // Randomized question collection picking
 )
 
 var (
 	errExamNotFound  = errors.New("exam not found")
+	errNotOwner      = errors.New("exam session does not belong to the caller")
 	errNotSeekable   = errors.New("exam is not seekable")
 	errInvalidCursor = errors.New("invalid question cursor")
 	errOutOfRange    = errors.New("question index out of range")
@@ -37,22 +38,22 @@ type ExamServer interface {
 	// Start a new exam session
 	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions) (ExamId, error)
 
-	// List started exam sessions of a given user session
+	// List started exam sessions of a given user
 	ListExamSessions(ctx context.Context, userId string) []ExamId
 
 	// Terminate the specified exam session
-	EndExamSession(ctx context.Context, examId ExamId) error
+	EndExamSession(ctx context.Context, examId ExamId, userId string) error
 
 	// the initial cursor should be nil
 	// if has more, `nextCursor` won't be nil
-	GetNextQuestion(ctx context.Context, examId ExamId, cursor *QuestionCursor) (question *pkgmodelquestions.Question, nextCursor *QuestionCursor, err error)
+	GetNextQuestion(ctx context.Context, examId ExamId, userId string, cursor *QuestionCursor) (question *pkgmodelquestions.Question, nextCursor *QuestionCursor, err error)
 
 	// if the cursor is nil, a brand-new cursor will be created, you should always use the `repositionedCursor` to get the next question, whether it was succeeded or not.
 	// if the exam is un-seekable, the operation will fail.
 	// the content of cursor is opaque, the client should never assume anything about it.
-	SeekCursorTo(ctx context.Context, examId ExamId, cursor *QuestionCursor, newVirtualIndex int) (repositionedCursor *QuestionCursor, err error)
+	SeekCursorTo(ctx context.Context, examId ExamId, userId string, cursor *QuestionCursor, newVirtualIndex int) (repositionedCursor *QuestionCursor, err error)
 
-	SubmitAnswer(ctx context.Context, examId ExamId, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error)
+	SubmitAnswer(ctx context.Context, examId ExamId, userId string, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error)
 }
 
 // OnMemoryExamServer implements ExamServer as a single CSP actor.
@@ -72,12 +73,12 @@ type OnMemoryExamServer struct {
 	// actor goroutine.
 	sessionsStore map[ExamId]*OnMemoryExamSession
 
-	// userSessions is the reverse index of sessionsStore: it maps a user
-	// session id to the set of exam ids that user has started, so that
-	// ListExamSessions is O(sessions-for-user) instead of scanning every
-	// session. Like sessionsStore, it is only ever touched inside closures run
-	// by the actor goroutine, so it stays in lock-step with sessionsStore
-	// without any locking of its own.
+	// userSessions is the reverse index of sessionsStore: it maps a user id
+	// to the set of exam ids that user has started, so that ListExamSessions
+	// is O(sessions-for-user) instead of scanning every session. Like
+	// sessionsStore, it is only ever touched inside closures run by the actor
+	// goroutine, so it stays in lock-step with sessionsStore without any
+	// locking of its own.
 	userSessions map[string]map[ExamId]struct{}
 
 	// serviceChan carries closures for the actor goroutine to run.
@@ -193,13 +194,17 @@ func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId stri
 	}
 }
 
-func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamId) error {
+func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamId, userId string) error {
 	type result struct{ err error }
 	resp := make(chan result, 1)
 	cmd := func() {
 		sess, ok := srv.sessionsStore[examId]
 		if !ok {
 			resp <- result{err: errExamNotFound}
+			return
+		}
+		if sess.UserId != userId {
+			resp <- result{err: errNotOwner}
 			return
 		}
 		delete(srv.sessionsStore, examId)
@@ -222,7 +227,7 @@ func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamId
 	}
 }
 
-func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamId, cursor *QuestionCursor) (question *pkgmodelquestions.Question, nextCursor *QuestionCursor, err error) {
+func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamId, userId string, cursor *QuestionCursor) (question *pkgmodelquestions.Question, nextCursor *QuestionCursor, err error) {
 	type result struct {
 		question   *pkgmodelquestions.Question
 		nextCursor *QuestionCursor
@@ -233,6 +238,10 @@ func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamI
 		sess, ok := srv.sessionsStore[examId]
 		if !ok {
 			resp <- result{err: errExamNotFound}
+			return
+		}
+		if sess.UserId != userId {
+			resp <- result{err: errNotOwner}
 			return
 		}
 		idx := 0
@@ -274,7 +283,7 @@ func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamI
 	}
 }
 
-func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamId, cursor *QuestionCursor, newIndex int) (*QuestionCursor, error) {
+func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamId, userId string, cursor *QuestionCursor, newIndex int) (*QuestionCursor, error) {
 	type result struct {
 		cursor *QuestionCursor
 		err    error
@@ -284,6 +293,10 @@ func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamId, 
 		sess, ok := srv.sessionsStore[examId]
 		if !ok {
 			resp <- result{err: errExamNotFound}
+			return
+		}
+		if sess.UserId != userId {
+			resp <- result{err: errNotOwner}
 			return
 		}
 		if sess.Options&ExamOptionSeekable == 0 {
@@ -315,9 +328,37 @@ func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamId, 
 	}
 }
 
-// SubmitAnswer is not yet implemented.
-func (srv *OnMemoryExamServer) SubmitAnswer(ctx context.Context, examId ExamId, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error) {
-	return nil, nil
+// SubmitAnswer is not yet fully implemented: it resolves and authorizes the
+// session, but does not yet grade the submitted answer. A successful call
+// returns a nil assessment until grading is added.
+func (srv *OnMemoryExamServer) SubmitAnswer(ctx context.Context, examId ExamId, userId string, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error) {
+	type result struct {
+		assessment *pkgmodelquestions.Assessment
+		err        error
+	}
+	resp := make(chan result, 1)
+	cmd := func() {
+		sess, ok := srv.sessionsStore[examId]
+		if !ok {
+			resp <- result{err: errExamNotFound}
+			return
+		}
+		if sess.UserId != userId {
+			resp <- result{err: errNotOwner}
+			return
+		}
+		// Grading is not yet implemented.
+		resp <- result{}
+	}
+	if err := srv.dispatch(ctx, cmd); err != nil {
+		return nil, err
+	}
+	select {
+	case r := <-resp:
+		return r.assessment, r.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 type OnMemoryQuestion struct {
@@ -329,9 +370,9 @@ type OnMemoryQuestion struct {
 
 // the singleton OnMemoryExamServer should be the sole ownership holder of every OnMemoryExamSession
 type OnMemoryExamSession struct {
-	ExamId        ExamId
-	UserId        string
-	Questions     *pkgmodelquestions.QuestionCollection
+	ExamId    ExamId
+	UserId    string
+	Questions *pkgmodelquestions.QuestionCollection
 
 	// Options captured for this exam; drives seekable checks and option
 	// shuffling when a question is first materialized.
@@ -375,7 +416,7 @@ func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int) *pkgmodelquestion
 // the question collection to present and computing its permutation up front
 // (the order in which questions are presented). Option permutations are derived
 // lazily, per question, as it is first requested.
-func newExamSession(examId ExamId, userSessionId string, exam *pkgmodelquestions.Exam, opts ExamOptions) *OnMemoryExamSession {
+func newExamSession(examId ExamId, userId string, exam *pkgmodelquestions.Exam, opts ExamOptions) *OnMemoryExamSession {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	qc := selectQuestionCollection(exam.QuestionSet, opts, rng)
 	n := len(qc.Questions)
@@ -387,7 +428,7 @@ func newExamSession(examId ExamId, userSessionId string, exam *pkgmodelquestions
 	}
 	return &OnMemoryExamSession{
 		ExamId:              examId,
-		UserId:       userSessionId,
+		UserId:              userId,
 		Questions:           &qc,
 		Options:             opts,
 		QuestionPermutation: qPerm,

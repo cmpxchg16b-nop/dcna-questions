@@ -30,7 +30,7 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 	var seen []string
 	var cursor *QuestionCursor
 	for {
-		q, next, err := srv.GetNextQuestion(ctx, examId, cursor)
+		q, next, err := srv.GetNextQuestion(ctx, examId, "user-1", cursor)
 		if err != nil {
 			t.Fatalf("GetNextQuestion: %v", err)
 		}
@@ -108,7 +108,7 @@ func TestStartNewExamSession_RandomCollPicksOneCollection(t *testing.T) {
 	var ids []string
 	var cursor *QuestionCursor
 	for {
-		q, next, err := srv.GetNextQuestion(ctx, examId, cursor)
+		q, next, err := srv.GetNextQuestion(ctx, examId, "user-1", cursor)
 		if err != nil {
 			t.Fatalf("GetNextQuestion: %v", err)
 		}
@@ -163,7 +163,7 @@ func TestStartNewExamSession_FlattensCollectionsByDefault(t *testing.T) {
 	var n int
 	var cursor *QuestionCursor
 	for {
-		q, next, err := srv.GetNextQuestion(ctx, examId, cursor)
+		q, next, err := srv.GetNextQuestion(ctx, examId, "user-1", cursor)
 		if err != nil {
 			t.Fatalf("GetNextQuestion: %v", err)
 		}
@@ -178,5 +178,53 @@ func TestStartNewExamSession_FlattensCollectionsByDefault(t *testing.T) {
 	}
 	if n != 4 {
 		t.Fatalf("expected flattened total of 4 questions, got %d", n)
+	}
+}
+
+// TestOwnershipEnforcement confirms that a user cannot operate on an exam
+// session that belongs to another user: EndExamSession, GetNextQuestion,
+// SeekCursorTo, and SubmitAnswer all reject a non-owner caller, while the
+// owner is unaffected.
+func TestOwnershipEnforcement(t *testing.T) {
+	mkQ := func(id string) pkgmodelquestions.Question {
+		return pkgmodelquestions.Question{Id: id, Type: pkgmodelquestions.QuestionTypeSingleChoice}
+	}
+	exam := &pkgmodelquestions.Exam{
+		Id: "ownership",
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{mkQ("q1")}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+
+	// A different user must be blocked from every operation on the session.
+	if err := srv.EndExamSession(ctx, examId, "user-2"); err != errNotOwner {
+		t.Errorf("EndExamSession by non-owner = %v, want errNotOwner", err)
+	}
+	if _, _, err := srv.GetNextQuestion(ctx, examId, "user-2", nil); err != errNotOwner {
+		t.Errorf("GetNextQuestion by non-owner = %v, want errNotOwner", err)
+	}
+	if _, err := srv.SeekCursorTo(ctx, examId, "user-2", nil, 0); err != errNotOwner {
+		t.Errorf("SeekCursorTo by non-owner = %v, want errNotOwner", err)
+	}
+	if _, err := srv.SubmitAnswer(ctx, examId, "user-2", &pkgmodelquestions.ExamAnswer{}, false); err != errNotOwner {
+		t.Errorf("SubmitAnswer by non-owner = %v, want errNotOwner", err)
+	}
+
+	// The owner can still use their own session.
+	if q, _, err := srv.GetNextQuestion(ctx, examId, "user-1", nil); err != nil || q == nil {
+		t.Fatalf("GetNextQuestion by owner: q=%v err=%v", q, err)
 	}
 }
