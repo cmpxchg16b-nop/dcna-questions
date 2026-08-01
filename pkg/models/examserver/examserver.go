@@ -79,6 +79,10 @@ type ExamServer interface {
 	SeekCursorTo(ctx context.Context, examId ExamSessionId, userId string, cursor *QuestionCursor, newVirtualIndex int) (repositionedCursor *QuestionCursor, err error)
 
 	SubmitAnswer(ctx context.Context, examId ExamSessionId, userId string, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error)
+
+	// GetMyAnswer returns the last saved submitting answer for the session, or
+	// (nil, nil) if no answer has been submitted yet.
+	GetMyAnswer(ctx context.Context, examId ExamSessionId, userId string) (*pkgmodelquestions.ExamAnswer, error)
 }
 
 // OnMemoryExamServer implements ExamServer as a single CSP actor.
@@ -391,9 +395,10 @@ func (srv *OnMemoryExamServer) SeekCursorTo(ctx context.Context, examId ExamSess
 	}
 }
 
-// SubmitAnswer is not yet fully implemented: it resolves and authorizes the
-// session, but does not yet grade the submitted answer. A successful call
-// returns a nil assessment until grading is added.
+// SubmitAnswer grades the submitted answer against the session's question
+// collection via the session's Grader. When checkOnly is false the answer is
+// also stored on the session as the latest submission; when true it is graded
+// but not persisted, enabling a preview of the score.
 func (srv *OnMemoryExamServer) SubmitAnswer(ctx context.Context, examId ExamSessionId, userId string, answer *pkgmodelquestions.ExamAnswer, checkOnly bool) (*pkgmodelquestions.Assessment, error) {
 	type result struct {
 		assessment *pkgmodelquestions.Assessment
@@ -426,6 +431,37 @@ func (srv *OnMemoryExamServer) SubmitAnswer(ctx context.Context, examId ExamSess
 	select {
 	case r := <-resp:
 		return r.assessment, r.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// GetMyAnswer returns the last saved submitting answer for the session. If no
+// answer has been submitted yet it returns (nil, nil).
+func (srv *OnMemoryExamServer) GetMyAnswer(ctx context.Context, examId ExamSessionId, userId string) (*pkgmodelquestions.ExamAnswer, error) {
+	type result struct {
+		answer *pkgmodelquestions.ExamAnswer
+		err    error
+	}
+	resp := make(chan result, 1)
+	cmd := func() {
+		sess, ok := srv.sessionsStore[examId]
+		if !ok {
+			resp <- result{err: errExamNotFound}
+			return
+		}
+		if sess.UserId != userId {
+			resp <- result{err: errNotOwner}
+			return
+		}
+		resp <- result{answer: sess.ExamAnswer}
+	}
+	if err := srv.dispatch(ctx, cmd); err != nil {
+		return nil, err
+	}
+	select {
+	case r := <-resp:
+		return r.answer, r.err
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

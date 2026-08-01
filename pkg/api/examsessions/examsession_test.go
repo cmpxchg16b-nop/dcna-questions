@@ -117,6 +117,10 @@ func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamSessionId,
 	return nil, nil
 }
 
+func (s *fakeExamServer) GetMyAnswer(context.Context, examserver.ExamSessionId, string) (*question.ExamAnswer, error) {
+	return nil, nil
+}
+
 // newTestExam builds a minimal valid exam with id and one single-choice question.
 func newTestExam(id string) *question.Exam {
 	return &question.Exam{
