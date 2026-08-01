@@ -56,6 +56,11 @@ type fakeExamServer struct {
 	seekExamID   string
 	seekCursorIn *examserver.QuestionCursor
 	seekIndex    int
+
+	// GetExamSessionById
+	getResult examserver.ExamSessionExcerpt
+	getErr    error
+	getExamID string
 }
 
 func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userSessionId string, opts examserver.ExamOptions) (examserver.ExamSessionId, error) {
@@ -77,7 +82,8 @@ func (s *fakeExamServer) ListExamSessions(_ context.Context, userSessionId strin
 }
 
 func (s *fakeExamServer) GetExamSessionById(_ context.Context, examId examserver.ExamSessionId, _ string) (examserver.ExamSessionExcerpt, error) {
-	return examserver.ExamSessionExcerpt{}, nil
+	s.getExamID = string(examId)
+	return s.getResult, s.getErr
 }
 
 func (s *fakeExamServer) EndExamSession(_ context.Context, examId examserver.ExamSessionId, userId string) error {
@@ -526,12 +532,59 @@ func TestExamSessionHandler(t *testing.T) {
 			wantAllow:  "GET, POST",
 		},
 		{
-			name:       "method not allowed on item",
+			name:   "get session success",
+			method: http.MethodGet,
+			target: "/api/examsessions/sess-1",
+			server: &fakeExamServer{getResult: examserver.ExamSessionExcerpt{
+				Id:                   "sess-1",
+				ExamExcerpt:          question.ExamDocumentExcerpt{Id: "exam-a"},
+				StartedAt:            5000,
+				CurrentQuestionIndex: 2,
+			}},
+			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				var got struct {
+					ExamSession struct {
+						ExamSessionID        string                       `json:"exam_session_id"`
+						ExamExcerpt          question.ExamDocumentExcerpt `json:"exam_excerpt"`
+						StartedAt            uint64                       `json:"started_at"`
+						CurrentQuestionIndex int                          `json:"current_question_index"`
+					} `json:"exam_session"`
+				}
+				decodeJSON(t, body, &got)
+				if got.ExamSession.ExamSessionID != "sess-1" {
+					t.Errorf("exam_session_id = %q, want sess-1", got.ExamSession.ExamSessionID)
+				}
+				if got.ExamSession.ExamExcerpt.Id != "exam-a" {
+					t.Errorf("exam_excerpt.Id = %q, want exam-a", got.ExamSession.ExamExcerpt.Id)
+				}
+				if got.ExamSession.StartedAt != 5000 {
+					t.Errorf("started_at = %d, want 5000", got.ExamSession.StartedAt)
+				}
+				if got.ExamSession.CurrentQuestionIndex != 2 {
+					t.Errorf("current_question_index = %d, want 2", got.ExamSession.CurrentQuestionIndex)
+				}
+			},
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if s.getExamID != "sess-1" {
+					t.Errorf("GetExamSessionById exam id = %q, want sess-1", s.getExamID)
+				}
+			},
+		},
+		{
+			name:       "get session not found",
 			method:     http.MethodGet,
+			target:     "/api/examsessions/sess-x",
+			server:     &fakeExamServer{getErr: errors.New("exam not found")},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "method not allowed on item",
+			method:     http.MethodPut,
 			target:     "/api/examsessions/sess-x",
 			server:     &fakeExamServer{},
 			wantStatus: http.StatusMethodNotAllowed,
-			wantAllow:  "DELETE",
+			wantAllow:  "GET, DELETE",
 		},
 		{
 			name:       "no session in context",

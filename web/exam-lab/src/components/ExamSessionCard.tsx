@@ -29,14 +29,11 @@ export default function ExamSessionCard({
   const router = useRouter();
   const excerpt = session.exam_excerpt;
 
+  // The exam session page fetches the session by id (including its current
+  // question index and exam metadata) from the server, so the Resume link only
+  // needs to carry the session id.
   const resumeParams = new URLSearchParams({
     exam_session_id: session.exam_session_id,
-    title: excerpt.Title,
-    shortname: excerpt.ShortName,
-    code: excerpt.Code,
-    num_questions: String(excerpt.NumQuestions),
-    // Mocked until the session API reports real progress.
-    current_question_index: "0",
   });
   return (
     <ListItem disableGutters sx={{ mb: 1 }}>

@@ -8,6 +8,8 @@
 //	        {"exam_session_id": "..."}.
 //	GET    /api/examsessions           list the caller's sessions as
 //	        {"exam_sessions": [{...}, ...]}.
+//	GET    /api/examsessions/{exam_id} fetch a single session as
+//	        {"exam_session": {...}}, including its current question index.
 //	DELETE /api/examsessions/{exam_id} terminate the named session.
 //	GET    /api/examsessions/{exam_id}/questions?cursor_id=<cursor>
 //	        fetch the next question via GetNextQuestion; responds
@@ -78,11 +80,31 @@ type listResponse struct {
 }
 
 // examSessionSummary is one entry in a list response: the session id, the
-// projected exam metadata, and when the session was started.
+// projected exam metadata, when the session was started, and the virtual index
+// of the question most recently served by GetNextQuestion (-1 before the first
+// question has been fetched).
 type examSessionSummary struct {
-	ExamSessionID string                       `json:"exam_session_id"`
-	ExamExcerpt   question.ExamDocumentExcerpt `json:"exam_excerpt"`
-	StartedAt     uint64                       `json:"started_at"`
+	ExamSessionID        string                       `json:"exam_session_id"`
+	ExamExcerpt          question.ExamDocumentExcerpt `json:"exam_excerpt"`
+	StartedAt            uint64                       `json:"started_at"`
+	CurrentQuestionIndex int                          `json:"current_question_index"`
+}
+
+// sessionResponse is the JSON body of a successful GET /{exam_id}: the single
+// session, wrapped so the resource can grow independently of the list shape.
+type sessionResponse struct {
+	ExamSession examSessionSummary `json:"exam_session"`
+}
+
+// toSummary projects an examserver.ExamSessionExcerpt into the wire shape used
+// by both the list and single-session responses.
+func toSummary(e examserver.ExamSessionExcerpt) examSessionSummary {
+	return examSessionSummary{
+		ExamSessionID:        string(e.Id),
+		ExamExcerpt:          e.ExamExcerpt,
+		StartedAt:            e.StartedAt,
+		CurrentQuestionIndex: e.CurrentQuestionIndex,
+	}
 }
 
 // nextQuestionResponse is the JSON body of a successful GET .../questions. Both
@@ -107,7 +129,7 @@ const apiPrefix = "/api/examsessions"
 // item, and the questions/cursors sub-resources itself:
 //
 //	""                     -> collection (POST create, GET list)
-//	"/{exam_id}"           -> item (DELETE)
+//	"/{exam_id}"           -> item (GET single, DELETE)
 //	"/{exam_id}/questions" -> next question (GET)
 //	"/{exam_id}/cursors"   -> seek cursor (PUT)
 //
@@ -140,12 +162,15 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.methodNotAllowed(w, "GET, POST")
 		}
 	case len(segments) == 1:
-		// Item: DELETE.
-		if r.Method != http.MethodDelete {
-			h.methodNotAllowed(w, "DELETE")
-			return
+		// Item: GET single session, DELETE terminate.
+		switch r.Method {
+		case http.MethodGet:
+			h.handleGetSession(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+		case http.MethodDelete:
+			h.handleDelete(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+		default:
+			h.methodNotAllowed(w, "GET, DELETE")
 		}
-		h.handleDelete(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
 	case len(segments) == 2 && segments[1] == "questions":
 		if r.Method != http.MethodGet {
 			h.methodNotAllowed(w, "GET")
@@ -210,13 +235,24 @@ func (h *ExamSessionHandler) handleList(w http.ResponseWriter, r *http.Request, 
 	excerpts := h.server.ListExamSessions(r.Context(), userSessionID)
 	out := make([]examSessionSummary, 0, len(excerpts))
 	for _, e := range excerpts {
-		out = append(out, examSessionSummary{
-			ExamSessionID: string(e.Id),
-			ExamExcerpt:   e.ExamExcerpt,
-			StartedAt:     e.StartedAt,
-		})
+		out = append(out, toSummary(e))
 	}
 	writeJSON(w, listResponse{ExamSessions: out})
+}
+
+// handleGetSession returns a single exam session by id, scoped to the caller.
+// The caller's user id is forwarded to GetExamSessionById so ownership is
+// enforced by the server.
+func (h *ExamSessionHandler) handleGetSession(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
+	excerpt, err := h.server.GetExamSessionById(r.Context(), examID, userSessionID)
+	if err != nil {
+		// GetExamSessionById fails when the session is missing or doesn't
+		// belong to the caller; both are reported as 404 (examserver keeps its
+		// sentinels unexported, so the two can't be told apart here).
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, sessionResponse{ExamSession: toSummary(excerpt)})
 }
 
 // handleDelete terminates a single exam session by id. The caller's user id is

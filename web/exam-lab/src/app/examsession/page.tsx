@@ -17,6 +17,8 @@ import {
   RadioGroup,
   Typography,
 } from "@mui/material";
+import { useExamSession } from "@/hooks/useExamSession";
+import { useEndExamSession } from "@/hooks/useEndExamSession";
 
 // Mocked single-choice question, mirroring the Go question.Question shape
 // (pkg/models/question/question.go) until the session API serves real ones.
@@ -37,34 +39,65 @@ export default function Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const title = searchParams.get("title") ?? "";
-  const shortname = searchParams.get("shortname") ?? "";
-  const code = searchParams.get("code") ?? "";
-  const numQuestions = Number(searchParams.get("num_questions")) || 0;
-  const currentQuestionIndex =
-    Number(searchParams.get("current_question_index")) || 0;
+  // The page is keyed off the session id alone; the session's metadata (title,
+  // shortname, code, total question count) and current question index are all
+  // sourced from the server rather than query params.
+  const examSessionId = searchParams.get("exam_session_id");
+
+  const { data: session, isPending, isError } = useExamSession(examSessionId);
+  const endSession = useEndExamSession();
 
   const [selected, setSelected] = useState("");
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
 
+  // currentQuestionIndex is seeded from the server's value once the session has
+  // loaded. Local Next/Previous navigation adjusts it client-side; advancing the
+  // server's index (via GetNextQuestion) is wired up separately.
+  const [indexOverride, setIndexOverride] = useState<number | null>(null);
+  const serverIndex = session?.current_question_index ?? -1;
+  const currentQuestionIndex =
+    indexOverride !== null ? indexOverride : serverIndex;
+
+  const numQuestions = session?.exam_excerpt.NumQuestions ?? 0;
   const isLastQuestion = currentQuestionIndex >= numQuestions - 1;
 
-  // Navigates within the session by rewriting current_question_index while
-  // preserving the other query params.
-  const goToQuestion = (index: number) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("current_question_index", String(index));
-    router.push(`/examsession?${params}`);
-  };
+  if (!examSessionId) {
+    return (
+      <Box sx={{ mt: 4 }}>
+        <Typography color="error">Missing exam_session_id.</Typography>
+      </Box>
+    );
+  }
+
+  if (isPending) {
+    return (
+      <Box sx={{ mt: 4 }}>
+        <Typography>…</Typography>
+      </Box>
+    );
+  }
+
+  if (isError || !session) {
+    return (
+      <Box sx={{ mt: 4 }}>
+        <Typography color="error">
+          Failed to load exam session {examSessionId}.
+        </Typography>
+      </Box>
+    );
+  }
+
+  const excerpt = session.exam_excerpt;
+  const goToQuestion = (index: number) => setIndexOverride(index);
 
   return (
     <Box>
       <Box sx={{ mt: 4 }}>
         <Typography variant="h4" component="h2" gutterBottom>
-          {title}
+          {excerpt.Title}
         </Typography>
         <Typography gutterBottom variant="body2" color="text.secondary">
-          {shortname} · {code} · {numQuestions}{" "}
+          {excerpt.ShortName} · {excerpt.Code} · {numQuestions}{" "}
           {numQuestions === 1 ? "question" : "questions"}
         </Typography>
       </Box>
@@ -135,7 +168,12 @@ export default function Page() {
           <Button
             color="error"
             variant="contained"
-            onClick={() => router.push("/")}
+            loading={endSession.isPending}
+            onClick={() => {
+              endSession.mutate(examSessionId, {
+                onSuccess: () => router.push("/"),
+              });
+            }}
           >
             End Exam
           </Button>

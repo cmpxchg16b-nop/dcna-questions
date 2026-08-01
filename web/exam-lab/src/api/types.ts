@@ -29,16 +29,26 @@ export type ExamDocsLine = { Data?: ExamExcerpt; Err?: string };
 // millisecond-resolution unix timestamp, so `new Date(started_at)` works
 // directly. exam_excerpt is a question.ExamDocumentExcerpt, which marshals
 // under capitalized field names just like in the examdocs endpoint.
+// current_question_index is the virtual index of the question most recently
+// served by GetNextQuestion; it is -1 before the first question has been
+// fetched.
 export type ExamSessionSummary = {
   exam_session_id: string;
   exam_excerpt: ExamExcerpt;
   started_at: number;
+  current_question_index: number;
 };
 
 // ExamSessionListResponse is the JSON body of a successful
 // GET /api/examsessions: {"exam_sessions": [{...}, ...]}.
 export type ExamSessionListResponse = {
   exam_sessions: ExamSessionSummary[];
+};
+
+// ExamSessionResponse is the JSON body of a successful
+// GET /api/examsessions/{exam_session_id}: {"exam_session": {...}}.
+export type ExamSessionResponse = {
+  exam_session: ExamSessionSummary;
 };
 
 // ExamOptions bitmask bits, mirroring the Go examserver.ExamOptions constants
