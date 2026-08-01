@@ -41,6 +41,12 @@ type ExamSessionExcerpt struct {
 	ExamExcerpt pkgmodelquestions.ExamDocumentExcerpt
 	// millisecond-resolution unix timestamp
 	StartedAt uint64
+
+	// CurrentQuestionIndex is the virtual index of the question most recently
+	// served by GetNextQuestion. It is -1 before the first question has been
+	// fetched, since the client must call GetNextQuestion even to obtain the
+	// first question.
+	CurrentQuestionIndex int
 }
 
 type ExamServer interface {
@@ -49,6 +55,10 @@ type ExamServer interface {
 
 	// List started exam sessions of a given user
 	ListExamSessions(ctx context.Context, userId string) []ExamSessionExcerpt
+
+	// Get a single exam session by its id, scoped to the caller. Returns an
+	// error if the session does not exist or does not belong to the caller.
+	GetExamSessionById(ctx context.Context, examId ExamSessionId, userId string) (ExamSessionExcerpt, error)
 
 	// Terminate the specified exam session
 	EndExamSession(ctx context.Context, examId ExamSessionId, userId string) error
@@ -190,9 +200,10 @@ func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId stri
 		for id := range sessions {
 			sess := srv.sessionsStore[id]
 			excerpts = append(excerpts, ExamSessionExcerpt{
-				Id:          id,
-				ExamExcerpt: pkgmodelquestions.ExamExcerptFrom(sess.Exam),
-				StartedAt:   sess.StartedAt,
+				Id:                   id,
+				ExamExcerpt:          pkgmodelquestions.ExamExcerptFrom(sess.Exam),
+				StartedAt:            sess.StartedAt,
+				CurrentQuestionIndex: sess.CurrentQuestionIndex,
 			})
 		}
 		resp <- result{excerpts: excerpts}
@@ -205,6 +216,40 @@ func (srv *OnMemoryExamServer) ListExamSessions(ctx context.Context, userId stri
 		return r.excerpts
 	case <-ctx.Done():
 		return nil
+	}
+}
+
+func (srv *OnMemoryExamServer) GetExamSessionById(ctx context.Context, examId ExamSessionId, userId string) (ExamSessionExcerpt, error) {
+	type result struct {
+		excerpt ExamSessionExcerpt
+		err     error
+	}
+	resp := make(chan result, 1)
+	cmd := func() {
+		sess, ok := srv.sessionsStore[examId]
+		if !ok {
+			resp <- result{err: errExamNotFound}
+			return
+		}
+		if sess.UserId != userId {
+			resp <- result{err: errNotOwner}
+			return
+		}
+		resp <- result{excerpt: ExamSessionExcerpt{
+			Id:                   examId,
+			ExamExcerpt:          pkgmodelquestions.ExamExcerptFrom(sess.Exam),
+			StartedAt:            sess.StartedAt,
+			CurrentQuestionIndex: sess.CurrentQuestionIndex,
+		}}
+	}
+	if err := srv.dispatch(ctx, cmd); err != nil {
+		return ExamSessionExcerpt{}, err
+	}
+	select {
+	case r := <-resp:
+		return r.excerpt, r.err
+	case <-ctx.Done():
+		return ExamSessionExcerpt{}, ctx.Err()
 	}
 }
 
@@ -272,6 +317,7 @@ func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamS
 			return
 		}
 		question = sess.cachedQuestion(perm[idx])
+		sess.CurrentQuestionIndex = idx
 		if idx+1 < len(perm) {
 			// The cursor's meaning is unchanged ("next question to read"), so
 			// advance it in place instead of minting a new token. On the very
@@ -407,6 +453,12 @@ type OnMemoryExamSession struct {
 	// for OnMemoryExamServer/OnMemoryExamSession, cursor id should be uuid
 	Cursors map[string]int
 
+	// CurrentQuestionIndex is the virtual index of the question most recently
+	// served by GetNextQuestion. It starts at -1 (no question fetched yet) and
+	// is advanced each time GetNextQuestion serves a question. It is owned by
+	// the actor goroutine like all other session state.
+	CurrentQuestionIndex int
+
 	// rng is the per-session random source, used to shuffle the question order
 	// and each question's options. It is owned by the actor goroutine (touched
 	// only inside dispatch closures) and is therefore lock-free.
@@ -446,16 +498,17 @@ func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions
 		qPerm = identityPermutation(n)
 	}
 	return &OnMemoryExamSession{
-		ExamId:              examId,
-		UserId:              userId,
-		Exam:                exam,
-		StartedAt:           uint64(time.Now().UnixMilli()),
-		Questions:           &qc,
-		Options:             opts,
-		QuestionPermutation: qPerm,
-		CachedQuestion:      make(map[string]OnMemoryQuestion),
-		Cursors:             make(map[string]int),
-		rng:                 rng,
+		ExamId:               examId,
+		UserId:               userId,
+		Exam:                 exam,
+		StartedAt:            uint64(time.Now().UnixMilli()),
+		Questions:            &qc,
+		Options:              opts,
+		QuestionPermutation:  qPerm,
+		CachedQuestion:       make(map[string]OnMemoryQuestion),
+		Cursors:              make(map[string]int),
+		CurrentQuestionIndex: -1,
+		rng:                  rng,
 	}
 }
 

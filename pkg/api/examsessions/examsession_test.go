@@ -76,6 +76,10 @@ func (s *fakeExamServer) ListExamSessions(_ context.Context, userSessionId strin
 	return s.listResult
 }
 
+func (s *fakeExamServer) GetExamSessionById(_ context.Context, examId examserver.ExamSessionId, _ string) (examserver.ExamSessionExcerpt, error) {
+	return examserver.ExamSessionExcerpt{}, nil
+}
+
 func (s *fakeExamServer) EndExamSession(_ context.Context, examId examserver.ExamSessionId, userId string) error {
 	s.ended = append(s.ended, examId)
 	return s.endErr

@@ -181,6 +181,76 @@ func TestStartNewExamSession_FlattensCollectionsByDefault(t *testing.T) {
 	}
 }
 
+// TestGetExamSessionById_CurrentQuestionIndex confirms that a freshly started
+// session reports CurrentQuestionIndex == -1 (no question fetched yet), and
+// that the index advances to 0, 1, ... as the owner calls GetNextQuestion. It
+// also checks that a non-owner cannot retrieve the session and that a missing
+// session is reported as an error.
+func TestGetExamSessionById_CurrentQuestionIndex(t *testing.T) {
+	mkQ := func(id string) pkgmodelquestions.Question {
+		return pkgmodelquestions.Question{Id: id, Type: pkgmodelquestions.QuestionTypeSingleChoice}
+	}
+	exam := &pkgmodelquestions.Exam{
+		Id: "index-tracking",
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{mkQ("1"), mkQ("2"), mkQ("3")}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+
+	// Before any GetNextQuestion, the current index is -1.
+	ex, err := srv.GetExamSessionById(ctx, examId, "user-1")
+	if err != nil {
+		t.Fatalf("GetExamSessionById: %v", err)
+	}
+	if ex.CurrentQuestionIndex != -1 {
+		t.Fatalf("initial CurrentQuestionIndex = %d, want -1", ex.CurrentQuestionIndex)
+	}
+	if ex.Id != examId {
+		t.Errorf("excerpt.Id = %q, want %q", ex.Id, examId)
+	}
+
+	// Each GetNextQuestion should advance the reported index by one.
+	var cursor *QuestionCursor
+	for want := 0; want < 3; want++ {
+		q, next, err := srv.GetNextQuestion(ctx, examId, "user-1", cursor)
+		if err != nil || q == nil {
+			t.Fatalf("GetNextQuestion(%d): q=%v err=%v", want, q, err)
+		}
+		cursor = next
+
+		ex, err := srv.GetExamSessionById(ctx, examId, "user-1")
+		if err != nil {
+			t.Fatalf("GetExamSessionById after fetch %d: %v", want, err)
+		}
+		if ex.CurrentQuestionIndex != want {
+			t.Errorf("after fetch %d, CurrentQuestionIndex = %d, want %d", want, ex.CurrentQuestionIndex, want)
+		}
+	}
+
+	// A non-owner must be rejected.
+	if _, err := srv.GetExamSessionById(ctx, examId, "user-2"); err != errNotOwner {
+		t.Errorf("GetExamSessionById by non-owner = %v, want errNotOwner", err)
+	}
+
+	// A missing session must be rejected.
+	if _, err := srv.GetExamSessionById(ctx, "does-not-exist", "user-1"); err != errExamNotFound {
+		t.Errorf("GetExamSessionById for missing session = %v, want errExamNotFound", err)
+	}
+}
+
 // TestOwnershipEnforcement confirms that a user cannot operate on an exam
 // session that belongs to another user: EndExamSession, GetNextQuestion,
 // SeekCursorTo, and SubmitAnswer all reject a non-owner caller, while the
@@ -221,6 +291,9 @@ func TestOwnershipEnforcement(t *testing.T) {
 	}
 	if _, err := srv.SubmitAnswer(ctx, examId, "user-2", &pkgmodelquestions.ExamAnswer{}, false); err != errNotOwner {
 		t.Errorf("SubmitAnswer by non-owner = %v, want errNotOwner", err)
+	}
+	if _, err := srv.GetExamSessionById(ctx, examId, "user-2"); err != errNotOwner {
+		t.Errorf("GetExamSessionById by non-owner = %v, want errNotOwner", err)
 	}
 
 	// The owner can still use their own session.
