@@ -52,12 +52,10 @@
             <option id="5">Layer 3 floating SVI</option>
           </options>
           <correctanswer>
-            <!-- combinations are orderless, in other words: they are just unordered set. -->
-            <!-- so that means, both (1, 4) and (4, 1) are correct answers. -->
-            <combination>
+            <options>
               <option id="1" />
               <option id="4" />
-            </combination>
+            </options>
           </correctanswer>
         </question>
         <question id="3" type="drag-and-drop" score="1">
