@@ -196,7 +196,7 @@ func TestExamHandler(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			h := examdocs.NewExamHandler(question.NewExamRepository(tc.sources))
+			h := examdocs.NewExamHandler(question.NewExamRepository([]question.ExamSource{question.NewStaticFileExamSource(tc.sources)}))
 			rr := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, "/api/examdocs", nil)
 
@@ -235,7 +235,7 @@ func (w *failingWriter) Flush()                    {}
 // fails, ServeHTTP must keep consuming ListExamDocuments' unbuffered channel so
 // the producer goroutine is not left blocked, and must return rather than hang.
 func TestExamHandler_ClientDisconnect(t *testing.T) {
-	repo := question.NewExamRepository([]question.ExamSourceEntry{
+	repo := question.NewExamRepository([]question.ExamSource{question.NewStaticFileExamSource([]question.ExamSourceEntry{
 		{
 			Loader: &fakeLoader{byURL: map[string]*question.Exam{
 				"u1": examWith("A", "cA", 1),
@@ -243,7 +243,7 @@ func TestExamHandler_ClientDisconnect(t *testing.T) {
 			}},
 			URLs: []string{"u1", "u2"},
 		},
-	})
+	})})
 	h := examdocs.NewExamHandler(repo)
 	r := httptest.NewRequest(http.MethodGet, "/api/examdocs", nil)
 

@@ -171,9 +171,9 @@ func newRepoWith(exams ...*question.Exam) *question.ExamRepository {
 		byURL[url] = e
 		urls = append(urls, url)
 	}
-	return question.NewExamRepository([]question.ExamSourceEntry{
+	return question.NewExamRepository([]question.ExamSource{question.NewStaticFileExamSource([]question.ExamSourceEntry{
 		{Loader: &fakeExamLoader{exams: byURL}, URLs: urls},
-	})
+	})})
 }
 
 // testEnv wires a handler behind a ServeMux that mirrors the documented mount.
