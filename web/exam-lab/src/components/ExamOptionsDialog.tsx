@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { useCreateExamSession } from "@/hooks/useCreateExamSession";
 import {
+  CLIENT_SUPPORTED_QUESTION_TYPES,
   ExamExcerpt,
   ExamOptionRandomOptions,
   ExamOptionRandomQuestions,
@@ -54,9 +55,15 @@ function ExamOptionsForm({
   const [randomQuestions, setRandomQuestions] = useState(false);
   const [randomOptions, setRandomOptions] = useState(false);
   const [seekable, setSeekable] = useState(false);
-  const [singleChoice, setSingleChoice] = useState(true);
-  const [multipleChoice, setMultipleChoice] = useState(true);
-  const [dragAndDrop, setDragAndDrop] = useState(true);
+  // Question types absent from CLIENT_SUPPORTED_QUESTION_TYPES cannot be
+  // rendered by the client: they start unchecked and are disabled below.
+  const supported = (t: QuestionType) =>
+    CLIENT_SUPPORTED_QUESTION_TYPES.includes(t);
+  const [singleChoice, setSingleChoice] = useState(supported("single-choice"));
+  const [multipleChoice, setMultipleChoice] = useState(
+    supported("multiple-choice"),
+  );
+  const [dragAndDrop, setDragAndDrop] = useState(supported("drag-and-drop"));
 
   const options =
     (randomQuestions ? ExamOptionRandomQuestions : 0) |
@@ -114,6 +121,7 @@ function ExamOptionsForm({
             control={
               <Checkbox
                 checked={singleChoice}
+                disabled={!supported("single-choice")}
                 onChange={(e) => setSingleChoice(e.target.checked)}
               />
             }
@@ -123,6 +131,7 @@ function ExamOptionsForm({
             control={
               <Checkbox
                 checked={multipleChoice}
+                disabled={!supported("multiple-choice")}
                 onChange={(e) => setMultipleChoice(e.target.checked)}
               />
             }
@@ -132,6 +141,7 @@ function ExamOptionsForm({
             control={
               <Checkbox
                 checked={dragAndDrop}
+                disabled={!supported("drag-and-drop")}
                 onChange={(e) => setDragAndDrop(e.target.checked)}
               />
             }
