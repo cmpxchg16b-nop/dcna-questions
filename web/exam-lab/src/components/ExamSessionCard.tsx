@@ -11,7 +11,8 @@ import {
 } from "@mui/material";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
-import { ExamCategoryLabels, ExamSessionSummary } from "@/api/types";
+import { ExamSessionSummary } from "@/api/types";
+import ExamMetadataChips from "@/components/ExamMetadataChips";
 
 type ExamSessionCardProps = {
   session: ExamSessionSummary;
@@ -44,10 +45,7 @@ export default function ExamSessionCard({
               <Typography variant="h6" component="div" noWrap>
                 {excerpt.Title}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {excerpt.ShortName} · {excerpt.Code} ·{" "}
-                {ExamCategoryLabels[excerpt.ExamCategory]}
-              </Typography>
+              <ExamMetadataChips exam={excerpt} />
               <Typography variant="body2" color="text.secondary">
                 Started{" "}
                 <Tooltip title={new Date(session.started_at).toLocaleString()}>
