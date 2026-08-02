@@ -50,6 +50,11 @@ type ExamSessionExcerpt struct {
 	// fetched, since the client must call GetNextQuestion even to obtain the
 	// first question.
 	CurrentQuestionIndex int
+
+	// CurrentQuestion is the question most recently served by GetNextQuestion.
+	// It is nil until the first question has been fetched. It is updated in
+	// lock-step with CurrentQuestionIndex.
+	CurrentQuestion *pkgmodelquestions.Question
 }
 
 type ExamServer interface {
@@ -325,6 +330,7 @@ func (srv *OnMemoryExamServer) GetNextQuestion(ctx context.Context, examId ExamS
 		}
 		question = sess.cachedQuestion(perm[idx])
 		sess.CurrentQuestionIndex = idx
+		sess.CurrentQuestion = question
 		if idx+1 < len(perm) {
 			// The cursor's meaning is unchanged ("next question to read"), so
 			// advance it in place instead of minting a new token. On the very
@@ -509,6 +515,12 @@ type OnMemoryExamSession struct {
 	// the actor goroutine like all other session state.
 	CurrentQuestionIndex int
 
+	// CurrentQuestion is the question most recently served by GetNextQuestion.
+	// It has the same lifetime and ownership semantics as CurrentQuestionIndex:
+	// nil until the first question has been fetched, then updated in lock-step
+	// with CurrentQuestionIndex each time GetNextQuestion serves a question.
+	CurrentQuestion *pkgmodelquestions.Question
+
 	// rng is the per-session random source, used to shuffle the question order
 	// and each question's options. It is owned by the actor goroutine (touched
 	// only inside dispatch closures) and is therefore lock-free.
@@ -632,6 +644,7 @@ func sessionExcerpt(sess *OnMemoryExamSession) ExamSessionExcerpt {
 		StartedAt:            sess.StartedAt,
 		Options:              sess.Options,
 		CurrentQuestionIndex: sess.CurrentQuestionIndex,
+		CurrentQuestion:      sess.CurrentQuestion,
 	}
 }
 

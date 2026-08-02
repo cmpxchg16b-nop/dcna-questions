@@ -98,6 +98,7 @@ type examSessionSummary struct {
 	StartedAt            uint64                       `json:"started_at"`
 	Options              examserver.ExamOptions       `json:"options"`
 	CurrentQuestionIndex int                          `json:"current_question_index"`
+	CurrentQuestion      *question.Question           `json:"current_question"`
 }
 
 // sessionResponse is the JSON body of a successful GET /{exam_id}: the single
@@ -115,6 +116,7 @@ func toSummary(e examserver.ExamSessionExcerpt) examSessionSummary {
 		StartedAt:            e.StartedAt,
 		Options:              e.Options,
 		CurrentQuestionIndex: e.CurrentQuestionIndex,
+		CurrentQuestion:      e.CurrentQuestion,
 	}
 }
 

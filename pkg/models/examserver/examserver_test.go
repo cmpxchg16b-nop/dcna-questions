@@ -218,6 +218,9 @@ func TestGetExamSessionById_CurrentQuestionIndex(t *testing.T) {
 	if ex.CurrentQuestionIndex != -1 {
 		t.Fatalf("initial CurrentQuestionIndex = %d, want -1", ex.CurrentQuestionIndex)
 	}
+	if ex.CurrentQuestion != nil {
+		t.Fatalf("initial CurrentQuestion = %v, want nil", ex.CurrentQuestion)
+	}
 	if ex.Id != examId {
 		t.Errorf("excerpt.Id = %q, want %q", ex.Id, examId)
 	}
@@ -237,6 +240,11 @@ func TestGetExamSessionById_CurrentQuestionIndex(t *testing.T) {
 		}
 		if ex.CurrentQuestionIndex != want {
 			t.Errorf("after fetch %d, CurrentQuestionIndex = %d, want %d", want, ex.CurrentQuestionIndex, want)
+		}
+		if ex.CurrentQuestion == nil {
+			t.Errorf("after fetch %d, CurrentQuestion = nil, want non-nil", want)
+		} else if ex.CurrentQuestion.Id != q.Id {
+			t.Errorf("after fetch %d, CurrentQuestion.Id = %q, want %q", want, ex.CurrentQuestion.Id, q.Id)
 		}
 	}
 

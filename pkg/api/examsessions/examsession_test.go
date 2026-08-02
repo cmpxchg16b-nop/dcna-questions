@@ -659,6 +659,7 @@ func TestExamSessionHandler(t *testing.T) {
 				ExamExcerpt:          question.ExamDocumentExcerpt{Id: "exam-a"},
 				StartedAt:            5000,
 				CurrentQuestionIndex: 2,
+				CurrentQuestion:      &question.Question{Id: "q-2"},
 			}},
 			wantStatus: http.StatusOK,
 			checkBody: func(t *testing.T, body string) {
@@ -668,6 +669,7 @@ func TestExamSessionHandler(t *testing.T) {
 						ExamExcerpt          question.ExamDocumentExcerpt `json:"exam_excerpt"`
 						StartedAt            uint64                       `json:"started_at"`
 						CurrentQuestionIndex int                          `json:"current_question_index"`
+						CurrentQuestion      *question.Question           `json:"current_question"`
 					} `json:"exam_session"`
 				}
 				decodeJSON(t, body, &got)
@@ -682,6 +684,9 @@ func TestExamSessionHandler(t *testing.T) {
 				}
 				if got.ExamSession.CurrentQuestionIndex != 2 {
 					t.Errorf("current_question_index = %d, want 2", got.ExamSession.CurrentQuestionIndex)
+				}
+				if got.ExamSession.CurrentQuestion == nil || got.ExamSession.CurrentQuestion.Id != "q-2" {
+					t.Errorf("current_question = %v, want Id q-2", got.ExamSession.CurrentQuestion)
 				}
 			},
 			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
