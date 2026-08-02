@@ -30,26 +30,30 @@ export default function Page() {
 
   const { data: session, isPending, isError } = useExamSession(examSessionId);
   const endSession = useEndExamSession();
-  const navigate = useNavigateQuestion(examSessionId ?? "");
-
-  const [confirmEndOpen, setConfirmEndOpen] = useState(false);
-
-  // position is the question currently on screen plus the cursor to continue
-  // from; it doubles as the cursor store the navigation API flows require. It
-  // is null until this page view has served a question, in which case the
-  // server-side current_question_index is the fallback: a non-negative server
-  // index then means the session was interrupted (e.g. the page was reloaded)
-  // and its question/cursor must be recovered through a seek.
-  const position = navigate.data ?? null;
-  const serverIndex = session?.current_question_index ?? -1;
-  const currentQuestionIndex = position?.index ?? serverIndex;
-  const interrupted = position === null && serverIndex >= 0;
-
-  const numQuestions = session?.exam_excerpt.NumQuestions ?? 0;
-  const isLastQuestion = currentQuestionIndex >= numQuestions - 1;
+  // seekable comes from the session's options bitmask and selects how the
+  // navigation hook repositions a lost cursor (seek vs. replay).
   const seekable = session
     ? (session.options & ExamOptionSeekable) !== 0
     : false;
+  const navigate = useNavigateQuestion(examSessionId ?? "", seekable);
+
+  const [confirmEndOpen, setConfirmEndOpen] = useState(false);
+
+  // position is the question fetched by this page view's latest navigation
+  // (Start/Previous/Next). It is null until this page view has navigated, in
+  // which case the server-side current_question_index/current_question are the
+  // fallback: the two are coherent, so a non-negative index means the session's
+  // current_question is the last question it served (e.g. before a reload).
+  const position = navigate.data ?? null;
+  const currentQuestionIndex =
+    position?.index ?? session?.current_question_index ?? -1;
+  // The effective current question: the fetched one when this page view has
+  // navigated, else the session's last visited one.
+  const effectiveQuestion =
+    position?.question ?? session?.current_question ?? null;
+
+  const numQuestions = session?.exam_excerpt.NumQuestions ?? 0;
+  const isLastQuestion = currentQuestionIndex >= numQuestions - 1;
 
   if (!examSessionId) {
     return (
@@ -81,22 +85,12 @@ export default function Page() {
 
   const goToQuestion = (nextIndex: number) => {
     if (nextIndex === currentQuestionIndex + 1) {
-      // go next: read through the current forward cursor. A null cursor reads
-      // from the beginning of the session, which is what Start Exam relies on.
-      navigate.mutate({
-        index: nextIndex,
-        cursor: position?.nextCursor ?? null,
-        seek: false,
-      });
+      // go next: read through the cursor tracked by the navigation hook.
+      navigate.mutate({ index: nextIndex, seek: false });
     } else if (nextIndex === currentQuestionIndex - 1) {
       // go previous: reposition the cursor to the previous index (requires a
-      // seekable session and invalidates the current cursor), then read the
-      // question through the repositioned cursor the server returned.
-      navigate.mutate({
-        index: nextIndex,
-        cursor: position?.nextCursor ?? null,
-        seek: true,
-      });
+      // seekable session), then read the question there.
+      navigate.mutate({ index: nextIndex, seek: true });
     } else {
       // unsupported
       console.error(`Unsupported index: ${nextIndex}`);
@@ -104,12 +98,6 @@ export default function Page() {
   };
 
   const startExam = () => goToQuestion(0);
-
-  // resumeExam recovers the interrupted session by seeking to the server's
-  // current question index with no cursor (SeekCursorTo mints a fresh one)
-  // and reading the question there. Only possible for seekable sessions.
-  const resumeExam = () =>
-    navigate.mutate({ index: serverIndex, cursor: null, seek: true });
 
   return (
     <Box>
@@ -124,29 +112,25 @@ export default function Page() {
       </Box>
 
       <Box sx={{ mt: 4 }}>
-        {interrupted ? (
-          <Typography>
-            {seekable
-              ? "This exam session is already in progress. Click “Resume” to continue where you left off."
-              : "This exam session is already in progress and cannot be resumed because it is not seekable. You can end it instead."}
-          </Typography>
-        ) : position === null ? (
+        {currentQuestionIndex === -1 ? (
           <Typography>
             Welcome! After you are prepared, click the &quot;Start Exam&quot;
             Button to start exam.
           </Typography>
         ) : (
-          <Fragment>
-            <Typography gutterBottom>
-              Question {currentQuestionIndex + 1} of {numQuestions}
-            </Typography>
-            {/* Keying by question id resets the card's selection state every
-                time a new question is served. */}
-            <QuestionCard
-              key={position.question.id}
-              question={position.question}
-            />
-          </Fragment>
+          effectiveQuestion && (
+            <Fragment>
+              <Typography gutterBottom>
+                Question {currentQuestionIndex + 1} of {numQuestions}
+              </Typography>
+              {/* Keying by question id resets the card's selection state every
+                  time a new question is served. */}
+              <QuestionCard
+                key={effectiveQuestion.id}
+                question={effectiveQuestion}
+              />
+            </Fragment>
+          )
         )}
 
         {navigate.isError && (
@@ -164,10 +148,7 @@ export default function Page() {
               <Button
                 variant="contained"
                 disabled={
-                  position === null ||
-                  currentQuestionIndex === 0 ||
-                  !seekable ||
-                  navigate.isPending
+                  currentQuestionIndex <= 0 || !seekable || navigate.isPending
                 }
                 onClick={() => goToQuestion(currentQuestionIndex - 1)}
               >
@@ -175,25 +156,7 @@ export default function Page() {
               </Button>
             </span>
           </Tooltip>
-          {interrupted ? (
-            seekable ? (
-              <Button
-                variant="contained"
-                loading={navigate.isPending}
-                onClick={resumeExam}
-              >
-                Resume
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                color="error"
-                onClick={() => setConfirmEndOpen(true)}
-              >
-                End Exam
-              </Button>
-            )
-          ) : position === null ? (
+          {currentQuestionIndex === -1 ? (
             <Button
               variant="contained"
               loading={navigate.isPending}

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ExamSessionSummary,
@@ -15,18 +16,17 @@ export type QuestionPosition = {
   nextCursor: string | null;
 };
 
-// NavigateInput describes one navigation step.
+// NavigateInput describes one navigation step to the question at index.
 //
-// Forward moves (seek: false) read the question at index through the current
-// cursor; a null cursor is treated by GetNextQuestion as "from the beginning",
-// which is what starting an exam relies on.
+// Backward moves (seek: true, the "Previous" button) always reposition the
+// cursor to index via SeekCursorTo first, then read through the repositioned
+// cursor.
 //
-// Backward and resume moves (seek: true) first reposition the cursor to index
-// via SeekCursorTo — which requires a seekable session and invalidates the
-// passed cursor, if any — then read through the repositioned cursor.
+// Forward moves (seek: false, the "Start"/"Next" buttons) read through the
+// tracked cursor. GetNextQuestion is never called on its own — only in
+// response to these button moves.
 export type NavigateInput = {
   index: number;
-  cursor: string | null;
   seek: boolean;
 };
 
@@ -71,41 +71,83 @@ async function seekCursor(
   return body.cursor_id;
 }
 
-// navigateQuestion performs one navigation step: an optional seek followed by
-// reading the question at the target index. It resolves to the new position,
-// including the cursor to continue forward from.
-async function navigateQuestion(
-  examSessionId: string,
-  { index, cursor, seek }: NavigateInput,
-): Promise<QuestionPosition> {
-  const readCursor = seek
-    ? await seekCursor(examSessionId, cursor, index)
-    : cursor;
-  const { question, cursor_id } = await fetchNextQuestion(
-    examSessionId,
-    readCursor,
-  );
-  if (!question) {
-    throw new Error(`the server served no question at index ${index}`);
-  }
-  return { index, question, nextCursor: cursor_id };
-}
-
 // useNavigateQuestion drives question navigation within an exam session. The
 // mutation's `data` is the current QuestionPosition, so the page derives the
 // on-screen question and index from it without extra state or effects. On
-// success it also syncs current_question_index into the cached session summary
-// so anything reading ["examsession", examSessionId] stays coherent.
-export function useNavigateQuestion(examSessionId: string) {
+// success it also syncs current_question_index and current_question into the
+// cached session summary so anything reading ["examsession", examSessionId]
+// stays coherent. seekable (from the session's options bitmask) selects the
+// cursor-restoration strategy below.
+export function useNavigateQuestion(examSessionId: string, seekable: boolean) {
   const queryClient = useQueryClient();
+  // cursorRef tracks the opaque cursor most recently returned by the server
+  // (by a seek or a question read). It is null until this page view has served
+  // a question — e.g. right after a page reload. A null cursor reads index 0,
+  // so it is exactly what "Start" relies on; a forward move to any other index
+  // with a null cursorRef must first reposition the cursor: by a seek when the
+  // session is seekable, or by replaying GetNextQuestion from an empty cursor
+  // when it is not.
+  const cursorRef = useRef<string | null>(null);
   return useMutation({
-    mutationFn: (input: NavigateInput) =>
-      navigateQuestion(examSessionId, input),
+    mutationFn: async ({
+      index,
+      seek,
+    }: NavigateInput): Promise<QuestionPosition> => {
+      let cursor = cursorRef.current;
+      if (seek) {
+        // Backward move: reposition the cursor to index first (requires a
+        // seekable session; the page disables Previous otherwise), then read
+        // through the repositioned cursor.
+        cursor = await seekCursor(examSessionId, cursor, index);
+      } else if (cursor === null && index !== 0) {
+        if (seekable) {
+          // The tracked cursor is lost (e.g. the page was reloaded): mint a
+          // fresh one already positioned at the target index.
+          cursor = await seekCursor(examSessionId, null, index);
+        } else {
+          // Non-seekable sessions cannot seek, so the cursor is restored by
+          // replaying GetNextQuestion from an empty cursor up to the target
+          // index. Every replayed read advances the server-side current
+          // question index, so the target is captured up front in `index`
+          // (the loop never consults the session) and only the final read's
+          // question and cursor are kept.
+          let question: Question | null = null;
+          for (let i = 0; i <= index; i++) {
+            const res = await fetchNextQuestion(examSessionId, cursor);
+            if (!res.question) {
+              throw new Error(`the server served no question at index ${i}`);
+            }
+            cursor = res.cursor_id;
+            question = res.question;
+          }
+          if (!question) {
+            throw new Error(`the server served no question at index ${index}`);
+          }
+          cursorRef.current = cursor;
+          return { index, question, nextCursor: cursor };
+        }
+      }
+      const { question, cursor_id } = await fetchNextQuestion(
+        examSessionId,
+        cursor,
+      );
+      if (!question) {
+        throw new Error(`the server served no question at index ${index}`);
+      }
+      cursorRef.current = cursor_id;
+      return { index, question, nextCursor: cursor_id };
+    },
     onSuccess: (position) => {
       queryClient.setQueryData<ExamSessionSummary>(
         ["examsession", examSessionId],
         (old) =>
-          old ? { ...old, current_question_index: position.index } : old,
+          old
+            ? {
+                ...old,
+                current_question_index: position.index,
+                current_question: position.question,
+              }
+            : old,
       );
     },
   });

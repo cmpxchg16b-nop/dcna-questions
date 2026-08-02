@@ -44,7 +44,8 @@ export type ExamDocsLine = { Data?: ExamExcerpt; Err?: string };
 // under capitalized field names just like in the examdocs endpoint.
 // current_question_index is the virtual index of the question most recently
 // served by GetNextQuestion; it is -1 before the first question has been
-// fetched.
+// fetched. current_question is that question itself; the two are coherent, so
+// current_question is non-null exactly when current_question_index >= 0.
 export type ExamSessionSummary = {
   exam_session_id: string;
   exam_excerpt: ExamExcerpt;
@@ -54,6 +55,7 @@ export type ExamSessionSummary = {
   // only supports seeking when (options & ExamOptionSeekable) !== 0).
   options: number;
   current_question_index: number;
+  current_question: Question | null;
 };
 
 // ExamSessionListResponse is the JSON body of a successful
