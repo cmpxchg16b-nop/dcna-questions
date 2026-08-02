@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -343,11 +345,53 @@ func (e *Exam) validate() error {
 	return nil
 }
 
-// ExamSource describes one source of exam documents: a Loader (an abstract type
+// ExamSourceEntry describes one source of exam documents: a Loader (an abstract type
 // that knows how to decode an Exam from a URL) plus the URLs it provides.
-type ExamSource struct {
+type ExamSourceEntry struct {
 	Loader ExamLoader
 	URLs   []string
+}
+
+type StaticFileExamSource struct {
+	entries []ExamSourceEntry
+}
+
+func NewStaticFileExamSource(entries []ExamSourceEntry) *StaticFileExamSource {
+	return &StaticFileExamSource{entries: entries}
+}
+
+func (s *StaticFileExamSource) Get() []ExamSourceEntry {
+	return s.entries
+}
+
+type DynamicDirExamSource struct {
+	dir string
+}
+
+func NewDynamicDirExamSource(dir string) *DynamicDirExamSource {
+	return &DynamicDirExamSource{dir: dir}
+}
+
+func (s *DynamicDirExamSource) Get() []ExamSourceEntry {
+	files, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil
+	}
+	var urls []string
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".xml") {
+			continue
+		}
+		urls = append(urls, filepath.Join(s.dir, f.Name()))
+	}
+	if len(urls) == 0 {
+		return nil
+	}
+	return []ExamSourceEntry{{Loader: NewFileExamLoader(), URLs: urls}}
+}
+
+type ExamSource interface {
+	Get() []ExamSourceEntry
 }
 
 // ExamRepository aggregates exam documents drawn from one or more ExamSources.
@@ -388,12 +432,14 @@ func (r *ExamRepository) cachedExam(id string) (*Exam, bool) {
 // found" rather than its underlying load error.
 func (r *ExamRepository) reload() {
 	for _, src := range r.sources {
-		for _, url := range src.URLs {
-			exam, err := src.Loader.LoadFrom(url)
-			if err != nil {
-				continue
+		for _, entry := range src.Get() {
+			for _, url := range entry.URLs {
+				exam, err := entry.Loader.LoadFrom(url)
+				if err != nil {
+					continue
+				}
+				r.cacheExam(exam)
 			}
-			r.cacheExam(exam)
 		}
 	}
 }
@@ -421,14 +467,16 @@ func (r *ExamRepository) ListExamDocuments() <-chan ExamDataEvent {
 	go func() {
 		defer close(events)
 		for _, src := range r.sources {
-			for _, url := range src.URLs {
-				exam, err := src.Loader.LoadFrom(url)
-				if err != nil {
-					events <- ExamDataEvent{Err: fmt.Errorf("load exam %q: %w", url, err)}
-					continue
+			for _, entry := range src.Get() {
+				for _, url := range entry.URLs {
+					exam, err := entry.Loader.LoadFrom(url)
+					if err != nil {
+						events <- ExamDataEvent{Err: fmt.Errorf("load exam %q: %w", url, err)}
+						continue
+					}
+					r.cacheExam(exam) // refresh the cache as each exam loads
+					events <- ExamDataEvent{Data: exam}
 				}
-				r.cacheExam(exam) // refresh the cache as each exam loads
-				events <- ExamDataEvent{Data: exam}
 			}
 		}
 	}()

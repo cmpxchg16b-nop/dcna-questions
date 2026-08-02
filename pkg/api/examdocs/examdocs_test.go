@@ -85,7 +85,7 @@ func TestExamHandler(t *testing.T) {
 	tests := []struct {
 		name            string
 		method          string
-		sources         []question.ExamSource
+		sources         []question.ExamSourceEntry
 		wantStatus      int
 		wantContentType string
 		check           func(t *testing.T, rr *httptest.ResponseRecorder)
@@ -93,7 +93,7 @@ func TestExamHandler(t *testing.T) {
 		{
 			name:   "GET streams exams as NDJSON excerpts",
 			method: http.MethodGet,
-			sources: []question.ExamSource{
+			sources: []question.ExamSourceEntry{
 				{
 					Loader: &fakeLoader{byURL: map[string]*question.Exam{
 						"u1": examWith("A", "cA", 1),
@@ -137,7 +137,7 @@ func TestExamHandler(t *testing.T) {
 		{
 			name:   "GET reports load failures as in-band Err lines",
 			method: http.MethodGet,
-			sources: []question.ExamSource{
+			sources: []question.ExamSourceEntry{
 				{
 					Loader: &fakeLoader{
 						byURL:  map[string]*question.Exam{"ok": examWith("A", "cA", 1)},
@@ -235,7 +235,7 @@ func (w *failingWriter) Flush()                    {}
 // fails, ServeHTTP must keep consuming ListExamDocuments' unbuffered channel so
 // the producer goroutine is not left blocked, and must return rather than hang.
 func TestExamHandler_ClientDisconnect(t *testing.T) {
-	repo := question.NewExamRepository([]question.ExamSource{
+	repo := question.NewExamRepository([]question.ExamSourceEntry{
 		{
 			Loader: &fakeLoader{byURL: map[string]*question.Exam{
 				"u1": examWith("A", "cA", 1),

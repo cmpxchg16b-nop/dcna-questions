@@ -1,6 +1,7 @@
 package question
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -153,5 +154,96 @@ func TestQuestionType_Valid(t *testing.T) {
 		if got := tc.t.Valid(); got != tc.exp {
 			t.Errorf("Valid(%q) = %v, want %v", tc.t, got, tc.exp)
 		}
+	}
+}
+
+// minimalExamXML is a valid, minimal exam document used as file content by the
+// exam-source tests.
+const minimalExamXML = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id="1" shortname="X" code="1">
+  <title>t</title><description>d</description>
+  <questionset><questioncollection>
+    <question id="1" type="single-choice"><description>a</description></question>
+  </questioncollection></questionset>
+</exam>
+</root>`
+
+func TestStaticFileExamSource_GetReturnsEntries(t *testing.T) {
+	entries := []ExamSourceEntry{
+		{Loader: NewFileExamLoader(), URLs: []string{"a.xml", "b.xml"}},
+		{Loader: NewFileExamLoader(), URLs: []string{"c.xml"}},
+	}
+	src := NewStaticFileExamSource(entries)
+	got := src.Get()
+	if len(got) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(got))
+	}
+	if len(got[0].URLs) != 2 || got[0].URLs[0] != "a.xml" {
+		t.Fatalf("unexpected entry 0 URLs: %v", got[0].URLs)
+	}
+	if len(got[1].URLs) != 1 || got[1].URLs[0] != "c.xml" {
+		t.Fatalf("unexpected entry 1 URLs: %v", got[1].URLs)
+	}
+}
+
+func TestStaticFileExamSource_GetEmpty(t *testing.T) {
+	src := NewStaticFileExamSource(nil)
+	if got := src.Get(); got != nil && len(got) != 0 {
+		t.Fatalf("expected nil/empty, got %v", got)
+	}
+}
+
+func TestDynamicDirExamSource_GetFindsXMLFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "exam1.xml"), []byte(minimalExamXML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "exam2.xml"), []byte(minimalExamXML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Non-XML files and subdirectories must be ignored.
+	if err := os.WriteFile(filepath.Join(dir, "README.txt"), []byte("ignore me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "subdir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	src := NewDynamicDirExamSource(dir)
+	got := src.Get()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(got))
+	}
+	if len(got[0].URLs) != 2 {
+		t.Fatalf("expected 2 URLs, got %d (%v)", len(got[0].URLs), got[0].URLs)
+	}
+	if got[0].Loader == nil {
+		t.Fatal("expected non-nil Loader")
+	}
+	// Each URL should resolve to a readable, valid exam.
+	for _, url := range got[0].URLs {
+		exam, err := got[0].Loader.LoadFrom(url)
+		if err != nil {
+			t.Fatalf("LoadFrom(%q): %v", url, err)
+		}
+		if exam.Id != "1" {
+			t.Fatalf("LoadFrom(%q): expected exam id 1, got %q", url, exam.Id)
+		}
+	}
+}
+
+func TestDynamicDirExamSource_GetEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	src := NewDynamicDirExamSource(dir)
+	if got := src.Get(); got != nil {
+		t.Fatalf("expected nil for empty dir, got %v", got)
+	}
+}
+
+func TestDynamicDirExamSource_GetMissingDir(t *testing.T) {
+	src := NewDynamicDirExamSource(filepath.Join(t.TempDir(), "does-not-exist"))
+	if got := src.Get(); got != nil {
+		t.Fatalf("expected nil for missing dir, got %v", got)
 	}
 }

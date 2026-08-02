@@ -171,7 +171,7 @@ func newRepoWith(exams ...*question.Exam) *question.ExamRepository {
 		byURL[url] = e
 		urls = append(urls, url)
 	}
-	return question.NewExamRepository([]question.ExamSource{
+	return question.NewExamRepository([]question.ExamSourceEntry{
 		{Loader: &fakeExamLoader{exams: byURL}, URLs: urls},
 	})
 }

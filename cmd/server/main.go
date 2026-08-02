@@ -10,6 +10,7 @@ import (
 
 	"context"
 	pkglog "dcna-questions/pkg/log"
+	"errors"
 	"log"
 	"net/http"
 
@@ -17,17 +18,29 @@ import (
 )
 
 type CLI struct {
-	Addr      string `name:"addr" help:"Listening address." env:"ADDR" default:":8080"`
-	AssetsDir string `name:"assets-dir" help:"Directory of static assets to serve under /assets/." env:"ASSETS_DIR" type:"existingdir"`
+	Addr        string   `name:"addr" help:"Listening address." env:"ADDR" default:":8080"`
+	AssetsDir   string   `name:"assets-dir" help:"Directory of static assets to serve under /assets/." env:"ASSETS_DIR" type:"existingdir"`
+	LoadExam    []string `name:"load-exam" help:"Paths to exam documents to load." env:"LOAD_EXAM" type:"existingfile"`
+	LoadExamDir []string `name:"load-exam-dir" help:"Directories of exam documents to load." env:"LOAD_EXAM_DIR" type:"existingdir"`
 }
 
 func (cli *CLI) Run() error {
-	sources := []pkgmodelsquestion.ExamSource{
-		{
-			Loader: pkgmodelsquestion.NewFileExamLoader(),
-			URLs:   []string{"exam1.xml"},
-		},
+	var sources []pkgmodelsquestion.ExamSource
+
+	if len(cli.LoadExam) > 0 {
+		sources = append(sources, pkgmodelsquestion.NewStaticFileExamSource([]pkgmodelsquestion.ExamSourceEntry{
+			{Loader: pkgmodelsquestion.NewFileExamLoader(), URLs: cli.LoadExam},
+		}))
 	}
+
+	for _, dir := range cli.LoadExamDir {
+		sources = append(sources, pkgmodelsquestion.NewDynamicDirExamSource(dir))
+	}
+
+	if len(sources) == 0 {
+		return errors.New("no exam sources configured; provide at least one --load-exam or --load-exam-dir")
+	}
+
 	repo := pkgmodelsquestion.NewExamRepository(sources)
 	examHandler := pkgapiexamdocs.NewExamHandler(repo)
 
