@@ -255,6 +255,7 @@ type ExamDocumentExcerpt struct {
 	Code         string
 	Title        PlainText
 	Description  PlainText
+	ExamCategory ExamCategory
 	NumQuestions int
 	TotalScores  float32
 }
@@ -264,11 +265,12 @@ type ExamDocumentExcerpt struct {
 // sum of their scores; both are zero when the exam has no question collections.
 func ExamExcerptFrom(e *Exam) ExamDocumentExcerpt {
 	excerpt := ExamDocumentExcerpt{
-		Id:          e.Id,
-		ShortName:   e.ShortName,
-		Code:        e.Code,
-		Title:       e.Title,
-		Description: e.Description,
+		Id:           e.Id,
+		ShortName:    e.ShortName,
+		Code:         e.Code,
+		Title:        e.Title,
+		Description:  e.Description,
+		ExamCategory: e.ExamCategory,
 	}
 	if len(e.QuestionSet.QuestionCollections) == 0 {
 		return excerpt

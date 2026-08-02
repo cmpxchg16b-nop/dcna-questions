@@ -8,7 +8,7 @@ import {
   ListItem,
   Typography,
 } from "@mui/material";
-import { ExamExcerpt } from "@/api/types";
+import { ExamCategoryLabels, ExamExcerpt } from "@/api/types";
 
 type ExamCardProps = {
   exam: ExamExcerpt;
@@ -31,7 +31,8 @@ export default function ExamCard({ exam, onTake }: ExamCardProps) {
                 {exam.Title}
               </Typography>
               <Typography gutterBottom variant="body2" color="text.secondary">
-                {exam.ShortName} · {exam.Code} · {exam.NumQuestions}{" "}
+                {exam.ShortName} · {exam.Code} ·{" "}
+                {ExamCategoryLabels[exam.ExamCategory]} · {exam.NumQuestions}{" "}
                 {exam.NumQuestions === 1 ? "question" : "questions"}
               </Typography>
               <Typography

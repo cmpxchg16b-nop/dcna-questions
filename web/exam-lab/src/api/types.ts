@@ -3,6 +3,18 @@
 // structs carry no json tags, so their fields marshal under their capitalized
 // names.
 
+// ExamCategory mirrors the Go question.ExamCategory string enum
+// (pkg/models/question/question.go): a proctored certification exam or an
+// unproctored practice exam.
+export type ExamCategory = "certification-exam" | "practice-exam";
+
+// ExamCategoryLabels is the human-readable label for each ExamCategory,
+// for display wherever the raw wire value would be shown.
+export const ExamCategoryLabels: Record<ExamCategory, string> = {
+  "certification-exam": "Certification Exam",
+  "practice-exam": "Practice Exam",
+};
+
 // ExamExcerpt mirrors the Go question.ExamExcerpt projection. Title and
 // Description are question.Plaintext, which is `type PlainText string`, so they
 // marshal as plain strings here.
@@ -12,6 +24,7 @@ export type ExamExcerpt = {
   Code: string;
   Title: string;
   Description: string;
+  ExamCategory: ExamCategory;
   NumQuestions: number;
   TotalScores: number;
 };

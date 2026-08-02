@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
-import { ExamSessionSummary } from "@/api/types";
+import { ExamCategoryLabels, ExamSessionSummary } from "@/api/types";
 
 type ExamSessionCardProps = {
   session: ExamSessionSummary;
@@ -45,7 +45,8 @@ export default function ExamSessionCard({
                 {excerpt.Title}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {excerpt.ShortName} · {excerpt.Code}
+                {excerpt.ShortName} · {excerpt.Code} ·{" "}
+                {ExamCategoryLabels[excerpt.ExamCategory]}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Started{" "}
