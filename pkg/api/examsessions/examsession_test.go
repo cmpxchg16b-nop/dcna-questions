@@ -68,6 +68,13 @@ type fakeExamServer struct {
 	gmaResult *question.ExamAnswer
 	gmaErr    error
 	gmaExamID string
+
+	// SubmitAnswer
+	submResult    *question.Assessment
+	submErr       error
+	submExamID    string
+	submAnswer    *question.ExamAnswer
+	submCheckOnly bool
 }
 
 func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userSessionId string, opts examserver.ExamOptions, acceptQuestionTypes []question.QuestionType) (examserver.ExamSessionId, error) {
@@ -118,8 +125,14 @@ func (s *fakeExamServer) SeekCursorTo(_ context.Context, examId examserver.ExamS
 	return s.seekResult, nil
 }
 
-func (s *fakeExamServer) SubmitAnswer(context.Context, examserver.ExamSessionId, string, *question.ExamAnswer, bool) (*question.Assessment, error) {
-	return nil, nil
+func (s *fakeExamServer) SubmitAnswer(_ context.Context, examId examserver.ExamSessionId, _ string, answer *question.ExamAnswer, checkOnly bool) (*question.Assessment, error) {
+	s.submExamID = string(examId)
+	s.submAnswer = answer
+	s.submCheckOnly = checkOnly
+	if s.submErr != nil {
+		return nil, s.submErr
+	}
+	return s.submResult, nil
 }
 
 func (s *fakeExamServer) GetMyAnswer(_ context.Context, examId examserver.ExamSessionId, _ string) (*question.ExamAnswer, error) {
@@ -151,6 +164,13 @@ func testQuestion(id string) *question.Question {
 func ptrCursor(s string) *examserver.QuestionCursor {
 	c := examserver.QuestionCursor(s)
 	return &c
+}
+
+// ptrOverallResult boxes an OverallResult so it can populate a
+// *question.OverallResult field in a struct literal (constants are not
+// addressable).
+func ptrOverallResult(r question.OverallResult) *question.OverallResult {
+	return &r
 }
 
 // decodeJSON unmarshals body into v, failing the test on error.
@@ -634,6 +654,93 @@ func TestExamSessionHandler(t *testing.T) {
 			server:     &fakeExamServer{},
 			wantStatus: http.StatusMethodNotAllowed,
 			wantAllow:  "GET",
+		},
+		{
+			name:   "submit answer success",
+			method: http.MethodPost,
+			target: "/api/examsessions/sess-1/answer",
+			body:   `{"answers":[{"questionId":"q1","questionType":"single-choice","options":[{"id":"2"}]}]}`,
+			server: &fakeExamServer{submResult: &question.Assessment{
+				OverallResult: ptrOverallResult(question.OverallResultPass),
+				ScoreResult:   &question.ScoreResult{EarnedScore: 1, TotalScore: 1},
+			}},
+			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				var got struct {
+					Assessment *question.Assessment `json:"assessment"`
+				}
+				decodeJSON(t, body, &got)
+				if got.Assessment == nil {
+					t.Fatal("assessment = nil, want non-nil")
+				}
+				if got.Assessment.OverallResult == nil || *got.Assessment.OverallResult != question.OverallResultPass {
+					t.Errorf("overallResult = %v, want pass", got.Assessment.OverallResult)
+				}
+				if got.Assessment.ScoreResult == nil || got.Assessment.ScoreResult.EarnedScore != 1 {
+					t.Errorf("scoreResult = %+v, want earnedScore 1", got.Assessment.ScoreResult)
+				}
+			},
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if s.submExamID != "sess-1" {
+					t.Errorf("SubmitAnswer exam id = %q, want sess-1", s.submExamID)
+				}
+				if s.submCheckOnly {
+					t.Errorf("checkOnly = true, want false by default")
+				}
+				if s.submAnswer == nil || len(s.submAnswer.Answers) != 1 || s.submAnswer.Answers[0].QuestionId != "q1" {
+					t.Errorf("submitted answer = %+v, want one answer for q1", s.submAnswer)
+				}
+			},
+		},
+		{
+			name:       "submit answer check_only",
+			method:     http.MethodPost,
+			target:     "/api/examsessions/sess-1/answer?check_only=true",
+			body:       `{"answers":[{"questionId":"q1","questionType":"single-choice","options":[{"id":"2"}]}]}`,
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusOK,
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if !s.submCheckOnly {
+					t.Errorf("checkOnly = false, want true")
+				}
+			},
+		},
+		{
+			name:       "submit answer empty body",
+			method:     http.MethodPost,
+			target:     "/api/examsessions/sess-1/answer",
+			body:       ``,
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusBadRequest,
+			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+				if s.submAnswer != nil {
+					t.Errorf("server should not be called, got answer %+v", s.submAnswer)
+				}
+			},
+		},
+		{
+			name:       "submit answer invalid JSON",
+			method:     http.MethodPost,
+			target:     "/api/examsessions/sess-1/answer",
+			body:       `not-json`,
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "submit answer grade error",
+			method:     http.MethodPost,
+			target:     "/api/examsessions/sess-1/answer",
+			body:       `{"answers":[]}`,
+			server:     &fakeExamServer{submErr: errors.New("grading failed")},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "method not allowed on answer",
+			method:     http.MethodGet,
+			target:     "/api/examsessions/sess-1/answer",
+			server:     &fakeExamServer{},
+			wantStatus: http.StatusMethodNotAllowed,
+			wantAllow:  "POST",
 		},
 		{
 			name:       "unknown sub-path not found",

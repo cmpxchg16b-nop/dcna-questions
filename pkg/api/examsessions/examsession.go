@@ -16,6 +16,9 @@
 //	GET    /api/examsessions/{exam_id}/my_answer fetch the caller's last saved
 //	        submitting answer via GetMyAnswer; responds {"exam_answer": {...}}
 //	        or {"exam_answer": null} when no answer has been submitted.
+//	POST   /api/examsessions/{exam_id}/answer[?check_only=true] grade the body
+//	        (an ExamAnswer) via SubmitAnswer; responds {"assessment": {...}}.
+//	        With check_only=true the answer is graded but not persisted.
 //	GET    /api/examsessions/{exam_id}/questions?cursor_id=<cursor>
 //	        fetch the next question via GetNextQuestion; responds
 //	        {"cursor_id": <next or null>, "question": {...} or null}.
@@ -138,6 +141,12 @@ type myAnswerResponse struct {
 	ExamAnswer *question.ExamAnswer `json:"exam_answer"`
 }
 
+// submitAnswerResponse is the JSON body of a successful POST .../answer: the
+// grading assessment, wrapped so the resource shape can grow independently.
+type submitAnswerResponse struct {
+	Assessment *question.Assessment `json:"assessment"`
+}
+
 // apiPrefix is the path the handler is mounted under. Every route beneath it is
 // resolved inside ServeHTTP, so the handler owns its own route tree rather than
 // relying on the ServeMux's wildcard captures.
@@ -151,6 +160,7 @@ const apiPrefix = "/api/examsessions"
 //	"/{exam_id}"             -> item (GET single, DELETE)
 //	"/{exam_id}/questions"   -> next question (GET)
 //	"/{exam_id}/cursors"     -> seek cursor (PUT)
+//	"/{exam_id}/answer"      -> submit/grade answer (POST)
 //	"/{exam_id}/my_answer"   -> last saved answer (GET)
 //
 // Anything else beneath the prefix responds 404.
@@ -203,6 +213,12 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.handleSeekCursor(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+	case len(segments) == 2 && segments[1] == "answer":
+		if r.Method != http.MethodPost {
+			h.methodNotAllowed(w, "POST")
+			return
+		}
+		h.handleSubmitAnswer(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
 	case len(segments) == 2 && segments[1] == "my_answer":
 		if r.Method != http.MethodGet {
 			h.methodNotAllowed(w, "GET")
@@ -362,6 +378,36 @@ func (h *ExamSessionHandler) handleGetMyAnswer(w http.ResponseWriter, r *http.Re
 	writeJSON(w, myAnswerResponse{ExamAnswer: ans})
 }
 
+// handleSubmitAnswer grades the submitted answer against the session. With
+// check_only=true the answer is graded but not persisted; otherwise it is saved
+// as the latest submission (and surfaces later via my_answer). Either way the
+// assessment is returned.
+func (h *ExamSessionHandler) handleSubmitAnswer(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes))
+	if err != nil {
+		http.Error(w, "failed reading body", http.StatusBadRequest)
+		return
+	}
+	if len(raw) == 0 {
+		http.Error(w, `invalid request body: expected an exam answer`, http.StatusBadRequest)
+		return
+	}
+	var answer question.ExamAnswer
+	if err := json.Unmarshal(raw, &answer); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	assessment, err := h.server.SubmitAnswer(r.Context(), examID, userSessionID, &answer, parseCheckOnly(r))
+	if err != nil {
+		// examserver's sentinels are unexported, so not-found/owner/grade errors
+		// cannot be told apart here; surface a generic server error, matching the
+		// questions and cursors endpoints (which face the same ambiguity).
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, submitAnswerResponse{Assessment: assessment})
+}
+
 // methodNotAllowed reports 405 with the given methods in the Allow header.
 func (h *ExamSessionHandler) methodNotAllowed(w http.ResponseWriter, allow string) {
 	w.Header().Set("Allow", allow)
@@ -425,6 +471,13 @@ func parseIndex(r *http.Request) (int, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// parseCheckOnly reads the optional check_only query parameter as a bool. An
+// absent or unparseable value yields false, so the answer is persisted.
+func parseCheckOnly(r *http.Request) bool {
+	v, _ := strconv.ParseBool(r.URL.Query().Get("check_only"))
+	return v
 }
 
 // writeJSON encodes v as the response body.
