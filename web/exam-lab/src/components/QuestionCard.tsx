@@ -34,9 +34,7 @@ export default function QuestionCard({ question }: QuestionCardProps) {
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" component="div" gutterBottom>
-          {question.description.text}
-        </Typography>
+        <Typography gutterBottom>{question.description.text}</Typography>
         {question.exhibits?.map((exhibit) => (
           <Box
             key={exhibit.image.src}
