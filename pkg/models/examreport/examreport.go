@@ -29,9 +29,9 @@ type Anonymous struct {
 // ExamTaker is the <examtaker> element: the list of persons and/or anonymous
 // sessions who took the exam. Either may be empty.
 type ExamTaker struct {
-	XMLName    xml.Name    `xml:"examtaker" json:"-"`
-	Persons    []Person    `xml:"person" json:"persons,omitempty"`
-	Anonymous  []Anonymous `xml:"anonymous" json:"anonymous,omitempty"`
+	XMLName   xml.Name    `xml:"examtaker" json:"-"`
+	Persons   []Person    `xml:"person" json:"persons,omitempty"`
+	Anonymous []Anonymous `xml:"anonymous" json:"anonymous,omitempty"`
 }
 
 // ExamReport is the <examreport> element: the full report sent to the
@@ -43,17 +43,17 @@ type ExamTaker struct {
 // Description, PassingScore, ExamCategory) are copied from the originating exam
 // document; ExamSessionId and FinishedAt describe the specific session.
 type ExamReport struct {
-	XMLName       xml.Name            `xml:"examreport" json:"-"`
-	Id            string              `xml:"id,attr" json:"id"`
-	ExamTaker     ExamTaker           `xml:"examtaker" json:"examTaker"`
-	ExamId        string              `xml:"examid" json:"examId"`
-	ExamShortName string              `xml:"examshortname" json:"examShortName,omitempty"`
-	ExamCode      string              `xml:"examcode" json:"examCode,omitempty"`
-	Title         string              `xml:"title" json:"title"`
-	Description   string              `xml:"description" json:"description,omitempty"`
-	PassingScore  *float32            `xml:"passingscore" json:"passingScore,omitempty"`
+	XMLName       xml.Name              `xml:"examreport" json:"-"`
+	Id            string                `xml:"id,attr" json:"id"`
+	ExamTaker     ExamTaker             `xml:"examtaker" json:"examTaker"`
+	ExamId        string                `xml:"examid" json:"examId"`
+	ExamShortName string                `xml:"examshortname" json:"examShortName,omitempty"`
+	ExamCode      string                `xml:"examcode" json:"examCode,omitempty"`
+	Title         string                `xml:"title" json:"title"`
+	Description   string                `xml:"description" json:"description,omitempty"`
+	PassingScore  *float32              `xml:"passingscore" json:"passingScore,omitempty"`
 	ExamCategory  question.ExamCategory `xml:"examcategory" json:"examCategory"`
-	ExamSessionId string              `xml:"examsessionid" json:"examSessionId"`
-	FinishedAt    int64               `xml:"finishedat" json:"finishedAt"`
-	Assessment    question.Assessment `xml:"assessment" json:"assessment"`
+	ExamSessionId string                `xml:"examsessionid" json:"examSessionId"`
+	FinishedAt    int64                 `xml:"finishedat" json:"finishedAt"`
+	Assessment    question.Assessment   `xml:"assessment" json:"assessment"`
 }
