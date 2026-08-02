@@ -20,10 +20,7 @@ type CLI struct {
 	Addr string `name:"addr" help:"Listening address." env:"ADDR" default:":8080"`
 }
 
-func main() {
-	var cli CLI
-	kong.Parse(&cli)
-
+func (cli *CLI) Run() error {
 	sources := []pkgmodelsquestion.ExamSource{
 		{
 			Loader: pkgmodelsquestion.NewFileExamLoader(),
@@ -52,7 +49,12 @@ func main() {
 	h = pkglog.WithSessionAwaredLog(nil, sm, h)
 	h = pkgsession.WithSessionId(h, sm)
 
-	if err := http.ListenAndServe(cli.Addr, h); err != nil {
-		log.Fatal(err)
-	}
+	return http.ListenAndServe(cli.Addr, h)
+}
+
+func main() {
+	var cli CLI
+	ctx := kong.Parse(&cli)
+	err := ctx.Run()
+	ctx.FatalIfErrorf(err)
 }
