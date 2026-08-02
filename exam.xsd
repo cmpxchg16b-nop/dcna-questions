@@ -254,13 +254,17 @@
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
-        <xs:element ref="title" />
-        <xs:element ref="description" />
+        <xs:element ref="title" minOccurs="1" maxOccurs="1" />
+        <xs:element ref="description" minOccurs="1" maxOccurs="1" />
         <xs:element name="passingscore" minOccurs="0" maxOccurs="1" type="xs:float" />
         <xs:element name="examcategory" minOccurs="1" maxOccurs="1" type="ExamCategory" />
         <xs:element ref="questionset" minOccurs="1" maxOccurs="1" />
       </xs:sequence>
-      <xs:attribute name="id" type="xs:string" use="required" />
+      <xs:attribute name="id" type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation>This is the exam document id, not the exam session id.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="shortname" type="xs:string" />
       <xs:attribute name="code" type="xs:string" />
     </xs:complexType>
@@ -329,12 +333,93 @@
       </xs:sequence>
     </xs:complexType>
   </xs:element>
+  <xs:element name="examtaker">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="person" minOccurs="0" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:attribute name="name" type="xs:string" use="required" />
+            <xs:attribute name="fistname" type="xs:string" use="optional" />
+            <xs:attribute name="lastname" type="xs:string" use="optional" />
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="anonymous" minOccurs="0" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:attribute name="sessionid" type="xs:string" use="required">
+              <xs:annotation>
+                <xs:documentation>The session id of the anonymous user, or just user session id.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="examreport">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">An exam report is a full report sending to the exam assessment tracking server after an exam taker has finished the exam session.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="examtaker" minOccurs="1" maxOccurs="1" />
+        <xs:element name="examid" type="xs:string" minOccurs="1" maxOccurs="1">
+          <xs:annotation>
+            <xs:documentation>This is the exam document id, not the exam session id.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="examshortname" type="xs:string" />
+        <xs:element name="examcode" type="xs:string" />
+        <xs:element ref="title">
+          <xs:annotation>
+            <xs:documentation>The title of the exam</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element ref="description" minOccurs="0" maxOccurs="1">
+          <xs:annotation>
+            <xs:documentation>The description of the exam, optional</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="passingscore" minOccurs="0" maxOccurs="1" type="xs:float">
+          <xs:annotation>
+            <xs:documentation>The mandated passing score of the exam, should be copied directly from the exam element.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="examcategory" minOccurs="1" maxOccurs="1" type="ExamCategory">
+          <xs:annotation>
+            <xs:documentation>Should be copied directly from the origin exam document too.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="examsessionid" minOccurs="1" maxOccurs="1" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>The id of the exam session which the exam taker was in.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="finishedat" minOccurs="1" maxOccurs="1" type="xs:integer">
+          <xs:annotation>
+            <xs:documentation>The millisecond-resolution unix timestamp when the exam session was finished by the exam taker.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element ref="assessment">
+          <xs:annotation>
+            <xs:documentation>The element contains the grade and the score that was achieved by the exam taker.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation>This is the id of the exam report, it has to be globally unique, not the id of the exam document, nor the id of the exam session.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+
+    </xs:complexType>
+  </xs:element>
   <xs:element name="root">
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="exam" minOccurs="0" maxOccurs="unbounded" />
         <xs:element ref="examanswer" minOccurs="0" maxOccurs="1" />
         <xs:element ref="assessment" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="examreport" minOccurs="0" maxOccurs="1" />
       </xs:sequence>
     </xs:complexType>
   </xs:element>
