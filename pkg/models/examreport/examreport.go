@@ -9,6 +9,8 @@ package examreport
 import (
 	"context"
 	"encoding/xml"
+	"strconv"
+	"sync"
 
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
 )
@@ -90,4 +92,76 @@ type ExamTrackingServer interface {
 
 	// GetExamReportsByUserId returns all exam reports recorded for userid.
 	GetExamReportsByUserId(ctx context.Context, userid string) ([]ExamReport, error)
+}
+
+// OnMemoryExamTrackingServer is an in-memory, lock-free implementation of
+// ExamTrackingServer. It is safe for concurrent use by multiple goroutines.
+//
+// It uses two sync.Maps:
+//
+//   - reports maps the synthesized key "{userid}:{index}" to an ExamReport;
+//   - counts  maps userid to an int64 holding the number of reports stored for
+//     that user.
+//
+// Put advances a user's count via sync.Map.CompareAndSwap to atomically claim a
+// unique index: it reads the current count c, then CAS-advances it to c+1; only
+// when the CAS succeeds is index c known to be safe to write. Because the count
+// is monotonically increased only by Put (it never decreases), there is no ABA
+// problem: each Put observes a strictly increasing index and no report is ever
+// overwritten or lost, with no mutex required.
+type OnMemoryExamTrackingServer struct {
+	// reports maps "{userid}:{index}" to ExamReport.
+	reports sync.Map
+	// counts maps userid to int64, the number of reports for that user.
+	counts sync.Map
+}
+
+// NewOnMemoryExamTrackingServer returns a ready-to-use OnMemoryExamTrackingServer.
+func NewOnMemoryExamTrackingServer() *OnMemoryExamTrackingServer {
+	return &OnMemoryExamTrackingServer{}
+}
+
+// Put stores examReport under userid. It is safe for concurrent use: Put claims
+// a unique per-user index by compare-and-swapping the count, so concurrent Puts
+// for the same userid never collide on the same key.
+func (s *OnMemoryExamTrackingServer) Put(ctx context.Context, userid string, examReport ExamReport) error {
+	s.counts.LoadOrStore(userid, int64(0))
+	for {
+		cur, _ := s.counts.Load(userid)
+		idx := cur.(int64)
+		// Atomically claim idx by advancing the count only if it is still idx.
+		if s.counts.CompareAndSwap(userid, idx, idx+1) {
+			// idx is now ours: safe to store the report at this index.
+			s.reports.Store(reportKey(userid, idx), examReport)
+			return nil
+		}
+	}
+}
+
+// GetExamReportsByUserId returns all exam reports stored for userid in the order
+// they were Put, or nil if the user has none. The returned slice is independent
+// of the stored state and safe to use without further synchronization.
+//
+// Note: the count is advanced before a report is stored, so under a concurrent
+// Put Get may observe a count that includes an in-flight report; such
+// not-yet-stored entries are skipped and will appear on a subsequent call. No
+// report is ever lost.
+func (s *OnMemoryExamTrackingServer) GetExamReportsByUserId(ctx context.Context, userid string) ([]ExamReport, error) {
+	v, ok := s.counts.Load(userid)
+	if !ok {
+		return nil, nil
+	}
+	n := v.(int64)
+	out := make([]ExamReport, 0, n)
+	for i := int64(0); i < n; i++ {
+		if rv, ok := s.reports.Load(reportKey(userid, i)); ok {
+			out = append(out, rv.(ExamReport))
+		}
+	}
+	return out, nil
+}
+
+// reportKey builds the synthesized reports-map key "{userid}:{index}".
+func reportKey(userid string, idx int64) string {
+	return userid + ":" + strconv.FormatInt(idx, 10)
 }
