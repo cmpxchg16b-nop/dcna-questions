@@ -15,6 +15,7 @@ func TestExamLoader_LoadDecodesNumericEntities(t *testing.T) {
 <exam id="1" shortname="DCACI" code="300-620">
   <title>Implementing Cisco ACI</title>
   <description>x</description>
+  <examcategory>certification-exam</examcategory>
   <questionset>
     <questioncollection>
       <question id="1" type="single-choice">
@@ -45,6 +46,7 @@ func TestExamLoader_LoadMultipleCollections(t *testing.T) {
 <root>
 <exam id="1" shortname="X" code="1">
   <title>t</title><description>d</description>
+  <examcategory>certification-exam</examcategory>
   <questionset>
     <questioncollection>
       <question id="1" type="single-choice"><description>a</description></question>
@@ -79,6 +81,7 @@ func TestExamLoader_LoadRejectsUnknownQuestionType(t *testing.T) {
 <root>
 <exam id="1" shortname="DCACI" code="300-620">
   <title>t</title><description>d</description>
+  <examcategory>certification-exam</examcategory>
   <questionset>
     <questioncollection>
       <question id="1" type="bogus-type">
@@ -99,6 +102,7 @@ func TestExamLoader_LoadRejectsMissingExamId(t *testing.T) {
 <root>
 <exam shortname="DCACI" code="300-620">
   <title>t</title><description>d</description>
+  <examcategory>certification-exam</examcategory>
   <questionset><questioncollection></questioncollection></questionset>
 </exam>
 </root>`
@@ -157,12 +161,45 @@ func TestQuestionType_Valid(t *testing.T) {
 	}
 }
 
+func TestExamCategory_Valid(t *testing.T) {
+	for _, tc := range []struct {
+		c   ExamCategory
+		exp bool
+	}{
+		{ExamCategoryCertification, true},
+		{ExamCategoryPractice, true},
+		{ExamCategory("nonsense"), false},
+		{ExamCategory(""), false},
+	} {
+		if got := tc.c.Valid(); got != tc.exp {
+			t.Errorf("Valid(%q) = %v, want %v", tc.c, got, tc.exp)
+		}
+	}
+}
+
+func TestExamLoader_LoadRejectsUnknownExamCategory(t *testing.T) {
+	const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id="1" shortname="DCACI" code="300-620">
+  <title>t</title><description>d</description>
+  <examcategory>bogus-category</examcategory>
+  <questionset><questioncollection></questioncollection></questionset>
+</exam>
+</root>`
+
+	_, err := NewFileExamLoader().Load([]byte(xml))
+	if err == nil || !strings.Contains(err.Error(), "unknown exam category") {
+		t.Fatalf("Load: expected unknown-exam-category error, got %v", err)
+	}
+}
+
 // minimalExamXML is a valid, minimal exam document used as file content by the
 // exam-source tests.
 const minimalExamXML = `<?xml version="1.0" encoding="UTF-8"?>
 <root>
 <exam id="1" shortname="X" code="1">
   <title>t</title><description>d</description>
+  <examcategory>certification-exam</examcategory>
   <questionset><questioncollection>
     <question id="1" type="single-choice"><description>a</description></question>
   </questioncollection></questionset>

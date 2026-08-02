@@ -152,14 +152,34 @@ type QuestionSet struct {
 // Exam is the root <exam> document: a named certification exam carrying
 // metadata and exactly one question set.
 type Exam struct {
-	XMLName      xml.Name    `xml:"exam" json:"-"`
-	Id           string      `xml:"id,attr" json:"id"`
-	ShortName    string      `xml:"shortname,attr" json:"shortName"`
-	Code         string      `xml:"code,attr" json:"code"`
-	Title        PlainText   `xml:"title" json:"title"`
-	Description  PlainText   `xml:"description" json:"description"`
-	PassingScore *float32    `xml:"passingscore" json:"passingScore,omitempty"`
-	QuestionSet  QuestionSet `xml:"questionset" json:"questionSet"`
+	XMLName      xml.Name     `xml:"exam" json:"-"`
+	Id           string       `xml:"id,attr" json:"id"`
+	ShortName    string       `xml:"shortname,attr" json:"shortName"`
+	Code         string       `xml:"code,attr" json:"code"`
+	Title        PlainText    `xml:"title" json:"title"`
+	Description  PlainText    `xml:"description" json:"description"`
+	PassingScore *float32     `xml:"passingscore" json:"passingScore,omitempty"`
+	ExamCategory ExamCategory `xml:"examcategory" json:"examCategory"`
+	QuestionSet  QuestionSet  `xml:"questionset" json:"questionSet"`
+}
+
+// ExamCategory is the value of the <examcategory> element in an exam. It mirrors
+// the XSD ExamCategory enumeration, classifying an exam as a proctored
+// certification exam or an unproctored practice exam.
+type ExamCategory string
+
+const (
+	ExamCategoryCertification ExamCategory = "certification-exam"
+	ExamCategoryPractice      ExamCategory = "practice-exam"
+)
+
+// Valid reports whether c is one of the recognized exam categories.
+func (c ExamCategory) Valid() bool {
+	switch c {
+	case ExamCategoryCertification, ExamCategoryPractice:
+		return true
+	}
+	return false
 }
 
 // OverallResult is the value of the <overallresult> element in an assessment.
@@ -331,6 +351,9 @@ func (l *FileExamLoader) LoadFrom(url string) (*Exam, error) {
 func (e *Exam) validate() error {
 	if e.Id == "" {
 		return errors.New("missing exam id")
+	}
+	if !e.ExamCategory.Valid() {
+		return fmt.Errorf("exam %q: unknown exam category %q", e.Id, e.ExamCategory)
 	}
 	for _, qc := range e.QuestionSet.QuestionCollections {
 		for _, q := range qc.Questions {
