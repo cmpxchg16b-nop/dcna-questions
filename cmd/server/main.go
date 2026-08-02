@@ -17,7 +17,8 @@ import (
 )
 
 type CLI struct {
-	Addr string `name:"addr" help:"Listening address." env:"ADDR" default:":8080"`
+	Addr      string `name:"addr" help:"Listening address." env:"ADDR" default:":8080"`
+	AssetsDir string `name:"assets-dir" help:"Directory of static assets to serve under /assets/." env:"ASSETS_DIR" type:"existingdir"`
 }
 
 func (cli *CLI) Run() error {
@@ -41,6 +42,11 @@ func (cli *CLI) Run() error {
 	mux.Handle("/api/examdocs", examHandler)
 	mux.Handle("/api/examsessions", examSessionHandler)
 	mux.Handle("/api/examsessions/", examSessionHandler)
+
+	if cli.AssetsDir != "" {
+		mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(cli.AssetsDir))))
+	}
+
 	mux.Handle("/", dcnaquestions.Handler())
 
 	log.Printf("listening on http://localhost%s", cli.Addr)
