@@ -9,6 +9,8 @@ import (
 
 	pkgmodelquestions "dcna-questions/pkg/models/question"
 
+	"dcna-questions/pkg/models/examreport"
+
 	"github.com/google/uuid"
 )
 
@@ -670,6 +672,30 @@ func buildOnMemoryQuestion(orig *pkgmodelquestions.Question, opts ExamOptions, r
 	}
 	qCopy.Options = reordered
 	return OnMemoryQuestion{Question: &qCopy, OptionPermutation: optPerm}
+}
+
+// newExamReport assembles an examreport.ExamReport for a finished exam
+// session. The exam metadata (id, short name, code, title, description, passing
+// score, category) is copied from exam; ExamSessionId is carried over from the
+// session; FinishedAt records the moment the report is generated, as a
+// millisecond-resolution unix timestamp; a fresh globally-unique report Id is
+// minted. The examTaker and assessment are taken verbatim from the arguments;
+// assessment must not be nil.
+func newExamReport(examTaker examreport.ExamTaker, exam *pkgmodelquestions.Exam, examSessionId ExamSessionId, assessment *pkgmodelquestions.Assessment) examreport.ExamReport {
+	return examreport.ExamReport{
+		Id:            uuid.NewString(),
+		ExamTaker:     examTaker,
+		ExamId:        exam.Id,
+		ExamShortName: exam.ShortName,
+		ExamCode:      exam.Code,
+		Title:         string(exam.Title),
+		Description:   string(exam.Description),
+		PassingScore:  exam.PassingScore,
+		ExamCategory:  exam.ExamCategory,
+		ExamSessionId: string(examSessionId),
+		FinishedAt:    time.Now().UnixMilli(),
+		Assessment:    *assessment,
+	}
 }
 
 // identityPermutation returns [0, 1, ..., n-1], the identical permutation,
