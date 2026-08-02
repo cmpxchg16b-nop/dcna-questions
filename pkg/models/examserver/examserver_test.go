@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	pkgmodelquestions "dcna-questions/pkg/models/question"
+
+	"dcna-questions/pkg/models/examreport"
 )
 
 // TestStartNewExamSession_WalksAllQuestions loads the real exam1.xml and confirms that
@@ -16,7 +18,7 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 		t.Fatalf("load exam: %v", err)
 	}
 
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -57,7 +59,7 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 
 // TestStartNewExamSession_EmptyExam verifies that an exam with no questions is rejected.
 func TestStartNewExamSession_EmptyExam(t *testing.T) {
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -92,7 +94,7 @@ func TestStartNewExamSession_RandomCollPicksOneCollection(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -149,7 +151,7 @@ func TestStartNewExamSession_FlattensCollectionsByDefault(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -199,7 +201,7 @@ func TestGetExamSessionById_CurrentQuestionIndex(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -276,7 +278,7 @@ func TestOwnershipEnforcement(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -320,7 +322,7 @@ func TestStartNewExamSession_AcceptQuestionTypes(t *testing.T) {
 		t.Fatalf("load exam: %v", err)
 	}
 
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)

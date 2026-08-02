@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	pkgmodelquestions "dcna-questions/pkg/models/question"
+
+	"dcna-questions/pkg/models/examreport"
 )
 
 // float32Ptr returns a pointer to v; used to build optional passing scores.
@@ -272,10 +274,10 @@ func TestSimpleOnMemoryGrader_PracticeExamIncludesAnsweredQuestions(t *testing.T
 	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryPractice)
 
 	got, err := g.Grade(examAnswer(
-		answer("sc", "3"),                 // correct
-		answer("mc", "9"),                // wrong
-		answer("dnd"),                    // unsupported type, skipped
-		answer("does-not-exist", "1"),    // unknown question, skipped
+		answer("sc", "3"),             // correct
+		answer("mc", "9"),             // wrong
+		answer("dnd"),                 // unsupported type, skipped
+		answer("does-not-exist", "1"), // unknown question, skipped
 	))
 	if err != nil {
 		t.Fatalf("Grade: %v", err)
@@ -354,7 +356,7 @@ func newGradingExam(passingScore *float32) *pkgmodelquestions.Exam {
 // submission, returns an assessment, and—when checkOnly is false—persists the
 // answer so that a later GetMyAnswer returns it.
 func TestSubmitAnswer_GradesAndStores(t *testing.T) {
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -401,7 +403,7 @@ func TestSubmitAnswer_GradesAndStores(t *testing.T) {
 // TestSubmitAnswer_CheckOnly verifies that SubmitAnswer with checkOnly=true
 // grades the submission but does not persist it.
 func TestSubmitAnswer_CheckOnly(t *testing.T) {
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -441,7 +443,7 @@ func TestSubmitAnswer_CheckOnly(t *testing.T) {
 // TestGetMyAnswer_NoneSubmitted verifies that GetMyAnswer returns (nil, nil)
 // before any non-checkOnly submission has been stored.
 func TestGetMyAnswer_NoneSubmitted(t *testing.T) {
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -463,7 +465,7 @@ func TestGetMyAnswer_NoneSubmitted(t *testing.T) {
 
 // TestGetMyAnswer_Ownership verifies that GetMyAnswer rejects a non-owner caller.
 func TestGetMyAnswer_Ownership(t *testing.T) {
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -482,7 +484,7 @@ func TestGetMyAnswer_Ownership(t *testing.T) {
 // TestGetMyAnswer_NotFound verifies that GetMyAnswer on an unknown session
 // returns errExamNotFound.
 func TestGetMyAnswer_NotFound(t *testing.T) {
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -496,7 +498,7 @@ func TestGetMyAnswer_NotFound(t *testing.T) {
 // TestSubmitAnswer_Overwrites verifies that a second non-checkOnly submission
 // replaces the previously stored answer.
 func TestSubmitAnswer_Overwrites(t *testing.T) {
-	srv := NewOnMemoryExamServer()
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)

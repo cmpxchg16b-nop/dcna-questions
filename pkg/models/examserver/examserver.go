@@ -125,17 +125,23 @@ type OnMemoryExamServer struct {
 	done chan struct{}
 
 	closeDoer sync.Once
+
+	// examTrackingServer persists finished exam reports. It is safe to call
+	// from any goroutine.
+	examTrackingServer examreport.ExamTrackingServer
 }
 
 // NewOnMemoryExamServer constructs an in-memory exam server. The exam options,
 // question bank, and RNG are all supplied per exam via StartNewExamSession, not held by
-// the server.
-func NewOnMemoryExamServer() *OnMemoryExamServer {
+// the server. examTrackingServer is the sink to which finished exam reports are
+// persisted.
+func NewOnMemoryExamServer(examTrackingServer examreport.ExamTrackingServer) *OnMemoryExamServer {
 	return &OnMemoryExamServer{
-		sessionsStore: make(map[ExamSessionId]*OnMemoryExamSession),
-		userSessions:  make(map[string]map[ExamSessionId]struct{}),
-		serviceChan:   make(chan func()),
-		done:          make(chan struct{}),
+		sessionsStore:      make(map[ExamSessionId]*OnMemoryExamSession),
+		userSessions:       make(map[string]map[ExamSessionId]struct{}),
+		serviceChan:        make(chan func()),
+		done:               make(chan struct{}),
+		examTrackingServer: examTrackingServer,
 	}
 }
 

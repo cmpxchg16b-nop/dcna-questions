@@ -4,6 +4,7 @@ import (
 	dcnaquestions "dcna-questions"
 	pkgapiexamdocs "dcna-questions/pkg/api/examdocs"
 	pkgapiexamsessions "dcna-questions/pkg/api/examsessions"
+	pkgmodelsexamreport "dcna-questions/pkg/models/examreport"
 	pkgmodelsexamserver "dcna-questions/pkg/models/examserver"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
 	pkgsession "dcna-questions/pkg/session"
@@ -44,7 +45,7 @@ func (cli *CLI) Run() error {
 	repo := pkgmodelsquestion.NewExamRepository(sources)
 	examHandler := pkgapiexamdocs.NewExamHandler(repo)
 
-	examServer := pkgmodelsexamserver.NewOnMemoryExamServer()
+	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(pkgmodelsexamreport.NewOnMemoryExamTrackingServer())
 	go examServer.Run(context.Background())
 	defer examServer.Shutdown()
 
