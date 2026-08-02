@@ -16,8 +16,10 @@ import {
 import { useExamSession } from "@/hooks/useExamSession";
 import { useEndExamSession } from "@/hooks/useEndExamSession";
 import { useNavigateQuestion } from "@/hooks/useNavigateQuestion";
+import { useMyAnswer } from "@/hooks/useMyAnswer";
+import { useSubmitAnswer } from "@/hooks/useSubmitAnswer";
 import QuestionCard from "@/components/QuestionCard";
-import { ExamOptionSeekable } from "@/api/types";
+import { Assessment, ExamOptionSeekable } from "@/api/types";
 
 export default function Page() {
   const router = useRouter();
@@ -36,6 +38,7 @@ export default function Page() {
     ? (session.options & ExamOptionSeekable) !== 0
     : false;
   const navigate = useNavigateQuestion(examSessionId ?? "", seekable);
+  const submitAnswer = useSubmitAnswer(examSessionId ?? "");
 
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
 
@@ -54,6 +57,48 @@ export default function Page() {
 
   const numQuestions = session?.exam_excerpt.NumQuestions ?? 0;
   const isLastQuestion = currentQuestionIndex >= numQuestions - 1;
+  const started = currentQuestionIndex >= 0;
+  const isPractice = session?.exam_excerpt.ExamCategory === "practice-exam";
+
+  // myAnswer is the session's saved submission (a single exam-scoped answer,
+  // so it covers every question at once). It is fetched once a question is on
+  // screen: the practice-exam footer shows its "Skip (loading)" state until
+  // this first fetch resolves, and new submissions are merged into it (see
+  // useSubmitAnswer, which also keeps the cache current after persisting).
+  const myAnswer = useMyAnswer(examSessionId, started);
+
+  // questionState is the per-question UI state: the selected option ids and
+  // the assessment revealed by the practice-exam "Check" button. It is tagged
+  // with selectionKey so a new question — and, for practice exams, the first
+  // resolution of my_answer — transparently starts it over: whenever the key
+  // does not match, the derived values below are the fresh ones and the stale
+  // state is dropped on the next update. No effects needed.
+  const [questionState, setQuestionState] = useState<{
+    key: string | null;
+    selection: string[];
+    checkResult: Assessment | null;
+  }>({ key: null, selection: [], checkResult: null });
+
+  // For practice exams the previously submitted selection is restored once
+  // my_answer resolves, so the footer offers "Check" (not "Skip") for
+  // questions the user already answered. Practice-exam inputs stay disabled
+  // while my_answer is pending, so the restore never clobbers a selection the
+  // user just made. Certification exams always start each question fresh.
+  const restoredSelection =
+    isPractice && effectiveQuestion
+      ? (myAnswer.data?.answers
+          ?.find((a) => a.questionId === effectiveQuestion.id)
+          ?.options?.map((o) => o.id) ?? [])
+      : [];
+  const selectionKey = effectiveQuestion
+    ? `${effectiveQuestion.id}:${
+        isPractice ? (myAnswer.isPending ? "loading" : "loaded") : "fresh"
+      }`
+    : null;
+  const { selection, checkResult } =
+    questionState.key === selectionKey
+      ? questionState
+      : { selection: restoredSelection, checkResult: null };
 
   if (!examSessionId) {
     return (
@@ -99,6 +144,185 @@ export default function Page() {
 
   const startExam = () => goToQuestion(0);
 
+  const setSelection = (sel: string[]) =>
+    setQuestionState({ key: selectionKey, selection: sel, checkResult: null });
+
+  // checkAnswer grades the current selection without persisting it
+  // (check_only=true); the returned assessment reveals the correct answer and
+  // turns the footer button into "Next".
+  const checkAnswer = () => {
+    if (!effectiveQuestion) return;
+    submitAnswer.mutate(
+      {
+        question: effectiveQuestion,
+        selectedOptionIds: selection,
+        checkOnly: true,
+      },
+      {
+        onSuccess: (result) =>
+          setQuestionState({
+            key: selectionKey,
+            selection,
+            checkResult: result.assessment,
+          }),
+      },
+    );
+  };
+
+  // submitThenGoNext persists the current selection (checkOnly=false), then
+  // navigates to the next question.
+  const submitThenGoNext = () => {
+    if (!effectiveQuestion) return;
+    submitAnswer.mutate(
+      {
+        question: effectiveQuestion,
+        selectedOptionIds: selection,
+        checkOnly: false,
+      },
+      { onSuccess: () => goToQuestion(currentQuestionIndex + 1) },
+    );
+  };
+
+  // submitThenConfirmEnd is the last-question counterpart of submitThenGoNext:
+  // persist the current selection, then open the end-of-exam confirmation.
+  const submitThenConfirmEnd = () => {
+    if (!effectiveQuestion) return;
+    submitAnswer.mutate(
+      {
+        question: effectiveQuestion,
+        selectedOptionIds: selection,
+        checkOnly: false,
+      },
+      { onSuccess: () => setConfirmEndOpen(true) },
+    );
+  };
+
+  // endExam ends the exam from the last question, first persisting the
+  // selection when there is one (so the last question's answer is not lost).
+  const endExam = () => {
+    if (selection.length > 0) {
+      submitThenConfirmEnd();
+    } else {
+      setConfirmEndOpen(true);
+    }
+  };
+
+  // inputsDisabled freezes the question's options while the saved answer is
+  // loading (practice exams only, so the restore cannot clobber a fresh
+  // selection), while a submission is in flight, and once the assessment is
+  // on screen.
+  const inputsDisabled =
+    submitAnswer.isPending ||
+    checkResult !== null ||
+    (isPractice && myAnswer.isPending);
+
+  // primaryButton renders the bottom-right action. Before the session starts
+  // it is always "Start Exam". Once started, a practice exam runs the
+  // Skip → Check → Next state machine below, while a certification exam only
+  // has "Next" (disabled until something is selected), which submits with
+  // checkOnly=false and moves on without revealing anything. On the last
+  // question "Next" is replaced by "End Exam" in the same slot.
+  const primaryButton = () => {
+    if (!started) {
+      return (
+        <Button
+          variant="contained"
+          loading={navigate.isPending}
+          onClick={startExam}
+        >
+          Start Exam
+        </Button>
+      );
+    }
+    if (!effectiveQuestion) return null;
+    if (isPractice) {
+      if (myAnswer.isPending) {
+        // Confirming whether the current question was already answered.
+        return (
+          <Button variant="contained" loading disabled>
+            Skip
+          </Button>
+        );
+      }
+      if (checkResult) {
+        // The assessment is on screen, so the only way forward is submitting
+        // the selection for real (checkOnly=false) and moving on.
+        return isLastQuestion ? (
+          <Button
+            variant="contained"
+            color="error"
+            loading={submitAnswer.isPending}
+            onClick={submitThenConfirmEnd}
+          >
+            End Exam
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            loading={submitAnswer.isPending || navigate.isPending}
+            onClick={submitThenGoNext}
+          >
+            Next
+          </Button>
+        );
+      }
+      if (selection.length > 0) {
+        return (
+          <Button
+            variant="contained"
+            loading={submitAnswer.isPending}
+            onClick={checkAnswer}
+          >
+            Check
+          </Button>
+        );
+      }
+      // Nothing selected and nothing previously submitted: Skip moves on
+      // without submitting anything; on the last question the way "on" is
+      // ending the exam.
+      return isLastQuestion ? (
+        <Button
+          variant="contained"
+          color="error"
+          onClick={() => setConfirmEndOpen(true)}
+        >
+          End Exam
+        </Button>
+      ) : (
+        <Button
+          variant="contained"
+          loading={navigate.isPending}
+          onClick={() => goToQuestion(currentQuestionIndex + 1)}
+        >
+          Skip
+        </Button>
+      );
+    }
+    // Certification exam: no answer reveal, submissions always persist.
+    if (isLastQuestion) {
+      return (
+        <Button
+          variant="contained"
+          color="error"
+          loading={submitAnswer.isPending}
+          onClick={endExam}
+        >
+          End Exam
+        </Button>
+      );
+    }
+    return (
+      <Button
+        variant="contained"
+        disabled={selection.length === 0}
+        loading={submitAnswer.isPending || navigate.isPending}
+        onClick={submitThenGoNext}
+      >
+        Next
+      </Button>
+    );
+  };
+
   return (
     <Box>
       <Box sx={{ mt: 4 }}>
@@ -112,7 +336,7 @@ export default function Page() {
       </Box>
 
       <Box sx={{ mt: 4 }}>
-        {currentQuestionIndex === -1 ? (
+        {!started ? (
           <Typography>
             Welcome! After you are prepared, click the &quot;Start Exam&quot;
             Button to start exam.
@@ -123,19 +347,23 @@ export default function Page() {
               <Typography gutterBottom>
                 Question {currentQuestionIndex + 1} of {numQuestions}
               </Typography>
-              {/* Keying by question id resets the card's selection state every
-                  time a new question is served. */}
               <QuestionCard
                 key={effectiveQuestion.id}
                 question={effectiveQuestion}
+                selected={selection}
+                onSelectionChange={setSelection}
+                disabled={inputsDisabled}
+                assessment={checkResult}
               />
             </Fragment>
           )
         )}
 
-        {navigate.isError && (
+        {(navigate.isError || submitAnswer.isError || myAnswer.isError) && (
           <Typography color="error" sx={{ mt: 1 }}>
-            {navigate.error.message}
+            {navigate.error?.message ??
+              submitAnswer.error?.message ??
+              myAnswer.error?.message}
           </Typography>
         )}
 
@@ -156,31 +384,7 @@ export default function Page() {
               </Button>
             </span>
           </Tooltip>
-          {currentQuestionIndex === -1 ? (
-            <Button
-              variant="contained"
-              loading={navigate.isPending}
-              onClick={startExam}
-            >
-              Start Exam
-            </Button>
-          ) : isLastQuestion ? (
-            <Button
-              variant="contained"
-              color="error"
-              onClick={() => setConfirmEndOpen(true)}
-            >
-              End Exam
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              loading={navigate.isPending}
-              onClick={() => goToQuestion(currentQuestionIndex + 1)}
-            >
-              Next
-            </Button>
-          )}
+          {primaryButton()}
         </Box>
       </Box>
 

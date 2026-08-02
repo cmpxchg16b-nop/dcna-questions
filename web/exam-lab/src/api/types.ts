@@ -170,6 +170,17 @@ export type QuestionScore = {
   scoreEarned: number;
 };
 
+// AssessedQuestion is a Question as embedded in an Assessment: for
+// practice-exam submissions the grader attaches the origin question document,
+// which carries its correctAnswer so the candidate can review what they got
+// wrong. Question deliberately does not model correctAnswer — it must never
+// influence the client while answering — so the field is modeled here, where
+// revealing it is the point. Certification-exam assessments omit questions
+// entirely.
+export type AssessedQuestion = Question & {
+  correctAnswer?: { options?: QuestionOption[] };
+};
+
 // Assessment mirrors the Go question.Assessment struct
 // (pkg/models/question/question.go): the score report produced after a
 // submission is graded. Its json tags produce camelCase wire fields.
@@ -178,12 +189,44 @@ export type QuestionScore = {
 // category submissions: per the XSD, the origin question (and therefore its
 // correct answer) is included so the candidate can review incorrect answers,
 // while certification-exam omits it. Only questions the candidate actually
-// answered are present. The Question type intentionally does not model
-// correctAnswer, so that field—present on the wire for practice-exam—is
-// ignored by the client.
+// answered are present.
 export type Assessment = {
   overallResult?: OverallResult;
   scoreResult?: ScoreResult;
   questionScores?: QuestionScore[];
-  questions?: Question[];
+  questions?: AssessedQuestion[];
+};
+
+// Answer mirrors the Go question.Answer struct (pkg/models/question/question.go):
+// a candidate's response to a single question. For single-choice and
+// multiple-choice questions it carries the selected options; drag-and-drop
+// connections are not modeled because the client cannot render that type yet.
+export type Answer = {
+  questionId: string;
+  questionType: QuestionType;
+  options?: QuestionOption[];
+};
+
+// ExamAnswer mirrors the Go question.ExamAnswer struct: a complete submission
+// carrying one answer per answered question. It is exam-scoped — the server
+// keeps a single ExamAnswer per session and replaces it wholesale on every
+// persisted submission — so each submit merges the current question's answer
+// into the previously saved one rather than posting it alone.
+export type ExamAnswer = {
+  answers?: Answer[];
+};
+
+// MyAnswerResponse is the JSON body of a successful
+// GET /api/examsessions/{exam_session_id}/my_answer:
+// {"exam_answer": {...} or null}; null when no answer has been submitted yet.
+export type MyAnswerResponse = {
+  exam_answer: ExamAnswer | null;
+};
+
+// SubmitAnswerResponse is the JSON body of a successful
+// POST /api/examsessions/{exam_session_id}/answer[?check_only=true]:
+// {"assessment": {...}}. With check_only=true the answer is graded but not
+// persisted; otherwise it is saved as the session's latest submission.
+export type SubmitAnswerResponse = {
+  assessment: Assessment | null;
 };
