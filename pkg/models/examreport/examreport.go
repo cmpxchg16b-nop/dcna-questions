@@ -34,26 +34,48 @@ type ExamTaker struct {
 	Anonymous []Anonymous `xml:"anonymous" json:"anonymous,omitempty"`
 }
 
-// ExamReport is the <examreport> element: the full report sent to the
+// ExamReport is the <examreport> element: a full report sent to the exam
 // assessment tracking server after an exam taker has finished the exam session.
-// The id attribute is the globally unique report id (not the exam document id,
-// nor the exam session id).
-//
-// The exam metadata fields (ExamId, ExamShortName, ExamCode, Title,
-// Description, PassingScore, ExamCategory) are copied from the originating exam
-// document; ExamSessionId and FinishedAt describe the specific session.
 type ExamReport struct {
-	XMLName       xml.Name                       `xml:"examreport" json:"-"`
-	Id            string                         `xml:"id,attr" json:"id"`
-	ExamTaker     ExamTaker                      `xml:"examtaker" json:"examTaker"`
-	ExamId        string                         `xml:"examid" json:"examId"`
-	ExamShortName string                         `xml:"examshortname" json:"examShortName,omitempty"`
-	ExamCode      string                         `xml:"examcode" json:"examCode,omitempty"`
-	Title         string                         `xml:"title" json:"title"`
-	Description   string                         `xml:"description" json:"description,omitempty"`
-	PassingScore  *float32                       `xml:"passingscore" json:"passingScore,omitempty"`
-	ExamCategory  pkgmodelsquestion.ExamCategory `xml:"examcategory" json:"examCategory"`
-	ExamSessionId string                         `xml:"examsessionid" json:"examSessionId"`
-	FinishedAt    int64                          `xml:"finishedat" json:"finishedAt"`
-	Assessment    pkgmodelsquestion.Assessment   `xml:"assessment" json:"assessment"`
+	XMLName xml.Name `xml:"examreport" json:"-"`
+
+	// Id is the id of the exam report; it has to be globally unique, not the id
+	// of the exam document, nor the id of the exam session.
+	Id string `xml:"id,attr" json:"id"`
+
+	// ExamTaker is the person or anonymous session that took the exam.
+	ExamTaker ExamTaker `xml:"examtaker" json:"examTaker"`
+
+	// ExamId is the exam document id, not the exam session id.
+	ExamId string `xml:"examid" json:"examId"`
+
+	// ExamShortName is the short name copied from the origin exam document.
+	ExamShortName string `xml:"examshortname" json:"examShortName,omitempty"`
+
+	// ExamCode is the code copied from the origin exam document.
+	ExamCode string `xml:"examcode" json:"examCode,omitempty"`
+
+	// Title is the title of the exam.
+	Title string `xml:"title" json:"title"`
+
+	// Description is the description of the exam. Optional.
+	Description string `xml:"description" json:"description,omitempty"`
+
+	// PassingScore is the mandated passing score of the exam, copied directly
+	// from the exam element.
+	PassingScore *float32 `xml:"passingscore" json:"passingScore,omitempty"`
+
+	// ExamCategory is copied directly from the origin exam document too.
+	ExamCategory pkgmodelsquestion.ExamCategory `xml:"examcategory" json:"examCategory"`
+
+	// ExamSessionId is the id of the exam session which the exam taker was in.
+	ExamSessionId string `xml:"examsessionid" json:"examSessionId"`
+
+	// FinishedAt is the millisecond-resolution unix timestamp when the exam
+	// session was finished by the exam taker.
+	FinishedAt int64 `xml:"finishedat" json:"finishedAt"`
+
+	// Assessment contains the grade and the score that was achieved by the
+	// exam taker.
+	Assessment pkgmodelsquestion.Assessment `xml:"assessment" json:"assessment"`
 }
