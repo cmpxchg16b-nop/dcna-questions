@@ -3,6 +3,7 @@ package examserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -273,6 +274,15 @@ func (srv *OnMemoryExamServer) GetExamSessionById(ctx context.Context, examId Ex
 	}
 }
 
+// EndExamSession ends the exam session identified by examId for userId.
+//
+// Before removing the session it persists a full exam report to the
+// ExamTrackingServer — but only when the session has a graded assessment (a
+// submitted answer). If the user never submitted an answer there is nothing to
+// report, so the report step is skipped and the session is deleted directly.
+// When a report is generated, the session is removed only if the report is
+// successfully persisted; on any failure the session is left intact so the
+// caller can retry.
 func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamSessionId, userId string) error {
 	type result struct{ err error }
 	resp := make(chan result, 1)
@@ -286,6 +296,31 @@ func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamSe
 			resp <- result{err: errNotOwner}
 			return
 		}
+
+		// Before removing the session, persist a full exam report for it — but
+		// only when the session has a graded assessment, i.e. the user submitted
+		// an answer that can be graded. If the user never submitted, there is no
+		// assessment to report, so we skip straight to deletion. When a report is
+		// generated, the session is deleted only if the report is successfully
+		// persisted; on any failure the session is left intact.
+		if sess.ExamAnswer != nil {
+			assessment, err := sess.Grader.Grade(sess.ExamAnswer)
+			if err != nil {
+				resp <- result{err: fmt.Errorf("end exam session %q: grade submitted answer: %w", examId, err)}
+				return
+			}
+			report := newExamReport(
+				examreport.ExamTaker{Anonymous: []examreport.Anonymous{{SessionId: userId}}},
+				sess.Exam,
+				sess.ExamId,
+				assessment,
+			)
+			if err := srv.examTrackingServer.Put(ctx, userId, report); err != nil {
+				resp <- result{err: fmt.Errorf("end exam session %q: persist exam report: %w", examId, err)}
+				return
+			}
+		}
+
 		delete(srv.sessionsStore, examId)
 		if sessions, ok := srv.userSessions[sess.UserId]; ok {
 			delete(sessions, examId)
