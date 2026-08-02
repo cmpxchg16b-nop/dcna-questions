@@ -7,6 +7,7 @@
 package examreport
 
 import (
+	"context"
 	"encoding/xml"
 
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
@@ -78,4 +79,15 @@ type ExamReport struct {
 	// Assessment contains the grade and the score that was achieved by the
 	// exam taker.
 	Assessment pkgmodelsquestion.Assessment `xml:"assessment" json:"assessment"`
+}
+
+// ExamTrackingServer is the server that persists and retrieves exam reports.
+// Reports are keyed by the exam taker (userid), so the history of a user's
+// finished exam sessions can be looked up via GetExamReportsByUserId.
+type ExamTrackingServer interface {
+	// Put stores an exam report for the given userid.
+	Put(ctx context.Context, userid string, examReport ExamReport) error
+
+	// GetExamReportsByUserId returns all exam reports recorded for userid.
+	GetExamReportsByUserId(ctx context.Context, userid string) ([]ExamReport, error)
 }
