@@ -8,6 +8,7 @@
     <description>Passing this exam earns you the DCNA certification, and can also can be used towards your recertification goals.
     Mastering DN42 techniques (DC-01 DCNA) v1.1 is a 120-minute exam that tests a candidate's knowledge and skills related to network fundamentals, routing and switching, IP connectivity, BGP configuration, connectivity troubleshooting, and automation and programmability.</description>
     <passingscore>4.0</passingscore>
+    <examcategory>certification-exam</examcategory>
     <questionset>
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
       <questioncollection>

@@ -234,6 +234,20 @@
       </xs:sequence>
     </xs:complexType>
   </xs:element>
+  <xs:simpleType name="ExamCategory">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="certification-exam">
+        <xs:annotation>
+          <xs:documentation>A proctored, high-stakes assessment delivered through an authorized testing provider that, when passed, grants an official vendor certification valid for a set period.</xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+      <xs:enumeration value="practice-exam">
+        <xs:annotation>
+          <xs:documentation>An unproctored study tool that simulates the exam format and provides detailed feedback on incorrect answers to help candidates assess their readiness without awarding certification.</xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+    </xs:restriction>
+  </xs:simpleType>
   <xs:element name="exam">
     <xs:annotation>
       <xs:documentation xml:lang="en">An exam is a container that contains a set of question collections that focus on a specific topic.</xs:documentation>
@@ -243,6 +257,7 @@
         <xs:element ref="title" />
         <xs:element ref="description" />
         <xs:element name="passingscore" minOccurs="0" maxOccurs="1" type="xs:float" />
+        <xs:element name="examcategory" minOccurs="1" maxOccurs="1" type="ExamCategory" />
         <xs:element ref="questionset" minOccurs="1" maxOccurs="1" />
       </xs:sequence>
       <xs:attribute name="id" type="xs:string" use="required" />
