@@ -62,7 +62,7 @@ type ExamReport struct {
 	Title string `xml:"title" json:"title"`
 
 	// Description is the description of the exam. Optional.
-	Description string `xml:"description" json:"description,omitempty"`
+	Description string `xml:"description,omitempty" json:"description,omitempty"`
 
 	// PassingScore is the mandated passing score of the exam, copied directly
 	// from the exam element.
