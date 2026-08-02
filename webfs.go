@@ -73,7 +73,9 @@ func lookup(fsys fs.FS, urlPath string) (string, bool) {
 			}
 			return urlPath + "/", true
 		}
-		return "", false
+		// A directory without an index.html is not servable — Next.js emits
+		// per-route RSC payload files into <route>/ alongside <route>.html —
+		// so fall through to the clean-URL checks below.
 	}
 
 	// Clean URL: /foo -> /foo.html

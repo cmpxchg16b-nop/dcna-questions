@@ -44,6 +44,12 @@ func TestHandler(t *testing.T) {
 	check("/favicon.ico", http.StatusOK)
 	check("/this-page-does-not-exist", http.StatusNotFound)
 
+	// Next.js emits per-route RSC payload files into <route>/ alongside
+	// <route>.html; the route directory (which has no index.html) must not
+	// shadow the clean URL.
+	check("/examsession", http.StatusOK)
+	check("/examsession?exam_session_id=abc", http.StatusOK)
+
 	// The home page should be served as HTML.
 	resp, err := http.Get(srv.URL + "/")
 	if err != nil {
