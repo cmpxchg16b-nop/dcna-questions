@@ -81,6 +81,14 @@ export const ExamOptionRandomQuestionColl = 1 << 3; // randomized question colle
 export type QuestionType =
   "single-choice" | "multiple-choice" | "drag-and-drop";
 
+// CLIENT_SUPPORTED_QUESTION_TYPES lists the question types the client can
+// render; drag-and-drop exists on the wire but has no renderer yet. Sessions
+// created without user-chosen types are restricted to these.
+export const CLIENT_SUPPORTED_QUESTION_TYPES: QuestionType[] = [
+  "single-choice",
+  "multiple-choice",
+];
+
 // CreateExamSessionRequest is the JSON body of POST /api/examsessions:
 // {"exam_id": "...", "options": <bitmask>, "accept_question_types": [...]}.
 // options defaults to 0 (document order, not seekable) when absent;

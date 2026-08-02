@@ -14,12 +14,15 @@ import ExamMetadataChips from "@/components/ExamMetadataChips";
 type ExamCardProps = {
   exam: ExamExcerpt;
   onTake: (exam: ExamExcerpt) => void;
+  // loading disables the Take button with a spinner while the parent creates
+  // the session (used when no options dialog is shown).
+  loading?: boolean;
 };
 
 // One entry in the Exams list: the exam's metadata and a two-line clamped
 // description, with a Take action reported via onTake so the parent can
 // collect exam options before creating the session.
-export default function ExamCard({ exam, onTake }: ExamCardProps) {
+export default function ExamCard({ exam, onTake, loading }: ExamCardProps) {
   return (
     <ListItem disableGutters sx={{ mb: 1 }}>
       <Card sx={{ width: "100%" }}>
@@ -45,7 +48,11 @@ export default function ExamCard({ exam, onTake }: ExamCardProps) {
                 {exam.Description}
               </Typography>
             </Box>
-            <Button variant="contained" onClick={() => onTake(exam)}>
+            <Button
+              variant="contained"
+              loading={loading}
+              onClick={() => onTake(exam)}
+            >
               Take
             </Button>
           </Box>

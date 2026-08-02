@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Box,
   Button,
@@ -15,19 +16,55 @@ import {
 import { useExamDocs } from "@/hooks/useExamDocs";
 import { useExamSessions } from "@/hooks/useExamSessions";
 import { useEndExamSession } from "@/hooks/useEndExamSession";
+import { useCreateExamSession } from "@/hooks/useCreateExamSession";
 import ExamCard from "@/components/ExamCard";
 import ExamOptionsDialog from "@/components/ExamOptionsDialog";
 import ExamSessionCard from "@/components/ExamSessionCard";
-import { ExamExcerpt, ExamSessionSummary } from "@/api/types";
+import {
+  CLIENT_SUPPORTED_QUESTION_TYPES,
+  ExamExcerpt,
+  ExamOptionRandomOptions,
+  ExamOptionRandomQuestions,
+  ExamSessionSummary,
+} from "@/api/types";
 
 export default function Home() {
+  const router = useRouter();
   const { data: exams, isPending: isExamsPending } = useExamDocs();
   const { data: sessions, isPending: isSessionsPending } = useExamSessions();
   const endSession = useEndExamSession();
+  const createSession = useCreateExamSession();
   const [sessionToEnd, setSessionToEnd] = useState<ExamSessionSummary | null>(
     null,
   );
   const [examToTake, setExamToTake] = useState<ExamExcerpt | null>(null);
+
+  // Certification exams are proctored: no customization dialog — the session
+  // is created with fixed options (randomized question/option order, not
+  // seekable, only client-renderable question types) and the user goes
+  // straight to the exam session page. Practice exams still open the options
+  // dialog so the user can customize the session.
+  const handleTake = (exam: ExamExcerpt) => {
+    if (exam.ExamCategory !== "certification-exam") {
+      setExamToTake(exam);
+      return;
+    }
+    createSession.mutate(
+      {
+        examId: exam.Id,
+        options: ExamOptionRandomQuestions | ExamOptionRandomOptions,
+        acceptQuestionTypes: CLIENT_SUPPORTED_QUESTION_TYPES,
+      },
+      {
+        onSuccess: (examSessionId) => {
+          const params = new URLSearchParams({
+            exam_session_id: examSessionId,
+          });
+          router.push(`/examsession?${params}`);
+        },
+      },
+    );
+  };
 
   return (
     <Box>
@@ -105,7 +142,15 @@ export default function Home() {
           exams.length > 0 && (
             <List>
               {exams.map((exam) => (
-                <ExamCard key={exam.Id} exam={exam} onTake={setExamToTake} />
+                <ExamCard
+                  key={exam.Id}
+                  exam={exam}
+                  onTake={handleTake}
+                  loading={
+                    createSession.isPending &&
+                    createSession.variables?.examId === exam.Id
+                  }
+                />
               ))}
             </List>
           )
