@@ -12,9 +12,18 @@ import (
 	pkglog "dcna-questions/pkg/log"
 	"log"
 	"net/http"
+
+	"github.com/alecthomas/kong"
 )
 
+type CLI struct {
+	Addr string `name:"addr" help:"Listening address." env:"ADDR" default:":8080"`
+}
+
 func main() {
+	var cli CLI
+	kong.Parse(&cli)
+
 	sources := []pkgmodelsquestion.ExamSource{
 		{
 			Loader: pkgmodelsquestion.NewFileExamLoader(),
@@ -37,14 +46,13 @@ func main() {
 	mux.Handle("/api/examsessions/", examSessionHandler)
 	mux.Handle("/", dcnaquestions.Handler())
 
-	const addr = ":8080"
-	log.Printf("listening on http://localhost%s", addr)
+	log.Printf("listening on http://localhost%s", cli.Addr)
 
 	var h http.Handler = mux
 	h = pkglog.WithSessionAwaredLog(nil, sm, h)
 	h = pkgsession.WithSessionId(h, sm)
 
-	if err := http.ListenAndServe(addr, h); err != nil {
+	if err := http.ListenAndServe(cli.Addr, h); err != nil {
 		log.Fatal(err)
 	}
 }
