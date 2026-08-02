@@ -573,7 +573,7 @@ func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions
 		Cursors:              make(map[string]int),
 		CurrentQuestionIndex: -1,
 		rng:                  rng,
-		Grader:               NewSimpleOnMemoryGrader(&qc, exam.PassingScore),
+		Grader:               NewSimpleOnMemoryGrader(&qc, exam.PassingScore, exam.ExamCategory),
 	}
 }
 

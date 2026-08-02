@@ -148,3 +148,42 @@ export type NextQuestionResponse = {
 export type SeekCursorResponse = {
   cursor_id: string;
 };
+
+// OverallResult mirrors the Go question.OverallResult string enum
+// (pkg/models/question/question.go): the overall verdict for a graded
+// submission. "pass" means the earned score reached the passing score;
+// "immediate" is any non-passing result returned right away.
+export type OverallResult = "pass" | "immediate";
+
+// ScoreResult mirrors the Go question.ScoreResult
+// {earnedScore, totalScore}: the aggregate earned and total scores for a
+// graded submission.
+export type ScoreResult = {
+  earnedScore: number;
+  totalScore: number;
+};
+
+// QuestionScore mirrors the Go question.QuestionScore
+// {questionId, scoreEarned}: the score earned on a single question.
+export type QuestionScore = {
+  questionId: string;
+  scoreEarned: number;
+};
+
+// Assessment mirrors the Go question.Assessment struct
+// (pkg/models/question/question.go): the score report produced after a
+// submission is graded. Its json tags produce camelCase wire fields.
+//
+// questions holds the original question documents, but only for practice-exam
+// category submissions: per the XSD, the origin question (and therefore its
+// correct answer) is included so the candidate can review incorrect answers,
+// while certification-exam omits it. Only questions the candidate actually
+// answered are present. The Question type intentionally does not model
+// correctAnswer, so that field—present on the wire for practice-exam—is
+// ignored by the client.
+export type Assessment = {
+  overallResult?: OverallResult;
+  scoreResult?: ScoreResult;
+  questionScores?: QuestionScore[];
+  questions?: Question[];
+};

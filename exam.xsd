@@ -321,6 +321,11 @@
         <xs:element ref="overallresult" minOccurs="0" maxOccurs="1" />
         <xs:element ref="scoreresult" minOccurs="0" maxOccurs="1" />
         <xs:element ref="questionscore" minOccurs="0" maxOccurs="unbounded" />
+        <xs:element ref="question" minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation xml:lang="en">Includes the original question in the document of assessment only when the category of exam is practice-exam, for certification-exam, we won't include the origin in the assessment document.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
       </xs:sequence>
     </xs:complexType>
   </xs:element>

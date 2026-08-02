@@ -217,11 +217,18 @@ type QuestionScore struct {
 // Assessment is the <assessment> element: the score report produced after a
 // submission is graded. It carries the overall result, the aggregate score,
 // and a per-question score breakdown. All children are optional (0..1 / 0..n).
+//
+// Questions holds the original <question> documents, but only for
+// practice-exam category submissions: the XSD documents that the origin
+// question (and therefore its correct answer) is included so the candidate can
+// review what they got wrong, whereas certification-exam omits it. The grader
+// populates Questions only for the questions the candidate actually answered.
 type Assessment struct {
 	XMLName        xml.Name        `xml:"assessment" json:"-"`
 	OverallResult  *OverallResult  `xml:"overallresult" json:"overallResult,omitempty"`
 	ScoreResult    *ScoreResult    `xml:"scoreresult" json:"scoreResult,omitempty"`
 	QuestionScores []QuestionScore `xml:"questionscore" json:"questionScores,omitempty"`
+	Questions      []Question      `xml:"question" json:"questions,omitempty"`
 }
 
 // Answer is one <answer> element within an examanswer: a candidate's response

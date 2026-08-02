@@ -234,5 +234,29 @@
     <questionscore scoreEarned="1.0" questionId="1" />
     <questionscore scoreEarned="1.0" questionId="2" />
     <questionscore scoreEarned="1.0" questionId="3" />
+    <question id="1" type="single-choice" score="1">
+      <description>An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix? (Choose one.)</description>
+      <options>
+        <option
+          id="1"
+        >All iBGP and eBGP peers, because NO_ADVERTISE only prevents the prefix from being readvertised toward the originating AS</option>
+        <option id="2">All three iBGP peers only</option>
+        <option id="3">The eBGP peer in AS 65003 only</option>
+        <option
+          id="4"
+        >All iBGP and eBGP peers, but with the community attribute stripped from the updates</option>
+        <option
+          id="5"
+        >No BGP peers at all; the prefix remains in R2's local BGP table but is not advertised to any peer</option>
+      </options>
+      <correctanswer>
+        <options>
+          <!-- In some case, more that one option is correct, even it's a single-choice question. -->
+          <option
+            id="5"
+          >No BGP peers at all; the prefix remains in R2's local BGP table but is not advertised to any peer</option>
+        </options>
+      </correctanswer>
+    </question>
   </assessment>
 </root>

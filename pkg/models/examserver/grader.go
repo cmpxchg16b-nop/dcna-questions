@@ -20,19 +20,29 @@ type SimpleGrader interface {
 // other type are silently skipped. Answers are correlated to questions by
 // questionId, and option sets are compared by option id, so neither question
 // nor option ordering affects the result.
+//
+// The exam category controls whether the original question documents are
+// embedded in the produced Assessment: for practice-exam the origin question
+// (including its correct answer) is attached for each answered question so the
+// candidate can review their mistakes; for certification-exam it is omitted.
 type SimpleOnMemoryGrader struct {
 	questions    map[string]pkgmodelquestions.Question
 	totalScore   float32
 	passingScore *float32
+	examCategory pkgmodelquestions.ExamCategory
 }
 
 // NewSimpleOnMemoryGrader indexes qc by question id and precomputes the total
 // achievable score. passingScore, when non-nil, drives the assessment's
 // OverallResult: the submission passes once the earned score reaches it.
-func NewSimpleOnMemoryGrader(qc *pkgmodelquestions.QuestionCollection, passingScore *float32) *SimpleOnMemoryGrader {
+// examCategory governs whether the original questions are embedded in the
+// assessment: practice-exam includes them (for answered questions only), other
+// categories omit them.
+func NewSimpleOnMemoryGrader(qc *pkgmodelquestions.QuestionCollection, passingScore *float32, examCategory pkgmodelquestions.ExamCategory) *SimpleOnMemoryGrader {
 	g := &SimpleOnMemoryGrader{
 		questions:    make(map[string]pkgmodelquestions.Question),
 		passingScore: passingScore,
+		examCategory: examCategory,
 	}
 	if qc != nil {
 		for _, q := range qc.Questions {
@@ -48,9 +58,16 @@ func NewSimpleOnMemoryGrader(qc *pkgmodelquestions.QuestionCollection, passingSc
 // multiple-choice, and answers with no matching question, are skipped without
 // error. Unanswered questions contribute no QuestionScore; their potential
 // score still counts toward TotalScore.
+//
+// For a practice-exam category the original question document (carrying its
+// correct answer) is attached for each answered, gradeable question; questions
+// the candidate did not answer are not included. Other categories never attach
+// the origin question.
 func (g *SimpleOnMemoryGrader) Grade(examAnswer *pkgmodelquestions.ExamAnswer) (*pkgmodelquestions.Assessment, error) {
 	var earnedScore float32
 	var questionScores []pkgmodelquestions.QuestionScore
+	includeQuestions := g.examCategory == pkgmodelquestions.ExamCategoryPractice
+	var questions []pkgmodelquestions.Question
 
 	if examAnswer != nil {
 		for _, ans := range examAnswer.Answers {
@@ -74,6 +91,9 @@ func (g *SimpleOnMemoryGrader) Grade(examAnswer *pkgmodelquestions.ExamAnswer) (
 				QuestionId:  q.Id,
 				ScoreEarned: earned,
 			})
+			if includeQuestions {
+				questions = append(questions, q)
+			}
 		}
 	}
 
@@ -89,6 +109,7 @@ func (g *SimpleOnMemoryGrader) Grade(examAnswer *pkgmodelquestions.ExamAnswer) (
 			TotalScore:  g.totalScore,
 		},
 		QuestionScores: questionScores,
+		Questions:      questions,
 	}, nil
 }
 

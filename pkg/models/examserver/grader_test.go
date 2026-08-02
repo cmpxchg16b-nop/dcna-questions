@@ -66,7 +66,7 @@ func TestSimpleOnMemoryGrader_SingleChoice(t *testing.T) {
 			singleChoice("q1", 2, "3", "5"), // accept either 3 or 5
 		},
 	}
-	g := NewSimpleOnMemoryGrader(qc, nil)
+	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryCertification)
 
 	// Correct option "5".
 	a := examAnswer(answer("q1", "5"))
@@ -98,7 +98,7 @@ func TestSimpleOnMemoryGrader_SingleChoice_RequiresExactlyOneOption(t *testing.T
 			singleChoice("q1", 2, "3", "5"),
 		},
 	}
-	g := NewSimpleOnMemoryGrader(qc, nil)
+	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryCertification)
 
 	for _, tc := range []struct {
 		name string
@@ -130,7 +130,7 @@ func TestSimpleOnMemoryGrader_MultipleChoice(t *testing.T) {
 			multiChoice("q1", 3, "1", "4"),
 		},
 	}
-	g := NewSimpleOnMemoryGrader(qc, nil)
+	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryCertification)
 
 	// Correct set, reversed order.
 	got, err := g.Grade(examAnswer(answer("q1", "4", "1")))
@@ -168,7 +168,7 @@ func TestSimpleOnMemoryGrader_UnsupportedTypeSkipped(t *testing.T) {
 	}
 	sc := singleChoice("sc", 2, "1")
 	qc := &pkgmodelquestions.QuestionCollection{Questions: []pkgmodelquestions.Question{dnd, sc}}
-	g := NewSimpleOnMemoryGrader(qc, nil)
+	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryCertification)
 
 	got, err := g.Grade(examAnswer(
 		answer("dnd"),                 // unsupported type
@@ -205,7 +205,7 @@ func TestSimpleOnMemoryGrader_OverallResult(t *testing.T) {
 	wrong := examAnswer(answer("q1", "9"))
 
 	t.Run("no passing score is always immediate", func(t *testing.T) {
-		g := NewSimpleOnMemoryGrader(qc, nil)
+		g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryCertification)
 		got, _ := g.Grade(correct)
 		if *got.OverallResult != pkgmodelquestions.OverallResultImmediate {
 			t.Errorf("got %q, want immediate", *got.OverallResult)
@@ -213,7 +213,7 @@ func TestSimpleOnMemoryGrader_OverallResult(t *testing.T) {
 	})
 
 	t.Run("earned >= passing is pass", func(t *testing.T) {
-		g := NewSimpleOnMemoryGrader(qc, float32Ptr(3))
+		g := NewSimpleOnMemoryGrader(qc, float32Ptr(3), pkgmodelquestions.ExamCategoryCertification)
 		got, _ := g.Grade(correct)
 		if *got.OverallResult != pkgmodelquestions.OverallResultPass {
 			t.Errorf("got %q, want pass", *got.OverallResult)
@@ -221,7 +221,7 @@ func TestSimpleOnMemoryGrader_OverallResult(t *testing.T) {
 	})
 
 	t.Run("earned < passing is immediate", func(t *testing.T) {
-		g := NewSimpleOnMemoryGrader(qc, float32Ptr(3))
+		g := NewSimpleOnMemoryGrader(qc, float32Ptr(3), pkgmodelquestions.ExamCategoryCertification)
 		got, _ := g.Grade(wrong)
 		if *got.OverallResult != pkgmodelquestions.OverallResultImmediate {
 			t.Errorf("got %q, want immediate", *got.OverallResult)
@@ -235,7 +235,7 @@ func TestSimpleOnMemoryGrader_NilAnswer(t *testing.T) {
 	qc := &pkgmodelquestions.QuestionCollection{
 		Questions: []pkgmodelquestions.Question{singleChoice("q1", 2, "1")},
 	}
-	g := NewSimpleOnMemoryGrader(qc, nil)
+	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryCertification)
 	got, err := g.Grade(nil)
 	if err != nil {
 		t.Fatalf("Grade(nil): %v", err)
@@ -251,6 +251,83 @@ func TestSimpleOnMemoryGrader_NilAnswer(t *testing.T) {
 	}
 }
 
+// --- SimpleOnMemoryGrader: practice-exam question inclusion ----------------
+
+// TestSimpleOnMemoryGrader_PracticeExamIncludesAnsweredQuestions confirms the
+// practice-exam rule from the XSD: the original question document (carrying its
+// correct answer) is embedded in the assessment, but only for questions the
+// candidate actually answered and that were gradeable.
+func TestSimpleOnMemoryGrader_PracticeExamIncludesAnsweredQuestions(t *testing.T) {
+	sc := singleChoice("sc", 2, "3")
+	mc := multiChoice("mc", 4, "1", "2")
+	qNotAnswered := singleChoice("skipped", 1, "7")
+	dnd := pkgmodelquestions.Question{
+		Id:    "dnd",
+		Type:  pkgmodelquestions.QuestionTypeDragAndDrop,
+		Score: 5,
+	}
+	qc := &pkgmodelquestions.QuestionCollection{
+		Questions: []pkgmodelquestions.Question{sc, mc, qNotAnswered, dnd},
+	}
+	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryPractice)
+
+	got, err := g.Grade(examAnswer(
+		answer("sc", "3"),                 // correct
+		answer("mc", "9"),                // wrong
+		answer("dnd"),                    // unsupported type, skipped
+		answer("does-not-exist", "1"),    // unknown question, skipped
+	))
+	if err != nil {
+		t.Fatalf("Grade: %v", err)
+	}
+
+	// Only the two gradeable, answered questions (sc, mc) are embedded; the
+	// skipped/unknown questions and the unanswered "skipped" question are not.
+	if len(got.Questions) != 2 {
+		t.Fatalf("got %d Questions, want 2", len(got.Questions))
+	}
+	want := map[string]bool{"sc": false, "mc": false}
+	for _, q := range got.Questions {
+		if _, ok := want[q.Id]; !ok {
+			t.Errorf("unexpected embedded question %q", q.Id)
+		}
+		want[q.Id] = true
+	}
+	for id, seen := range want {
+		if !seen {
+			t.Errorf("question %q not embedded in assessment", id)
+		}
+	}
+
+	// The embedded single-choice question must carry its correct answer so the
+	// candidate can review it.
+	for _, q := range got.Questions {
+		if q.Id == "sc" {
+			if len(q.CorrectAnswer.Options) != 1 || q.CorrectAnswer.Options[0].Id != "3" {
+				t.Errorf("embedded sc correctAnswer = %v, want option 3", q.CorrectAnswer.Options)
+			}
+		}
+	}
+}
+
+// TestSimpleOnMemoryGrader_CertificationExamOmitsQuestions confirms that a
+// certification-exam assessment never embeds the origin questions, regardless
+// of how many questions were answered.
+func TestSimpleOnMemoryGrader_CertificationExamOmitsQuestions(t *testing.T) {
+	qc := &pkgmodelquestions.QuestionCollection{
+		Questions: []pkgmodelquestions.Question{singleChoice("q1", 2, "3")},
+	}
+	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryCertification)
+
+	got, err := g.Grade(examAnswer(answer("q1", "3")))
+	if err != nil {
+		t.Fatalf("Grade: %v", err)
+	}
+	if len(got.Questions) != 0 {
+		t.Errorf("certification-exam embedded %d questions, want 0", len(got.Questions))
+	}
+}
+
 // --- SubmitAnswer integration (grading + GetMyAnswer) ------------------------
 
 // newGradingExam builds an exam with one collection of two gradeable questions
@@ -259,6 +336,7 @@ func TestSimpleOnMemoryGrader_NilAnswer(t *testing.T) {
 func newGradingExam(passingScore *float32) *pkgmodelquestions.Exam {
 	return &pkgmodelquestions.Exam{
 		Id:           "grading",
+		ExamCategory: pkgmodelquestions.ExamCategoryCertification,
 		PassingScore: passingScore,
 		QuestionSet: pkgmodelquestions.QuestionSet{
 			QuestionCollections: []pkgmodelquestions.QuestionCollection{
