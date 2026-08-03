@@ -592,6 +592,84 @@ func TestGetMyAnswer_NoneSubmitted(t *testing.T) {
 	}
 }
 
+// TestSubmitAnswer_CheckOnlyRevealsCorrectAnswers pins the contract the
+// practice-exam "check my answer" flow relies on: the assessment returned for
+// a check_only submission embeds every answered question with its correct
+// answer — options for the choice types, connection solutions for
+// drag-and-drop — regardless of question type. Served questions stay stripped
+// of their answer key; the assessment is the only place it is revealed.
+func TestSubmitAnswer_CheckOnlyRevealsCorrectAnswers(t *testing.T) {
+	dndSol := pkgmodelquestions.ConnectionSolution{
+		RequiredUniqueConnections: 1,
+		Connects:                  []pkgmodelquestions.Connect{{Src: "a", Dst: "b"}},
+	}
+	exam := &pkgmodelquestions.Exam{
+		Id:           "check-reveal",
+		ExamCategory: pkgmodelquestions.ExamCategoryPractice,
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{
+					singleChoice("sc", 1, "1"),
+					multiChoice("mc", 1, "1", "2"),
+					dndQuestion("dnd", 1, dndSol),
+				}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+
+	// One wrong and two correct answers; the grading itself is covered
+	// elsewhere — what matters here is that every answered question comes back
+	// embedded with its correct answer.
+	assessment, err := srv.SubmitAnswer(ctx, examId, "user-1", examAnswer(
+		answer("sc", "2"),      // wrong
+		answer("mc", "1", "2"), // correct
+		pkgmodelquestions.Answer{QuestionId: "dnd", Connections: connects([2]string{"a", "b"})}, // correct
+	), true)
+	if err != nil {
+		t.Fatalf("SubmitAnswer: %v", err)
+	}
+	if assessment.ScoreResult.EarnedScore != 2 {
+		t.Errorf("earned = %g, want 2", assessment.ScoreResult.EarnedScore)
+	}
+	if len(assessment.Questions) != 3 {
+		t.Fatalf("assessment embedded %d questions, want 3", len(assessment.Questions))
+	}
+	byId := make(map[string]pkgmodelquestions.Question, len(assessment.Questions))
+	for _, q := range assessment.Questions {
+		byId[q.Id] = q
+	}
+	if got := byId["sc"].CorrectAnswer.Options; len(got) != 1 || got[0].Id != "1" {
+		t.Errorf("sc correctAnswer.Options = %v, want [1]", got)
+	}
+	if got := byId["mc"].CorrectAnswer.Options; len(got) != 2 {
+		t.Errorf("mc correctAnswer.Options = %v, want 2 options", got)
+	}
+	if got := byId["dnd"].CorrectAnswer.ConnectionSolutions; len(got) != 1 ||
+		got[0].RequiredUniqueConnections != 1 || len(got[0].Connects) != 1 {
+		t.Errorf("dnd correctAnswer.ConnectionSolutions = %v, want the one-connection solution", got)
+	}
+
+	// check_only must not persist the submission.
+	stored, err := srv.GetMyAnswer(ctx, examId, "user-1")
+	if err != nil {
+		t.Fatalf("GetMyAnswer: %v", err)
+	}
+	if stored != nil {
+		t.Errorf("GetMyAnswer returned %v after checkOnly submit, want nil", stored)
+	}
+}
+
 // TestGetMyAnswer_Ownership verifies that GetMyAnswer rejects a non-owner caller.
 func TestGetMyAnswer_Ownership(t *testing.T) {
 	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())

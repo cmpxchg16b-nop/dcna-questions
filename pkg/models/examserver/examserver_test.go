@@ -261,6 +261,92 @@ func TestGetExamSessionById_CurrentQuestionIndex(t *testing.T) {
 	}
 }
 
+// hasCorrectAnswer reports whether q carries any correct-answer content.
+func hasCorrectAnswer(q *pkgmodelquestions.Question) bool {
+	ca := q.CorrectAnswer
+	return len(ca.Options) > 0 || len(ca.Combinations) > 0 || len(ca.ConnectionSolutions) > 0
+}
+
+// TestGetNextQuestion_StripsCorrectAnswer verifies that served questions never
+// carry the correct answer — neither from GetNextQuestion nor from the session
+// excerpt's CurrentQuestion — while the grader's internal answer key is
+// unaffected and the practice-exam assessment remains the one place the
+// correct answer is revealed.
+func TestGetNextQuestion_StripsCorrectAnswer(t *testing.T) {
+	exam := &pkgmodelquestions.Exam{
+		Id:           "strip",
+		ExamCategory: pkgmodelquestions.ExamCategoryPractice,
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{
+					singleChoice("sc", 1, "1"),
+					dndQuestion("dnd", 1, pkgmodelquestions.ConnectionSolution{
+						RequiredUniqueConnections: 1,
+						Connects:                  []pkgmodelquestions.Connect{{Src: "a", Dst: "b"}},
+					}),
+				}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+
+	// Every served question must be stripped, including the one echoed back as
+	// the session excerpt's CurrentQuestion.
+	var cursor *QuestionCursor
+	for i := 0; i < 2; i++ {
+		q, next, err := srv.GetNextQuestion(ctx, examId, "user-1", cursor)
+		if err != nil || q == nil {
+			t.Fatalf("GetNextQuestion(%d): q=%v err=%v", i, q, err)
+		}
+		if hasCorrectAnswer(q) {
+			t.Errorf("GetNextQuestion(%d) leaked correct answer for %q", i, q.Id)
+		}
+		cursor = next
+
+		ex, err := srv.GetExamSessionById(ctx, examId, "user-1")
+		if err != nil {
+			t.Fatalf("GetExamSessionById after fetch %d: %v", i, err)
+		}
+		if ex.CurrentQuestion == nil || ex.CurrentQuestion.Id != q.Id {
+			t.Fatalf("after fetch %d, CurrentQuestion = %v, want Id %q", i, ex.CurrentQuestion, q.Id)
+		}
+		if hasCorrectAnswer(ex.CurrentQuestion) {
+			t.Errorf("CurrentQuestion leaked correct answer for %q", q.Id)
+		}
+	}
+
+	// Grading still sees the answer key: both answers correct -> full score,
+	// and the practice-exam assessment reveals the correct answers.
+	assessment, err := srv.SubmitAnswer(ctx, examId, "user-1", examAnswer(
+		answer("sc", "1"),
+		pkgmodelquestions.Answer{QuestionId: "dnd", Connections: connects([2]string{"a", "b"})},
+	), false)
+	if err != nil {
+		t.Fatalf("SubmitAnswer: %v", err)
+	}
+	if assessment.ScoreResult.EarnedScore != 2 {
+		t.Errorf("earned = %g, want 2", assessment.ScoreResult.EarnedScore)
+	}
+	if len(assessment.Questions) != 2 {
+		t.Fatalf("assessment embedded %d questions, want 2", len(assessment.Questions))
+	}
+	for _, q := range assessment.Questions {
+		if !hasCorrectAnswer(&q) {
+			t.Errorf("assessment question %q lost its correct answer", q.Id)
+		}
+	}
+}
+
 // TestOwnershipEnforcement confirms that a user cannot operate on an exam
 // session that belongs to another user: EndExamSession, GetNextQuestion,
 // SeekCursorTo, and SubmitAnswer all reject a non-owner caller, while the

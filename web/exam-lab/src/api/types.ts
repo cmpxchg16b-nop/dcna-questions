@@ -226,7 +226,8 @@ export type ConnectionSolution = {
 // Question mirrors the subset of the Go question.Question struct
 // (pkg/models/question/question.go) that the client renders. Its json tags
 // produce camelCase wire fields. correctAnswer is deliberately not modeled:
-// it is part of the wire payload but must never influence the client.
+// the exam server strips it from every served question, so the only place it
+// ever appears on the wire is inside an assessment (see AssessedQuestion).
 export type Question = {
   id: string;
   type: QuestionType;

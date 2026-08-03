@@ -575,9 +575,10 @@ type OnMemoryExamSession struct {
 	ExamAnswer *pkgmodelquestions.ExamAnswer
 }
 
-// cachedQuestion returns the question at actualIdx, building and caching a copy
-// with shuffled options on first access. The session's rng is used, which is
-// owned by the actor goroutine and therefore single-threaded.
+// cachedQuestion returns the question at actualIdx, building and caching a
+// copy with shuffled options and a stripped correct answer on first access.
+// The session's rng is used, which is owned by the actor goroutine and
+// therefore single-threaded.
 func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int) *pkgmodelquestions.Question {
 	orig := &sess.Questions.Questions[actualIdx]
 	if cached, ok := sess.CachedQuestion[orig.Id]; ok {
@@ -692,11 +693,15 @@ func sessionExcerpt(sess *OnMemoryExamSession) ExamSessionExcerpt {
 }
 
 // buildOnMemoryQuestion returns a shallow copy of orig whose Options are
-// reordered according to the (random or identity) option permutation. The
-// original question bank is never mutated; option Ids are preserved so
-// CorrectAnswer (which references options by value) stays valid.
+// reordered according to the (random or identity) option permutation and whose
+// CorrectAnswer is stripped: a served question must never reveal the answer
+// key. The only legitimate reveal is the grader's assessment, which embeds the
+// origin question (correct answer included) for practice-exam submissions.
+// The original question bank is never mutated; option Ids are preserved so a
+// submitted answer's option ids still match the grader's own unstripped copy.
 func buildOnMemoryQuestion(orig *pkgmodelquestions.Question, opts ExamOptions, rng *rand.Rand) OnMemoryQuestion {
 	qCopy := *orig
+	qCopy.CorrectAnswer = pkgmodelquestions.CorrectAnswer{}
 	m := len(orig.Options)
 	if m == 0 {
 		return OnMemoryQuestion{Question: &qCopy, OptionPermutation: identityPermutation(0)}
