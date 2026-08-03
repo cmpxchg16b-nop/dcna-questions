@@ -70,6 +70,42 @@ export type ExamSessionResponse = {
   exam_session: ExamSessionSummary;
 };
 
+// ExamReport mirrors the Go examreport.ExamReport struct
+// (pkg/models/examreport/examreport.go): the full report recorded by the
+// tracking server when an exam session is finished. Its json tags produce
+// camelCase wire fields. finishedAt is a millisecond-resolution unix
+// timestamp, so `new Date(finishedAt)` works directly. examShortName,
+// examCode, description, and passingScore are omitted from the wire when
+// empty. assessment reuses the question.Assessment shape defined above
+// (certification-exam reports omit its questions, practice-exam reports
+// include them for review).
+export type ExamReport = {
+  id: string;
+  examTaker: {
+    persons?: { name: string; fistname?: string; lastname?: string }[];
+    anonymous?: { sessionId: string }[];
+  };
+  examId: string;
+  examShortName?: string;
+  examCode?: string;
+  title: string;
+  description?: string;
+  passingScore?: number;
+  examCategory: ExamCategory;
+  examSessionId: string;
+  finishedAt: number;
+  assessment: Assessment;
+};
+
+// ExamTrackingListResponse is the JSON body of a successful
+// GET /api/examtrackings: {"exam_reports": [{...}, ...]}.
+export type ExamTrackingListResponse = {
+  exam_reports: ExamReport[];
+};
+
+// ExamReports is the resolved list of reports exposed by useExamTrackings.
+export type ExamReports = ExamReport[];
+
 // ExamOptions bitmask bits, mirroring the Go examserver.ExamOptions constants
 // in pkg/models/examserver/examserver.go. The API accepts them combined as the
 // "options" field of POST /api/examsessions.

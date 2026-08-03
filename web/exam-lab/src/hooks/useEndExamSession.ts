@@ -14,13 +14,16 @@ async function endExamSession(examSessionId: string): Promise<void> {
 
 // useEndExamSession terminates an exam session by id. On success it
 // invalidates the "examsessions" query (the key used by useExamSessions) so
-// the sessions list refetches without the ended session.
+// the sessions list refetches without the ended session, and the
+// "examtrackings" query (the key used by useExamTrackings) because ending a
+// session persists its exam report server-side.
 export function useEndExamSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: endExamSession,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["examsessions"] });
+      queryClient.invalidateQueries({ queryKey: ["examtrackings"] });
     },
   });
 }

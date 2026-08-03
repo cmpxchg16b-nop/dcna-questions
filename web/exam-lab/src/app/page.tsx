@@ -15,10 +15,12 @@ import {
 } from "@mui/material";
 import { useExamDocs } from "@/hooks/useExamDocs";
 import { useExamSessions } from "@/hooks/useExamSessions";
+import { useExamTrackings } from "@/hooks/useExamTrackings";
 import { useEndExamSession } from "@/hooks/useEndExamSession";
 import { useCreateExamSession } from "@/hooks/useCreateExamSession";
 import ExamCard from "@/components/ExamCard";
 import ExamOptionsDialog from "@/components/ExamOptionsDialog";
+import ExamReportCard from "@/components/ExamReportCard";
 import ExamSessionCard from "@/components/ExamSessionCard";
 import {
   CLIENT_SUPPORTED_QUESTION_TYPES,
@@ -32,6 +34,7 @@ export default function Home() {
   const router = useRouter();
   const { data: exams, isPending: isExamsPending } = useExamDocs();
   const { data: sessions, isPending: isSessionsPending } = useExamSessions();
+  const { data: reports, isPending: isReportsPending } = useExamTrackings();
   const endSession = useEndExamSession();
   const createSession = useCreateExamSession();
   const [sessionToEnd, setSessionToEnd] = useState<ExamSessionSummary | null>(
@@ -88,6 +91,30 @@ export default function Home() {
                   session={session}
                   onEnd={setSessionToEnd}
                 />
+              ))}
+            </List>
+          )
+        )}
+      </Box>
+
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h4" component="h2" gutterBottom>
+          Trackings
+        </Typography>
+        <Typography gutterBottom>
+          {!isReportsPending && reports.length === 0
+            ? "No exam reports yet"
+            : "Here are the exams that you have completed"}
+        </Typography>
+        {isReportsPending ? (
+          <Typography>…</Typography>
+        ) : (
+          reports.length > 0 && (
+            <List>
+              {/* The server returns reports oldest-first; show the most
+                  recently finished exam at the top. */}
+              {[...reports].reverse().map((report) => (
+                <ExamReportCard key={report.id} report={report} />
               ))}
             </List>
           )
