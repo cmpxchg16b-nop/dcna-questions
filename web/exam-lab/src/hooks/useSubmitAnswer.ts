@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Answer,
   Assessment,
+  Connect,
   ExamAnswer,
   Question,
   SubmitAnswerResponse,
@@ -15,7 +16,11 @@ import { fetchMyAnswer, myAnswerQueryKey } from "./useMyAnswer";
 // the only mode certification exams use).
 export type SubmitAnswerInput = {
   question: Question;
+  // selectedOptionIds carries the answer of a choice question; connections
+  // carries the placed candidate→drop pairs of a drag-and-drop question. Each
+  // is ignored for the other kind.
   selectedOptionIds: string[];
+  connections: Connect[];
   checkOnly: boolean;
 };
 
@@ -65,6 +70,7 @@ export function useSubmitAnswer(examSessionId: string) {
     mutationFn: async ({
       question,
       selectedOptionIds,
+      connections,
       checkOnly,
     }: SubmitAnswerInput): Promise<SubmitAnswerResult> => {
       const existing = await queryClient.ensureQueryData({
@@ -77,6 +83,8 @@ export function useSubmitAnswer(examSessionId: string) {
         options: question.options?.filter((o) =>
           selectedOptionIds.includes(o.id),
         ),
+        connections:
+          question.type === "drag-and-drop" ? connections : undefined,
       };
       // Replace any earlier answer to this question; keep every other one.
       const others = (existing?.answers ?? []).filter(

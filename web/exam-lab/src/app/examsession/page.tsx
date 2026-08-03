@@ -19,7 +19,7 @@ import { useNavigateQuestion } from "@/hooks/useNavigateQuestion";
 import { useMyAnswer } from "@/hooks/useMyAnswer";
 import { useSubmitAnswer } from "@/hooks/useSubmitAnswer";
 import QuestionCard from "@/components/QuestionCard";
-import { Assessment, ExamOptionSeekable } from "@/api/types";
+import { Assessment, Connect, ExamOptionSeekable } from "@/api/types";
 
 export default function Page() {
   const router = useRouter();
@@ -67,7 +67,8 @@ export default function Page() {
   // useSubmitAnswer, which also keeps the cache current after persisting).
   const myAnswer = useMyAnswer(examSessionId, started);
 
-  // questionState is the per-question UI state: the selected option ids and
+  // questionState is the per-question UI state: the selected option ids
+  // (choice questions), the placed connections (drag-and-drop questions), and
   // the assessment revealed by the practice-exam "Check" button. It is tagged
   // with selectionKey so a new question — and, for practice exams, the first
   // resolution of my_answer — transparently starts it over: whenever the key
@@ -76,29 +77,39 @@ export default function Page() {
   const [questionState, setQuestionState] = useState<{
     key: string | null;
     selection: string[];
+    connections: Connect[];
     checkResult: Assessment | null;
-  }>({ key: null, selection: [], checkResult: null });
+  }>({ key: null, selection: [], connections: [], checkResult: null });
 
-  // For practice exams the previously submitted selection is restored once
+  // For practice exams the previously submitted answer is restored once
   // my_answer resolves, so the footer offers "Check" (not "Skip") for
   // questions the user already answered. Practice-exam inputs stay disabled
   // while my_answer is pending, so the restore never clobbers a selection the
   // user just made. Certification exams always start each question fresh.
-  const restoredSelection =
+  const restoredAnswer =
     isPractice && effectiveQuestion
-      ? (myAnswer.data?.answers
-          ?.find((a) => a.questionId === effectiveQuestion.id)
-          ?.options?.map((o) => o.id) ?? [])
-      : [];
+      ? myAnswer.data?.answers?.find(
+          (a) => a.questionId === effectiveQuestion.id,
+        )
+      : undefined;
+  const restoredSelection = restoredAnswer?.options?.map((o) => o.id) ?? [];
+  const restoredConnections = restoredAnswer?.connections ?? [];
   const selectionKey = effectiveQuestion
     ? `${effectiveQuestion.id}:${
         isPractice ? (myAnswer.isPending ? "loading" : "loaded") : "fresh"
       }`
     : null;
-  const { selection, checkResult } =
+  const { selection, connections, checkResult } =
     questionState.key === selectionKey
       ? questionState
-      : { selection: restoredSelection, checkResult: null };
+      : {
+          selection: restoredSelection,
+          connections: restoredConnections,
+          checkResult: null,
+        };
+  // hasAnswer is the footer's "is there anything to submit" test: chosen
+  // options for the choice types, placed connections for drag-and-drop.
+  const hasAnswer = selection.length > 0 || connections.length > 0;
 
   if (!examSessionId) {
     return (
@@ -145,7 +156,20 @@ export default function Page() {
   const startExam = () => goToQuestion(0);
 
   const setSelection = (sel: string[]) =>
-    setQuestionState({ key: selectionKey, selection: sel, checkResult: null });
+    setQuestionState({
+      key: selectionKey,
+      selection: sel,
+      connections,
+      checkResult: null,
+    });
+
+  const setConnections = (conns: Connect[]) =>
+    setQuestionState({
+      key: selectionKey,
+      selection,
+      connections: conns,
+      checkResult: null,
+    });
 
   // checkAnswer grades the current selection without persisting it
   // (check_only=true); the returned assessment reveals the correct answer and
@@ -156,6 +180,7 @@ export default function Page() {
       {
         question: effectiveQuestion,
         selectedOptionIds: selection,
+        connections,
         checkOnly: true,
       },
       {
@@ -163,6 +188,7 @@ export default function Page() {
           setQuestionState({
             key: selectionKey,
             selection,
+            connections,
             checkResult: result.assessment,
           }),
       },
@@ -177,6 +203,7 @@ export default function Page() {
       {
         question: effectiveQuestion,
         selectedOptionIds: selection,
+        connections,
         checkOnly: false,
       },
       { onSuccess: () => goToQuestion(currentQuestionIndex + 1) },
@@ -191,6 +218,7 @@ export default function Page() {
       {
         question: effectiveQuestion,
         selectedOptionIds: selection,
+        connections,
         checkOnly: false,
       },
       { onSuccess: () => setConfirmEndOpen(true) },
@@ -200,7 +228,7 @@ export default function Page() {
   // endExam ends the exam from the last question, first persisting the
   // selection when there is one (so the last question's answer is not lost).
   const endExam = () => {
-    if (selection.length > 0) {
+    if (hasAnswer) {
       submitThenConfirmEnd();
     } else {
       setConfirmEndOpen(true);
@@ -266,7 +294,7 @@ export default function Page() {
           </Button>
         );
       }
-      if (selection.length > 0) {
+      if (hasAnswer) {
         return (
           <Button
             variant="contained"
@@ -314,7 +342,7 @@ export default function Page() {
     return (
       <Button
         variant="contained"
-        disabled={selection.length === 0}
+        disabled={!hasAnswer}
         loading={submitAnswer.isPending || navigate.isPending}
         onClick={submitThenGoNext}
       >
@@ -352,6 +380,8 @@ export default function Page() {
                 question={effectiveQuestion}
                 selected={selection}
                 onSelectionChange={setSelection}
+                connections={connections}
+                onConnectionsChange={setConnections}
                 disabled={inputsDisabled}
                 assessment={checkResult}
               />

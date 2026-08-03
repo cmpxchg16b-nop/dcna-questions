@@ -120,11 +120,11 @@ export type QuestionType =
   "single-choice" | "multiple-choice" | "drag-and-drop";
 
 // CLIENT_SUPPORTED_QUESTION_TYPES lists the question types the client can
-// render; drag-and-drop exists on the wire but has no renderer yet. Sessions
-// created without user-chosen types are restricted to these.
+// render. Sessions created without user-chosen types are restricted to these.
 export const CLIENT_SUPPORTED_QUESTION_TYPES: QuestionType[] = [
   "single-choice",
   "multiple-choice",
+  "drag-and-drop",
 ];
 
 // CreateExamSessionRequest is the JSON body of POST /api/examsessions:
@@ -154,6 +154,75 @@ export type QuestionOption = {
   content: string;
 };
 
+// DragCandidate mirrors the Go question.Candidate struct {"id", "content"}: a
+// draggable source item of a drag-and-drop question. Ids are unique within the
+// question scope.
+export type DragCandidate = {
+  id: string;
+  content: string;
+};
+
+// DropTarget mirrors the Go question.Drop struct {"id", "content"}: one drop
+// slot of a drag-and-drop question. Its content is the slot's label and may be
+// empty — e.g. the anonymous slots of a multi-area drop, whose meaning comes
+// from the enclosing area's label.
+export type DropTarget = {
+  id: string;
+  content: string;
+};
+
+// DropArea mirrors the Go question.DropArea struct {"id", "label", "drops"}:
+// one labeled sub-section of a multi-area drop zone. Drop ids share the
+// question-wide drop id namespace even across areas, so a connection's dst is
+// unique no matter which area the drop belongs to.
+export type DropArea = {
+  id: string;
+  label?: string;
+  drops: DropTarget[];
+};
+
+// MultiAreaDrop mirrors the Go question.MultiAreaDrop struct {"dropAreas"}:
+// the drop zone of a drag-and-drop question when it is split into labeled
+// sub-sections, in contrast to the flat drops list. A question carries exactly
+// one of the two.
+export type MultiAreaDrop = {
+  dropAreas: DropArea[];
+};
+
+// Connect mirrors the Go question.Connect struct {"src", "dst"}: one
+// connection in a drag-and-drop answer, from the candidate src onto the drop
+// dst.
+export type Connect = {
+  src: string;
+  dst: string;
+};
+
+// ConnectEndpoint mirrors the Go question.ConnectSource and
+// question.ConnectDestination structs, both {"id"}.
+export type ConnectEndpoint = {
+  id: string;
+};
+
+// ConnectCombination mirrors the Go question.ConnectCombination struct
+// {"connectSources", "connectDestinations"}: the Cartesian product of its
+// sources and destinations yields the set of connections it accepts.
+export type ConnectCombination = {
+  connectSources?: ConnectEndpoint[];
+  connectDestinations?: ConnectEndpoint[];
+};
+
+// ConnectionSolution mirrors the Go question.ConnectionSolution struct: one
+// acceptable correct answer for a drag-and-drop question. A submission
+// satisfies it by making at least requiredUniqueConnections unique
+// connections, each drawn from its explicit connects or the products of its
+// connect combinations. A question with several solutions is correct when any
+// one of them is satisfied.
+export type ConnectionSolution = {
+  requiredUniqueConnections: number;
+  connects?: Connect[];
+  connectCombinations?: ConnectCombination[];
+};
+
 // Question mirrors the subset of the Go question.Question struct
 // (pkg/models/question/question.go) that the client renders. Its json tags
 // produce camelCase wire fields. correctAnswer is deliberately not modeled:
@@ -165,6 +234,12 @@ export type Question = {
   description: { text: string };
   exhibits?: { image: { src: string } }[];
   options?: QuestionOption[];
+  // Drag-and-drop payload: candidates are the draggable source items, and the
+  // drop zone is either the flat drops list or a multiAreaDrop split into
+  // labeled sub-sections (exactly one of the two is present).
+  candidates?: DragCandidate[];
+  multiAreaDrop?: MultiAreaDrop;
+  drops?: DropTarget[];
 };
 
 // NextQuestionResponse is the JSON body of a successful
@@ -214,7 +289,10 @@ export type QuestionScore = {
 // revealing it is the point. Certification-exam assessments omit questions
 // entirely.
 export type AssessedQuestion = Question & {
-  correctAnswer?: { options?: QuestionOption[] };
+  correctAnswer?: {
+    options?: QuestionOption[];
+    connectionSolutions?: ConnectionSolution[];
+  };
 };
 
 // Assessment mirrors the Go question.Assessment struct
@@ -235,12 +313,13 @@ export type Assessment = {
 
 // Answer mirrors the Go question.Answer struct (pkg/models/question/question.go):
 // a candidate's response to a single question. For single-choice and
-// multiple-choice questions it carries the selected options; drag-and-drop
-// connections are not modeled because the client cannot render that type yet.
+// multiple-choice questions it carries the selected options; for drag-and-drop
+// questions it carries the placed connections.
 export type Answer = {
   questionId: string;
   questionType: QuestionType;
   options?: QuestionOption[];
+  connections?: Connect[];
 };
 
 // ExamAnswer mirrors the Go question.ExamAnswer struct: a complete submission

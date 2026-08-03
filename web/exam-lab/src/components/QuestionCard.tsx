@@ -12,7 +12,9 @@ import {
   RadioGroup,
   Typography,
 } from "@mui/material";
-import { Assessment, Question } from "@/api/types";
+import { Assessment, Connect, Question } from "@/api/types";
+import { isConnectionAnswerCorrect } from "@/api/dragAndDrop";
+import DragAndDropBoard from "./DragAndDropBoard";
 
 type QuestionCardProps = {
   question: Question;
@@ -22,6 +24,10 @@ type QuestionCardProps = {
   // one-element (or empty) array so both choice types share the same shape.
   selected: string[];
   onSelectionChange: (selected: string[]) => void;
+  // connections holds the placed candidate→drop connections for a
+  // drag-and-drop question, playing the same controlled role as selected.
+  connections: Connect[];
+  onConnectionsChange: (connections: Connect[]) => void;
   // disabled freezes the inputs while the saved answer is loading, while a
   // submission is in flight, and once the assessment is on screen.
   disabled?: boolean;
@@ -38,6 +44,8 @@ export default function QuestionCard({
   question,
   selected,
   onSelectionChange,
+  connections,
+  onConnectionsChange,
   disabled = false,
   assessment = null,
 }: QuestionCardProps) {
@@ -57,14 +65,23 @@ export default function QuestionCard({
   const correctIds = new Set(
     gradedQuestion?.correctAnswer?.options?.map((o) => o.id) ?? [],
   );
-  // Correctness mirrors the grader's option-set semantics: single-choice is
-  // correct when exactly one option is chosen and it is among the correct
-  // ones; multiple-choice requires an exact set match.
+  // Correctness mirrors the grader's semantics: single-choice is correct when
+  // exactly one option is chosen and it is among the correct ones;
+  // multiple-choice requires an exact option-set match; drag-and-drop requires
+  // satisfying one of the question's connection solutions. It stays undefined
+  // unless the assessment attached this question's origin document with the
+  // relevant correct-answer data (practice exams only).
+  const connectionSolutions =
+    gradedQuestion?.correctAnswer?.connectionSolutions ?? [];
   const isCorrect = gradedQuestion
     ? question.type === "single-choice"
       ? selected.length === 1 && correctIds.has(selected[0])
-      : correctIds.size === selected.length &&
-        selected.every((id) => correctIds.has(id))
+      : question.type === "multiple-choice"
+        ? correctIds.size === selected.length &&
+          selected.every((id) => correctIds.has(id))
+        : question.type === "drag-and-drop" && connectionSolutions.length > 0
+          ? isConnectionAnswerCorrect(connections, connectionSolutions)
+          : undefined
     : undefined;
 
   // optionMarker renders the per-option verdict once the assessment is on
@@ -158,8 +175,18 @@ export default function QuestionCard({
             ))}
           </FormGroup>
         )}
+        {question.type === "drag-and-drop" && (
+          <DragAndDropBoard
+            question={question}
+            connections={connections}
+            onConnectionsChange={onConnectionsChange}
+            disabled={disabled}
+            assessment={assessment}
+          />
+        )}
         {question.type !== "single-choice" &&
-          question.type !== "multiple-choice" && (
+          question.type !== "multiple-choice" &&
+          question.type !== "drag-and-drop" && (
             <Typography color="textSecondary">
               Questions of type &quot;{question.type}&quot; are not supported
               yet.
