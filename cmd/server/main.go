@@ -4,6 +4,7 @@ import (
 	dcnaquestions "dcna-questions"
 	pkgapiexamdocs "dcna-questions/pkg/api/examdocs"
 	pkgapiexamsessions "dcna-questions/pkg/api/examsessions"
+	pkgapiexamtrackings "dcna-questions/pkg/api/examtrackings"
 	pkgmodelsexamreport "dcna-questions/pkg/models/examreport"
 	pkgmodelsexamserver "dcna-questions/pkg/models/examserver"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
@@ -45,17 +46,24 @@ func (cli *CLI) Run() error {
 	repo := pkgmodelsquestion.NewExamRepository(sources)
 	examHandler := pkgapiexamdocs.NewExamHandler(repo)
 
-	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(pkgmodelsexamreport.NewOnMemoryExamTrackingServer())
+	// A single ExamTrackingServer is shared by the exam server (which persists
+	// finished-session reports) and the /api/examtrackings handler (which reads
+	// them back), so a report written on session end is immediately visible to
+	// the caller.
+	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer()
+	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer)
 	go examServer.Run(context.Background())
 	defer examServer.Shutdown()
 
 	sm := pkgsession.NewOnMemorySessionManager()
 	examSessionHandler := pkgapiexamsessions.NewExamSessionHandler(sm, examServer, repo)
+	examTrackingsHandler := pkgapiexamtrackings.NewExamTrackingsHandler(sm, trackingServer)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/examdocs", examHandler)
 	mux.Handle("/api/examsessions", examSessionHandler)
 	mux.Handle("/api/examsessions/", examSessionHandler)
+	mux.Handle("/api/examtrackings", examTrackingsHandler)
 
 	if cli.AssetsDir != "" {
 		mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(cli.AssetsDir))))
