@@ -16,10 +16,10 @@ type SimpleGrader interface {
 // SimpleOnMemoryGrader is a SimpleGrader that indexes a question collection in
 // memory by question id. It is not safe for concurrent use.
 //
-// Only single-choice and multiple-choice questions are graded; questions of any
-// other type are silently skipped. Answers are correlated to questions by
-// questionId, and option sets are compared by option id, so neither question
-// nor option ordering affects the result.
+// Single-choice, multiple-choice, and drag-and-drop questions are graded;
+// questions of any other (unrecognized) type are silently skipped. Answers are
+// correlated to questions by questionId, and option sets are compared by option
+// id, so neither question nor option ordering affects the result.
 //
 // The exam category controls whether the original question documents are
 // embedded in the produced Assessment: for practice-exam the origin question
@@ -54,10 +54,10 @@ func NewSimpleOnMemoryGrader(qc *pkgmodelquestions.QuestionCollection, passingSc
 }
 
 // Grade evaluates each submitted answer against its official question and
-// builds an Assessment. Questions whose type is neither single-choice nor
-// multiple-choice, and answers with no matching question, are skipped without
-// error. Unanswered questions contribute no QuestionScore; their potential
-// score still counts toward TotalScore.
+// builds an Assessment. Questions whose type is none of single-choice,
+// multiple-choice, or drag-and-drop, and answers with no matching question,
+// are skipped without error. Unanswered questions contribute no QuestionScore;
+// their potential score still counts toward TotalScore.
 //
 // For a practice-exam category the original question document (carrying its
 // correct answer) is attached for each answered, gradeable question; questions
@@ -77,7 +77,8 @@ func (g *SimpleOnMemoryGrader) Grade(examAnswer *pkgmodelquestions.ExamAnswer) (
 			}
 			switch q.Type {
 			case pkgmodelquestions.QuestionTypeSingleChoice,
-				pkgmodelquestions.QuestionTypeMultipleChoice:
+				pkgmodelquestions.QuestionTypeMultipleChoice,
+				pkgmodelquestions.QuestionTypeDragAndDrop:
 			default:
 				continue // unsupported type: skip silently
 			}
@@ -114,12 +115,14 @@ func (g *SimpleOnMemoryGrader) Grade(examAnswer *pkgmodelquestions.ExamAnswer) (
 }
 
 // isAnswerCorrect reports whether ans matches the official correct answer
-// for q. Both question types compare option ids against q.CorrectAnswer.Options,
-// so option ordering is irrelevant; they differ in match semantics:
+// for q. The match semantics differ per question type:
 //   - single-choice: correct so long as exactly one option is submitted and
-//     that option is one of the correct options.
+//     that option is one of the correct options; option ordering is
+//     irrelevant.
 //   - multiple-choice: correct only when the submitted option set exactly
-//     matches the correct option set.
+//     matches the correct option set; option ordering is irrelevant.
+//   - drag-and-drop: correct when the submitted connections satisfy at least
+//     one of the question's connection solutions.
 func isAnswerCorrect(q pkgmodelquestions.Question, ans pkgmodelquestions.Answer) bool {
 	correct, submitted := q.CorrectAnswer.Options, ans.Options
 	switch q.Type {
@@ -147,6 +150,63 @@ func isAnswerCorrect(q pkgmodelquestions.Question, ans pkgmodelquestions.Answer)
 			}
 		}
 		return true
+	case pkgmodelquestions.QuestionTypeDragAndDrop:
+		return isConnectionAnswerCorrect(q.CorrectAnswer.ConnectionSolutions, ans.Connections)
+	}
+	return false
+}
+
+// connectionKey identifies a connection by its (src, dst) pair for set
+// membership tests.
+type connectionKey struct {
+	src string
+	dst string
+}
+
+// acceptedConnections expands a ConnectionSolution into the set of connections
+// it accepts: its explicit connects plus the Cartesian products of its connect
+// combinations.
+func acceptedConnections(sol pkgmodelquestions.ConnectionSolution) map[connectionKey]struct{} {
+	accepted := make(map[connectionKey]struct{})
+	for _, c := range sol.Connects {
+		accepted[connectionKey{c.Src, c.Dst}] = struct{}{}
+	}
+	for _, combo := range sol.ConnectCombinations {
+		for _, s := range combo.ConnectSources {
+			for _, d := range combo.ConnectDestinations {
+				accepted[connectionKey{s.Id, d.Id}] = struct{}{}
+			}
+		}
+	}
+	return accepted
+}
+
+// isConnectionSolutionSatisfied reports whether the submitted connections
+// satisfy sol: the number of unique submitted connections sol accepts reaches
+// its RequiredUniqueConnections. Duplicate submissions of the same connection
+// count once.
+func isConnectionSolutionSatisfied(sol pkgmodelquestions.ConnectionSolution, submitted []pkgmodelquestions.Connect) bool {
+	accepted := acceptedConnections(sol)
+	unique := make(map[connectionKey]struct{}, len(submitted))
+	for _, c := range submitted {
+		unique[connectionKey{c.Src, c.Dst}] = struct{}{}
+	}
+	count := 0
+	for k := range unique {
+		if _, ok := accepted[k]; ok {
+			count++
+		}
+	}
+	return count >= sol.RequiredUniqueConnections
+}
+
+// isConnectionAnswerCorrect reports whether the submitted connections satisfy
+// at least one of the question's connection solutions.
+func isConnectionAnswerCorrect(solutions []pkgmodelquestions.ConnectionSolution, submitted []pkgmodelquestions.Connect) bool {
+	for _, sol := range solutions {
+		if isConnectionSolutionSatisfied(sol, submitted) {
+			return true
+		}
 	}
 	return false
 }

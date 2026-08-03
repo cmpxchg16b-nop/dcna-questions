@@ -156,24 +156,153 @@ func TestSimpleOnMemoryGrader_MultipleChoice(t *testing.T) {
 	}
 }
 
+// --- SimpleOnMemoryGrader: drag-and-drop ------------------------------------
+
+// dndQuestion builds a drag-and-drop question worth score points whose correct
+// answer is any one of the given connection solutions.
+func dndQuestion(id string, score float32, solutions ...pkgmodelquestions.ConnectionSolution) pkgmodelquestions.Question {
+	return pkgmodelquestions.Question{
+		Id:    id,
+		Type:  pkgmodelquestions.QuestionTypeDragAndDrop,
+		Score: score,
+		CorrectAnswer: pkgmodelquestions.CorrectAnswer{
+			ConnectionSolutions: solutions,
+		},
+	}
+}
+
+// connects builds a Connect slice from (src, dst) pairs.
+func connects(pairs ...[2]string) []pkgmodelquestions.Connect {
+	conns := make([]pkgmodelquestions.Connect, len(pairs))
+	for i, p := range pairs {
+		conns[i] = pkgmodelquestions.Connect{Src: p[0], Dst: p[1]}
+	}
+	return conns
+}
+
+// TestSimpleOnMemoryGrader_DragAndDrop exercises the connection-solution
+// semantics: a submission is correct when at least one solution is satisfied,
+// i.e. when it makes at least requiredUniqueConnections unique connections
+// that the solution accepts, drawn from its explicit connects or the Cartesian
+// products of its connect combinations.
+func TestSimpleOnMemoryGrader_DragAndDrop(t *testing.T) {
+	// Like exam1.xml question 3: three explicit connects, all three required.
+	flatSolution := pkgmodelquestions.ConnectionSolution{
+		RequiredUniqueConnections: 3,
+		Connects: []pkgmodelquestions.Connect{
+			{Src: "2", Dst: "1"},
+			{Src: "1", Dst: "2"},
+			{Src: "3", Dst: "3"},
+		},
+	}
+	// Like exam1.xml question 5: two connect combinations with five unique
+	// connections required; any product of a combination is accepted.
+	comboSolution := pkgmodelquestions.ConnectionSolution{
+		RequiredUniqueConnections: 5,
+		ConnectCombinations: []pkgmodelquestions.ConnectCombination{
+			{
+				ConnectSources:      []pkgmodelquestions.ConnectSource{{Id: "1"}, {Id: "3"}},
+				ConnectDestinations: []pkgmodelquestions.ConnectDestination{{Id: "4"}, {Id: "5"}},
+			},
+			{
+				ConnectSources:      []pkgmodelquestions.ConnectSource{{Id: "2"}, {Id: "4"}, {Id: "5"}},
+				ConnectDestinations: []pkgmodelquestions.ConnectDestination{{Id: "1"}, {Id: "2"}, {Id: "3"}},
+			},
+		},
+	}
+
+	for _, tc := range []struct {
+		name      string
+		solutions []pkgmodelquestions.ConnectionSolution
+		conns     []pkgmodelquestions.Connect
+		want      float32
+	}{
+		{"exact explicit connects", []pkgmodelquestions.ConnectionSolution{flatSolution},
+			connects([2]string{"2", "1"}, [2]string{"1", "2"}, [2]string{"3", "3"}), 3},
+		{"order irrelevant", []pkgmodelquestions.ConnectionSolution{flatSolution},
+			connects([2]string{"3", "3"}, [2]string{"2", "1"}, [2]string{"1", "2"}), 3},
+		{"duplicates count once", []pkgmodelquestions.ConnectionSolution{flatSolution},
+			connects([2]string{"2", "1"}, [2]string{"1", "2"}, [2]string{"3", "3"}, [2]string{"3", "3"}), 3},
+		{"fewer unique than required", []pkgmodelquestions.ConnectionSolution{flatSolution},
+			connects([2]string{"2", "1"}, [2]string{"1", "2"}), 0},
+		{"unaccepted connection", []pkgmodelquestions.ConnectionSolution{flatSolution},
+			connects([2]string{"2", "1"}, [2]string{"1", "2"}, [2]string{"4", "3"}), 0},
+		{"combination products", []pkgmodelquestions.ConnectionSolution{comboSolution},
+			connects([2]string{"1", "4"}, [2]string{"3", "5"}, [2]string{"2", "1"}, [2]string{"4", "2"}, [2]string{"5", "3"}), 3},
+		{"combination products incomplete", []pkgmodelquestions.ConnectionSolution{comboSolution},
+			connects([2]string{"1", "4"}, [2]string{"3", "5"}, [2]string{"2", "1"}, [2]string{"4", "2"}), 0},
+		{"any satisfied solution wins", []pkgmodelquestions.ConnectionSolution{flatSolution, comboSolution},
+			connects([2]string{"1", "4"}, [2]string{"3", "5"}, [2]string{"2", "1"}, [2]string{"4", "2"}, [2]string{"5", "3"}), 3},
+		{"no solutions is never correct", nil,
+			connects([2]string{"2", "1"}), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			qc := &pkgmodelquestions.QuestionCollection{
+				Questions: []pkgmodelquestions.Question{dndQuestion("dnd", 3, tc.solutions...)},
+			}
+			g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryCertification)
+			got, err := g.Grade(examAnswer(pkgmodelquestions.Answer{
+				QuestionId:  "dnd",
+				Connections: tc.conns,
+			}))
+			if err != nil {
+				t.Fatalf("Grade: %v", err)
+			}
+			if got.ScoreResult.EarnedScore != tc.want {
+				t.Errorf("earned = %g, want %g", got.ScoreResult.EarnedScore, tc.want)
+			}
+		})
+	}
+}
+
+// TestSimpleOnMemoryGrader_DragAndDrop_PracticeExamEmbedsQuestion verifies that
+// an answered drag-and-drop question is embedded in a practice-exam assessment
+// carrying its connection solutions, so the candidate can review the correct
+// answer.
+func TestSimpleOnMemoryGrader_DragAndDrop_PracticeExamEmbedsQuestion(t *testing.T) {
+	sol := pkgmodelquestions.ConnectionSolution{
+		RequiredUniqueConnections: 1,
+		Connects:                  []pkgmodelquestions.Connect{{Src: "1", Dst: "2"}},
+	}
+	qc := &pkgmodelquestions.QuestionCollection{
+		Questions: []pkgmodelquestions.Question{dndQuestion("dnd", 2, sol)},
+	}
+	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryPractice)
+
+	got, err := g.Grade(examAnswer(pkgmodelquestions.Answer{
+		QuestionId:  "dnd",
+		Connections: connects([2]string{"1", "2"}),
+	}))
+	if err != nil {
+		t.Fatalf("Grade: %v", err)
+	}
+	if len(got.Questions) != 1 {
+		t.Fatalf("got %d Questions, want 1", len(got.Questions))
+	}
+	sols := got.Questions[0].CorrectAnswer.ConnectionSolutions
+	if len(sols) != 1 || sols[0].RequiredUniqueConnections != 1 {
+		t.Errorf("embedded connectionSolutions = %v, want the question's one solution", sols)
+	}
+}
+
 // --- SimpleOnMemoryGrader: skipping -----------------------------------------
 
-// TestSimpleOnMemoryGrader_UnsupportedTypeSkipped verifies that a drag-and-drop
-// question (the unsupported type here) is silently skipped: it contributes to
-// neither an error nor a QuestionScore, though its score still counts toward
-// TotalScore.
+// TestSimpleOnMemoryGrader_UnsupportedTypeSkipped verifies that a question of
+// an unrecognized type (all three defined types are graded) is silently
+// skipped: it contributes to neither an error nor a QuestionScore, though its
+// score still counts toward TotalScore.
 func TestSimpleOnMemoryGrader_UnsupportedTypeSkipped(t *testing.T) {
-	dnd := pkgmodelquestions.Question{
-		Id:    "dnd",
-		Type:  pkgmodelquestions.QuestionTypeDragAndDrop,
+	unrecognized := pkgmodelquestions.Question{
+		Id:    "ordering",
+		Type:  pkgmodelquestions.QuestionType("ordering"),
 		Score: 5,
 	}
 	sc := singleChoice("sc", 2, "1")
-	qc := &pkgmodelquestions.QuestionCollection{Questions: []pkgmodelquestions.Question{dnd, sc}}
+	qc := &pkgmodelquestions.QuestionCollection{Questions: []pkgmodelquestions.Question{unrecognized, sc}}
 	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryCertification)
 
 	got, err := g.Grade(examAnswer(
-		answer("dnd"),                 // unsupported type
+		answer("ordering"),            // unrecognized type
 		answer("sc", "1"),             // correct single-choice
 		answer("does-not-exist", "1"), // unknown question
 	))
@@ -263,20 +392,20 @@ func TestSimpleOnMemoryGrader_PracticeExamIncludesAnsweredQuestions(t *testing.T
 	sc := singleChoice("sc", 2, "3")
 	mc := multiChoice("mc", 4, "1", "2")
 	qNotAnswered := singleChoice("skipped", 1, "7")
-	dnd := pkgmodelquestions.Question{
-		Id:    "dnd",
-		Type:  pkgmodelquestions.QuestionTypeDragAndDrop,
+	unrecognized := pkgmodelquestions.Question{
+		Id:    "ordering",
+		Type:  pkgmodelquestions.QuestionType("ordering"),
 		Score: 5,
 	}
 	qc := &pkgmodelquestions.QuestionCollection{
-		Questions: []pkgmodelquestions.Question{sc, mc, qNotAnswered, dnd},
+		Questions: []pkgmodelquestions.Question{sc, mc, qNotAnswered, unrecognized},
 	}
 	g := NewSimpleOnMemoryGrader(qc, nil, pkgmodelquestions.ExamCategoryPractice)
 
 	got, err := g.Grade(examAnswer(
 		answer("sc", "3"),             // correct
 		answer("mc", "9"),             // wrong
-		answer("dnd"),                 // unsupported type, skipped
+		answer("ordering"),            // unrecognized type, skipped
 		answer("does-not-exist", "1"), // unknown question, skipped
 	))
 	if err != nil {
