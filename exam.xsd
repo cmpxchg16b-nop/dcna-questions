@@ -195,6 +195,41 @@
       </xs:sequence>
     </xs:complexType>
   </xs:element>
+  <xs:element name="imgDragAndDrop">
+    <xs:annotation>
+      <xs:documentation>Drag-and-drop question based on image clips, drag and drop all the image snippets to the correct positions to pass.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="imgCandidate" minOccurs="1" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:attribute name="nodeId" type="xs:string" use="required" />
+            <xs:attribute name="width" type="xs:integer" use="required" />
+            <xs:attribute name="height" type="xs:integer" use="required" />
+            <xs:attribute name="imgDataSrc" type="xs:string" use="required" />
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="imgDropsArea" minOccurs="1" maxOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="imgDrop" minOccurs="1" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:attribute name="nodeId" type="xs:string" use="required" />
+                  <xs:attribute name="positionX" type="xs:integer" use="required" />
+                  <xs:attribute name="positionY" type="xs:integer" use="required" />
+                  <xs:attribute name="width" type="xs:integer" use="required" />
+                  <xs:attribute name="height" type="xs:integer" use="required" />
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+            <xs:attribute name="imgBackgroundUrl" type="xs:string" use="required" />
+            <xs:attribute name="width" type="xs:integer" use="required" />
+            <xs:attribute name="height" type="xs:integer" use="required" />
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
   <xs:element name="question">
     <xs:annotation>
       <xs:documentation xml:lang="en">A question enclosure models a Cisco-flavor exam question: like a single-choice, a multiple-choice or a drag-and-drop question. The &#x60;id&#x60; attribute of the question has to be unique within the surrounding question collection scope.</xs:documentation>
@@ -205,12 +240,13 @@
         <xs:element ref="exhibits" minOccurs="0" maxOccurs="1" />
         <xs:element ref="options" minOccurs="0" maxOccurs="1" />
         <xs:element ref="candidates" minOccurs="0" maxOccurs="1" />
+        <xs:element ref="imgDragAndDrop" minOccurs="0" maxOccurs="1" />
         <xs:element ref="multiareadrop" minOccurs="0" maxOccurs="1" />
         <xs:element ref="drops" minOccurs="0" maxOccurs="1" />
         <xs:element ref="correctanswer" minOccurs="1" maxOccurs="1" />
       </xs:sequence>
       <xs:attribute name="id" type="xs:string" use="required" />
-      <xs:attribute name="type" type="QuestionType" />
+      <xs:attribute name="type" type="QuestionType" use="required" />
       <xs:attribute name="score" type="xs:float" use="required"></xs:attribute>
     </xs:complexType>
   </xs:element>

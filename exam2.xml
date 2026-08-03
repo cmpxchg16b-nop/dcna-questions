@@ -195,6 +195,33 @@
             </options>
           </correctanswer>
         </question>
+        <question id="7" type="drag-and-drop" score="1">
+          <description></description>
+          <imgDragAndDrop>
+            <imgCandidate nodeId="node-a" width="79" height="57" imgDataSrc="assets/example-drag-and-drop-p2-1.png" />
+            <imgCandidate nodeId="node-b" width="79" height="57" imgDataSrc="assets/example-drag-and-drop-p2-1.png" />
+            <imgCandidate nodeId="node-c" width="79" height="57" imgDataSrc="assets/example-drag-and-drop-p2-1.png" />
+            <imgDropsArea imgBackgroundUrl="assets/example-drag-and-drop-p1.png" width="480" height="540">
+              <imgDrop nodeId="drop-a" positionX="265" positionY="100" width="79" height="57" />
+              <imgDrop nodeId="drop-b" positionX="265" positionY="200" width="79" height="57" />
+              <imgDrop nodeId="drop-c" positionX="265" positionY="300" width="79" height="57" />
+            </imgDropsArea>
+          </imgDragAndDrop>
+          <correctanswer>
+            <connectionsolutions>
+              <connectionsolution requiredUniqueConnections="3">
+                <!-- node-a should be dragged to drop-a then drop -->
+                <connect dst="drop-a" src="node-a" />
+
+                <!-- node-b should be dragged to drop-b then drop -->
+                <connect dst="drop-b" src="node-b" />
+
+                <!-- node-c should be dragged to drop-c then drop -->
+                <connect dst="drop-c" src="node-c" />
+              </connectionsolution>
+            </connectionsolutions>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
