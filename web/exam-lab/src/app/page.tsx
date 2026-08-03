@@ -77,7 +77,7 @@ export default function Home() {
         </Typography>
         <Typography gutterBottom>
           {!isSessionsPending && sessions.length === 0
-            ? "No ongoing exam sessions."
+            ? "No ongoing exam sessions"
             : "Here are the ongoing exam sessions"}
         </Typography>
         {isSessionsPending ? (
