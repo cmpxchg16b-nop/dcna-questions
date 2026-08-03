@@ -69,7 +69,11 @@ export default function QuestionCard({
 
   // optionMarker renders the per-option verdict once the assessment is on
   // screen: "Correct answer" in green, the candidate's own answer in red when
-  // it is wrong — or both, in green, when they coincide.
+  // it is wrong — or both, in green, when they coincide. Typography's color
+  // prop only recognizes MUI v9's simple palette keys ("success", "error",
+  // "textSecondary", ...) — dotted paths like "success.main" emit no style,
+  // and the marker sits inside a disabled FormControlLabel, so without a real
+  // color it inherits the dimmed text.disabled gray.
   const optionMarker = (optionId: string) => {
     if (!assessment) return null;
     const isCorrectOption = correctIds.has(optionId);
@@ -79,8 +83,8 @@ export default function QuestionCard({
       <Typography
         component="span"
         variant="caption"
-        color={isCorrectOption ? "success.main" : "error.main"}
-        sx={{ ml: 1 }}
+        color={isCorrectOption ? "success" : "error"}
+        sx={{ ml: 1, fontWeight: 600 }}
       >
         {isCorrectOption
           ? isMine
@@ -156,7 +160,7 @@ export default function QuestionCard({
         )}
         {question.type !== "single-choice" &&
           question.type !== "multiple-choice" && (
-            <Typography color="text.secondary">
+            <Typography color="textSecondary">
               Questions of type &quot;{question.type}&quot; are not supported
               yet.
             </Typography>

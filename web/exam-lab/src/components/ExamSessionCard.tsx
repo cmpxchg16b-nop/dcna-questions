@@ -46,7 +46,7 @@ export default function ExamSessionCard({
                 {excerpt.Title}
               </Typography>
               <ExamMetadataChips exam={excerpt} />
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="textSecondary">
                 Started{" "}
                 <Tooltip title={new Date(session.started_at).toLocaleString()}>
                   <Box component="span">

@@ -37,7 +37,7 @@ export default function ExamCard({ exam, onTake, loading }: ExamCardProps) {
               <ExamMetadataChips exam={exam} />
               <Typography
                 variant="body2"
-                color="text.secondary"
+                color="textSecondary"
                 sx={{
                   display: "-webkit-box",
                   WebkitLineClamp: 2,

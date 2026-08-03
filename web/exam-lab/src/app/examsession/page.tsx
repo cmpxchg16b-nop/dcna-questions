@@ -329,7 +329,7 @@ export default function Page() {
         <Typography variant="h4" component="h2" gutterBottom>
           {excerpt.Title}
         </Typography>
-        <Typography gutterBottom variant="body2" color="text.secondary">
+        <Typography gutterBottom variant="body2" color="textSecondary">
           {excerpt.ShortName} · {excerpt.Code} · {numQuestions}{" "}
           {numQuestions === 1 ? "question" : "questions"}
         </Typography>

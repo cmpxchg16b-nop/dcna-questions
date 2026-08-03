@@ -48,7 +48,7 @@ export default function ExamReportCard({ report }: ExamReportCardProps) {
                   size="small"
                 />
               </Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="textSecondary">
                 Finished{" "}
                 <Tooltip title={new Date(report.finishedAt).toLocaleString()}>
                   <Box component="span">
@@ -71,7 +71,7 @@ export default function ExamReportCard({ report }: ExamReportCardProps) {
                   {score.earnedScore}/{score.totalScore}
                 </Typography>
                 {report.passingScore != null && (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" color="textSecondary">
                     pass at {report.passingScore}
                   </Typography>
                 )}
