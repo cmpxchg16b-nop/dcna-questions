@@ -74,6 +74,11 @@ func (h *ExamTrackingsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Normalize nil to an empty slice so the body is "[]", not "null" — matching
+	// the /api/examsessions list handler's wire shape.
+	if reports == nil {
+		reports = []examreport.ExamReport{}
+	}
 	writeJSON(w, listResponse{ExamReports: reports})
 }
 
