@@ -58,6 +58,7 @@ export default function ImgDragAndDropBoard({
   const imgDrops = dropsArea?.imgDrops ?? [];
 
   const candidateById = new Map(candidates.map((c) => [c.nodeId, c]));
+  const dropById = new Map(imgDrops.map((d) => [d.nodeId, d]));
   const placedByDrop = new Map(connections.map((c) => [c.dst, c.src]));
   const placedCandidates = new Set(connections.map((c) => c.src));
 
@@ -121,6 +122,11 @@ export default function ImgDragAndDropBoard({
   };
 
   if (!imgDragAndDrop || !dropsArea) return null;
+
+  // The correct-answer reveal speaks in labels, not nodeIds; the raw id is
+  // the fallback for a solution endpoint absent from the question payload.
+  const candidateLabel = (id: string) => candidateById.get(id)?.nodeLabel ?? id;
+  const dropLabel = (id: string) => dropById.get(id)?.nodeLabel ?? id;
 
   const renderCandidate = (candidate: ImgCandidate) => {
     const id = candidate.nodeId;
@@ -347,15 +353,20 @@ export default function ImgDragAndDropBoard({
                       />
                     )}
                     <Typography variant="body2">
-                      {c.src} → {c.dst}
+                      {candidateLabel(c.src)} → {dropLabel(c.dst)}
                     </Typography>
                   </Stack>
                 );
               })}
               {solution.connectCombinations?.map((combo, j) => (
                 <Typography key={`cc-${j}`} variant="body2">
-                  {combo.connectSources?.map((s) => s.id).join(", ")} →{" "}
-                  {combo.connectDestinations?.map((d) => d.id).join(", ")}{" "}
+                  {combo.connectSources
+                    ?.map((s) => candidateLabel(s.id))
+                    .join(", ")}{" "}
+                  →{" "}
+                  {combo.connectDestinations
+                    ?.map((d) => dropLabel(d.id))
+                    .join(", ")}{" "}
                   <Typography
                     component="span"
                     variant="caption"

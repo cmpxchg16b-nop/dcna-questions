@@ -191,18 +191,22 @@ export type MultiAreaDrop = {
 
 // ImgCandidate mirrors the Go question.ImgCandidate struct: a draggable image
 // snippet of an image-based drag-and-drop question, identified by nodeId.
+// nodeLabel is the descriptive text used when rendering the correct answer.
 // width/height give the snippet's intrinsic pixel size.
 export type ImgCandidate = {
   nodeId: string;
+  nodeLabel: string;
   width: number;
   height: number;
   imgDataSrc: string;
 };
 
 // ImgDrop mirrors the Go question.ImgDrop struct: a single drop target laid out
-// at an absolute position over the drop area's background image.
+// at an absolute position over the drop area's background image. nodeLabel is
+// the descriptive text used when rendering the correct answer.
 export type ImgDrop = {
   nodeId: string;
+  nodeLabel: string;
   positionX: number;
   positionY: number;
   width: number;

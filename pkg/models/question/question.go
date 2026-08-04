@@ -68,18 +68,23 @@ type MultiAreaDrop struct {
 }
 
 // ImgCandidate is an <imgCandidate>: a draggable image snippet identified by
-// its nodeId. Width and Height give the intrinsic pixel size of the snippet.
+// its nodeId. NodeLabel is the descriptive text used when rendering the
+// correct answer in the frontend. Width and Height give the intrinsic pixel
+// size of the snippet.
 type ImgCandidate struct {
 	NodeId     string `xml:"nodeId,attr" json:"nodeId"`
+	NodeLabel  string `xml:"nodeLabel,attr" json:"nodeLabel"`
 	Width      int    `xml:"width,attr" json:"width"`
 	Height     int    `xml:"height,attr" json:"height"`
 	ImgDataSrc string `xml:"imgDataSrc,attr" json:"imgDataSrc"`
 }
 
 // ImgDrop is an <imgDrop>: a single drop target laid out at an absolute
-// position over the drop area background image.
+// position over the drop area background image. NodeLabel is the descriptive
+// text used when rendering the correct answer in the frontend.
 type ImgDrop struct {
 	NodeId    string `xml:"nodeId,attr" json:"nodeId"`
+	NodeLabel string `xml:"nodeLabel,attr" json:"nodeLabel"`
 	PositionX int    `xml:"positionX,attr" json:"positionX"`
 	PositionY int    `xml:"positionY,attr" json:"positionY"`
 	Width     int    `xml:"width,attr" json:"width"`
