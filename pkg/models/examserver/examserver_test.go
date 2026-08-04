@@ -46,9 +46,9 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 		}
 	}
 
-	// exam1.xml has one collection with 6 questions (ids 1, 2, 3, 4, 5, 6).
-	if len(seen) != 6 {
-		t.Fatalf("expected 6 questions, got %d (%v)", len(seen), seen)
+	// exam1.xml has one collection with 7 questions (ids 1, 2, 3, 4, 5, 6, 7).
+	if len(seen) != 7 {
+		t.Fatalf("expected 7 questions, got %d (%v)", len(seen), seen)
 	}
 	for i, want := range []string{"1", "2", "3", "4", "5", "6"} {
 		if seen[i] != want {

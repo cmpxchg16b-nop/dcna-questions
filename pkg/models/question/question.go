@@ -67,6 +67,43 @@ type MultiAreaDrop struct {
 	DropAreas []DropArea `xml:"droparea" json:"dropAreas"`
 }
 
+// ImgCandidate is an <imgCandidate>: a draggable image snippet identified by
+// its nodeId. Width and Height give the intrinsic pixel size of the snippet.
+type ImgCandidate struct {
+	NodeId     string `xml:"nodeId,attr" json:"nodeId"`
+	Width      int    `xml:"width,attr" json:"width"`
+	Height     int    `xml:"height,attr" json:"height"`
+	ImgDataSrc string `xml:"imgDataSrc,attr" json:"imgDataSrc"`
+}
+
+// ImgDrop is an <imgDrop>: a single drop target laid out at an absolute
+// position over the drop area background image.
+type ImgDrop struct {
+	NodeId    string `xml:"nodeId,attr" json:"nodeId"`
+	PositionX int    `xml:"positionX,attr" json:"positionX"`
+	PositionY int    `xml:"positionY,attr" json:"positionY"`
+	Width     int    `xml:"width,attr" json:"width"`
+	Height    int    `xml:"height,attr" json:"height"`
+}
+
+// ImgDropsArea is the single <imgDropsArea> within an <imgDragAndDrop>: a
+// background image that hosts one or more absolutely positioned <imgDrop>
+// targets.
+type ImgDropsArea struct {
+	ImgBackgroundUrl string    `xml:"imgBackgroundUrl,attr" json:"imgBackgroundUrl"`
+	Width            int       `xml:"width,attr" json:"width"`
+	Height           int       `xml:"height,attr" json:"height"`
+	ImgDrops         []ImgDrop `xml:"imgDrop" json:"imgDrops"`
+}
+
+// ImgDragAndDrop models an <imgDragAndDrop>: an image-based drag-and-drop
+// question where the candidate drags image snippets (ImgCandidates) onto
+// absolutely positioned drop targets (ImgDrops) over a background image.
+type ImgDragAndDrop struct {
+	ImgCandidates []ImgCandidate `xml:"imgCandidate" json:"imgCandidates"`
+	ImgDropsArea  ImgDropsArea   `xml:"imgDropsArea" json:"imgDropsArea"`
+}
+
 type Image struct {
 	Src string `xml:"src,attr" json:"src"`
 }
@@ -125,16 +162,17 @@ type QuestionDescription struct {
 }
 
 type Question struct {
-	Id            string              `xml:"id,attr" json:"id"`
-	Type          QuestionType        `xml:"type,attr" json:"type"`
-	Score         float32             `xml:"score,attr" json:"score,omitempty"`
-	Description   QuestionDescription `xml:"description" json:"description"`
-	Exhibits      Exhibits            `xml:"exhibits>exhibit" json:"exhibits,omitempty"`
-	Options       Options             `xml:"options>option" json:"options,omitempty"`
-	Candidates    Candidates          `xml:"candidates>candidate" json:"candidates,omitempty"`
-	MultiAreaDrop *MultiAreaDrop      `xml:"multiareadrop" json:"multiAreaDrop,omitempty"`
-	Drops         Drops               `xml:"drops>drop" json:"drops,omitempty"`
-	CorrectAnswer CorrectAnswer       `xml:"correctanswer" json:"correctAnswer"`
+	Id             string              `xml:"id,attr" json:"id"`
+	Type           QuestionType        `xml:"type,attr" json:"type"`
+	Score          float32             `xml:"score,attr" json:"score,omitempty"`
+	Description    QuestionDescription `xml:"description" json:"description"`
+	Exhibits       Exhibits            `xml:"exhibits>exhibit" json:"exhibits,omitempty"`
+	Options        Options             `xml:"options>option" json:"options,omitempty"`
+	Candidates     Candidates          `xml:"candidates>candidate" json:"candidates,omitempty"`
+	ImgDragAndDrop *ImgDragAndDrop     `xml:"imgDragAndDrop" json:"imgDragAndDrop,omitempty"`
+	MultiAreaDrop  *MultiAreaDrop      `xml:"multiareadrop" json:"multiAreaDrop,omitempty"`
+	Drops          Drops               `xml:"drops>drop" json:"drops,omitempty"`
+	CorrectAnswer  CorrectAnswer       `xml:"correctanswer" json:"correctAnswer"`
 }
 
 // QuestionCollection is a named group of questions. It models a single
