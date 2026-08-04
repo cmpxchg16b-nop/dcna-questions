@@ -1,0 +1,9 @@
+# The Dockerfile only COPYs the pre-built binary, so shrink the build context
+# by excluding everything that isn't needed at image build time.
+.git
+.github
+**/node_modules
+web/exam-lab/.next
+web/exam-lab/out
+web/exam-lab/tsconfig.tsbuildinfo
+**/.DS_Store

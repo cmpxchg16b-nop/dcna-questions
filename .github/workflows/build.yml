@@ -1,0 +1,136 @@
+name: build
+
+# Builds the single-binary exam-server and a minimal OCI image for every target
+# platform whenever code lands on main. The web assets (Next.js static export)
+# are embedded into the Go binary at compile time via //go:embed, so they are
+# built once and shared across the per-platform matrix instead of rebuilding
+# Next.js four times.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+# Cancel a superseded run when new commits are pushed to the same branch.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.24"
+  NODE_VERSION: "22"
+
+jobs:
+  # Build the Next.js static export (web/exam-lab/out) once. This directory is
+  # gitignored and therefore absent from a fresh checkout, but the Go binary's
+  # //go:embed directive requires it to exist at compile time.
+  build-web:
+    name: Build web assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/exam-lab/package-lock.json
+
+      - name: Build Next.js static export
+        working-directory: web/exam-lab
+        run: |
+          npm ci
+          npm run build
+          # Fail early if the export didn't land where //go:embed expects it.
+          test -f out/index.html
+
+      - name: Upload web export
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-out
+          path: web/exam-lab/out
+          retention-days: 1
+
+  # Cross-compile the Go binary and package it into an OCI image, one job per
+  # target platform. CGO is disabled so every binary is fully static, which
+  # lets a scratch-based image work for all four targets.
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: build-web
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download web export
+        uses: actions/download-artifact@v4
+        with:
+          name: web-out
+          path: web/exam-lab/out
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p bin
+          go build -trimpath -ldflags="-s -w" -o bin/exam-server ./cmd/server
+          file bin/exam-server
+
+      # Deliverable 1: the single-binary executable, downloadable per platform.
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: exam-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/exam-server
+
+      # Deliverable 2: an OCI image containing the binary, pushed to GHCR.
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ matrix.goos }}-${{ matrix.goarch }}
+            type=sha,format=short,prefix=${{ matrix.goos }}-${{ matrix.goarch }}-sha-
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.goos }}/${{ matrix.goarch }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
