@@ -13,6 +13,7 @@ import (
 
 	pkgapicommon "dcna-questions/pkg/api/common"
 	pkgauth "dcna-questions/pkg/auth"
+	pkgcookie "dcna-questions/pkg/cookie"
 	pkggoogle "dcna-questions/pkg/google"
 	pkgutils "dcna-questions/pkg/utils"
 
@@ -43,8 +44,40 @@ type GoogleOAuthLoginHandler struct {
 
 	LoginSuccessRedirectURL string
 
-	TokenIssuer pkgauth.JWTIssuer
-	NonceIssuer pkgauth.NonceIssuer
+	TokenIssuer   pkgauth.JWTIssuer
+	NonceIssuer   pkgauth.NonceIssuer
+	cookieBuilder pkgcookie.CookieBuilder
+}
+
+// NewGoogleOAuthLoginHandler constructs a GoogleOAuthLoginHandler, injecting its
+// dependencies including the CookieBuilder used to create the session and nonce
+// cookies.
+func NewGoogleOAuthLoginHandler(
+	sessionLifespan time.Duration,
+	googleOAuthClientId string,
+	googleOAuthClientSecret string,
+	googleOAuthRedirURL string,
+	googleOAuthLoginPage string,
+	googleOAuthScope string,
+	googleOAuthTokenEndpoint string,
+	loginSuccessRedirectURL string,
+	tokenIssuer pkgauth.JWTIssuer,
+	nonceIssuer pkgauth.NonceIssuer,
+	cookieBuilder pkgcookie.CookieBuilder,
+) *GoogleOAuthLoginHandler {
+	return &GoogleOAuthLoginHandler{
+		SessionLifespan:          sessionLifespan,
+		GoogleOAuthClientId:      googleOAuthClientId,
+		GoogleOAuthClientSecret:  googleOAuthClientSecret,
+		GoogleOAuthRedirURL:      googleOAuthRedirURL,
+		GoogleOAuthLoginPage:     googleOAuthLoginPage,
+		GoogleOAuthScope:         googleOAuthScope,
+		GoogleOAuthTokenEndpoint: googleOAuthTokenEndpoint,
+		LoginSuccessRedirectURL:  loginSuccessRedirectURL,
+		TokenIssuer:              tokenIssuer,
+		NonceIssuer:              nonceIssuer,
+		cookieBuilder:            cookieBuilder,
+	}
 }
 
 func (h *GoogleOAuthLoginHandler) getGoogleLoginPage() string {
@@ -107,7 +140,7 @@ func (h *GoogleOAuthLoginHandler) handleStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	cookieObj := h.BuildCookieFromToken(pkgapicommon.DefaultNonceCookieKey, nonce)
+	cookieObj := h.cookieBuilder.BuildCookieFromKeyValue(pkgapicommon.DefaultNonceCookieKey, nonce)
 	http.SetCookie(w, cookieObj)
 
 	redirURL := h.getGoogleOAuthRedirectURL(nonce)
@@ -278,7 +311,7 @@ func (h *GoogleOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 		return
 	}
 
-	cookieObj := h.BuildCookieFromToken(pkgapicommon.DefaultJWTCookieKey, token)
+	cookieObj := h.cookieBuilder.BuildCookieFromToken(token)
 	http.SetCookie(w, cookieObj)
 
 	redirUrl := "/"
@@ -288,17 +321,6 @@ func (h *GoogleOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 
 	log.Printf("User %s (id=%s) from google has been successfully logged in, redirecting to %s", username, googleId, redirUrl)
 	http.Redirect(w, r, redirUrl, http.StatusTemporaryRedirect)
-}
-
-func (h *GoogleOAuthLoginHandler) BuildCookieFromToken(name, value string) *http.Cookie {
-	cookieObj := &http.Cookie{}
-	cookieObj.HttpOnly = true
-	cookieObj.Secure = true
-	cookieObj.SameSite = http.SameSiteLaxMode
-	cookieObj.Path = "/"
-	cookieObj.Name = name
-	cookieObj.Value = value
-	return cookieObj
 }
 
 func (h *GoogleOAuthLoginHandler) GetMapClaims(r *http.Request, subjectId string, username string) (jwt.MapClaims, error) {

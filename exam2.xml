@@ -3,7 +3,7 @@
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="exams/exam.xsd"
 >
-  <exam id="2" shortname="DCPE" code="DC-02">
+  <exam id="example-2" shortname="DCPE" code="DC-02">
     <title>DCNA Practice Exam</title>
     <description>Practice exam for the DCNA certification.</description>
     <passingscore>4.0</passingscore>

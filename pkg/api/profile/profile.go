@@ -7,7 +7,14 @@ import (
 	"dcna-questions/pkg/utils"
 )
 
+// ProfileHandler is an http.Handler that serves the caller's profile (session
+// and subject ids) at GET /api/profile.
 type ProfileHandler struct{}
+
+// NewProfileHandler constructs a ProfileHandler.
+func NewProfileHandler() *ProfileHandler {
+	return &ProfileHandler{}
+}
 
 type ProfileResponse struct {
 	SessionID string `json:"session_id"`
@@ -15,6 +22,12 @@ type ProfileResponse struct {
 }
 
 func (h *ProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	sessionID := r.Context().Value(utils.CtxKeySessionId)
 	subjectID := r.Context().Value(utils.CtxKeySubjectId)
 

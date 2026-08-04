@@ -14,6 +14,7 @@ import (
 
 	pkgapicommon "dcna-questions/pkg/api/common"
 	pkgauth "dcna-questions/pkg/auth"
+	pkgcookie "dcna-questions/pkg/cookie"
 	pkggithub "dcna-questions/pkg/github"
 	pkgutils "dcna-questions/pkg/utils"
 
@@ -49,8 +50,40 @@ type GithubOAuthLoginHandler struct {
 
 	LoginSuccessRedirectURL string
 
-	TokenIssuer pkgauth.JWTIssuer
-	NonceIssuer pkgauth.NonceIssuer
+	TokenIssuer   pkgauth.JWTIssuer
+	NonceIssuer   pkgauth.NonceIssuer
+	cookieBuilder pkgcookie.CookieBuilder
+}
+
+// NewGithubOAuthLoginHandler constructs a GithubOAuthLoginHandler, injecting its
+// dependencies including the CookieBuilder used to create the session and nonce
+// cookies.
+func NewGithubOAuthLoginHandler(
+	sessionLifespan time.Duration,
+	githubOAuthClientId string,
+	githubOAuthAppSecret string,
+	githubOAuthRedirURL string,
+	githubOAuthLoginPage string,
+	githubOAuthScope string,
+	githubOAuthTokenEndpoint string,
+	loginSuccessRedirectURL string,
+	tokenIssuer pkgauth.JWTIssuer,
+	nonceIssuer pkgauth.NonceIssuer,
+	cookieBuilder pkgcookie.CookieBuilder,
+) *GithubOAuthLoginHandler {
+	return &GithubOAuthLoginHandler{
+		SessionLifespan:          sessionLifespan,
+		GithubOAuthClientId:      githubOAuthClientId,
+		GithubOAuthAppSecret:     githubOAuthAppSecret,
+		GithubOAuthRedirURL:      githubOAuthRedirURL,
+		GithubOAuthLoginPage:     githubOAuthLoginPage,
+		GithubOAuthScope:         githubOAuthScope,
+		GithubOAuthTokenEndpoint: githubOAuthTokenEndpoint,
+		LoginSuccessRedirectURL:  loginSuccessRedirectURL,
+		TokenIssuer:              tokenIssuer,
+		NonceIssuer:              nonceIssuer,
+		cookieBuilder:            cookieBuilder,
+	}
 }
 
 func (h *GithubOAuthLoginHandler) getGithubLoginPage() string {
@@ -112,7 +145,7 @@ func (h *GithubOAuthLoginHandler) handleStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	cookieObj := h.BuildCookieFromToken(pkgapicommon.DefaultNonceCookieKey, nonce)
+	cookieObj := h.cookieBuilder.BuildCookieFromKeyValue(pkgapicommon.DefaultNonceCookieKey, nonce)
 	http.SetCookie(w, cookieObj)
 
 	redirURL := h.getGithubOAuthRedirectURL(nonce)
@@ -235,7 +268,7 @@ func (h *GithubOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 		return
 	}
 
-	cookieObj := h.BuildCookieFromToken(pkgapicommon.DefaultJWTCookieKey, token)
+	cookieObj := h.cookieBuilder.BuildCookieFromToken(token)
 	http.SetCookie(w, cookieObj)
 
 	redirUrl := "/"
@@ -246,17 +279,6 @@ func (h *GithubOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 
 	log.Printf("User %s (id=%d) from github has been successfully logged in, redirecting to %s", username, *githubId, redirUrl)
 	http.Redirect(w, r, redirUrl, http.StatusTemporaryRedirect)
-}
-
-func (h *GithubOAuthLoginHandler) BuildCookieFromToken(name, value string) *http.Cookie {
-	cookieObj := &http.Cookie{}
-	cookieObj.HttpOnly = true
-	cookieObj.Secure = true
-	cookieObj.SameSite = http.SameSiteLaxMode
-	cookieObj.Path = "/"
-	cookieObj.Name = name
-	cookieObj.Value = value
-	return cookieObj
 }
 
 func (h *GithubOAuthLoginHandler) GetMapClaims(r *http.Request, subjectId string, username string) (jwt.MapClaims, error) {

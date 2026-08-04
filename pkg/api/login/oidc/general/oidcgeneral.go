@@ -13,6 +13,7 @@ import (
 
 	pkgapicommon "dcna-questions/pkg/api/common"
 	pkgauth "dcna-questions/pkg/auth"
+	pkgcookie "dcna-questions/pkg/cookie"
 	pkgoidc "dcna-questions/pkg/oidc"
 	pkgutils "dcna-questions/pkg/utils"
 
@@ -53,11 +54,43 @@ type GenericOIDCLoginHandler struct {
 
 	LoginSuccessRedirectURL string
 
-	TokenIssuer pkgauth.JWTIssuer
-	NonceIssuer pkgauth.NonceIssuer
+	TokenIssuer   pkgauth.JWTIssuer
+	NonceIssuer   pkgauth.NonceIssuer
+	cookieBuilder pkgcookie.CookieBuilder
 
 	discoveryCache *pkgoidc.DiscoveryCache
 	providerCache  *pkgoidc.ProviderCache
+}
+
+// NewGenericOIDCLoginHandler constructs a GenericOIDCLoginHandler, injecting its
+// dependencies including the CookieBuilder used to create the session and nonce
+// cookies.
+func NewGenericOIDCLoginHandler(
+	sessionLifespan time.Duration,
+	providerName string,
+	issuerURL string,
+	clientId string,
+	clientSecret string,
+	redirectURL string,
+	scope string,
+	loginSuccessRedirectURL string,
+	tokenIssuer pkgauth.JWTIssuer,
+	nonceIssuer pkgauth.NonceIssuer,
+	cookieBuilder pkgcookie.CookieBuilder,
+) *GenericOIDCLoginHandler {
+	return &GenericOIDCLoginHandler{
+		SessionLifespan:         sessionLifespan,
+		ProviderName:            providerName,
+		IssuerURL:               issuerURL,
+		ClientId:                clientId,
+		ClientSecret:            clientSecret,
+		RedirectURL:             redirectURL,
+		Scope:                   scope,
+		LoginSuccessRedirectURL: loginSuccessRedirectURL,
+		TokenIssuer:             tokenIssuer,
+		NonceIssuer:             nonceIssuer,
+		cookieBuilder:           cookieBuilder,
+	}
 }
 
 const defaultScope = "openid profile email"
@@ -138,7 +171,7 @@ func (h *GenericOIDCLoginHandler) handleStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	http.SetCookie(w, h.BuildCookieFromToken(pkgapicommon.DefaultNonceCookieKey, nonce))
+	http.SetCookie(w, h.cookieBuilder.BuildCookieFromKeyValue(pkgapicommon.DefaultNonceCookieKey, nonce))
 
 	redirURL := h.buildAuthorizeURL(nonce, disc.AuthorizationEndpoint)
 	if redirURL == "" {
@@ -343,7 +376,7 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 		return
 	}
 
-	http.SetCookie(w, h.BuildCookieFromToken(pkgapicommon.DefaultJWTCookieKey, token))
+	http.SetCookie(w, h.cookieBuilder.BuildCookieFromToken(token))
 
 	redirUrl := "/"
 	if u := h.LoginSuccessRedirectURL; u != "" {
@@ -352,17 +385,6 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 
 	log.Printf("User %s (id=%s) from OIDC provider %q has been successfully logged in, redirecting to %s", username, userId, h.getProviderName(), redirUrl)
 	http.Redirect(w, r, redirUrl, http.StatusTemporaryRedirect)
-}
-
-func (h *GenericOIDCLoginHandler) BuildCookieFromToken(name, value string) *http.Cookie {
-	cookieObj := &http.Cookie{}
-	cookieObj.HttpOnly = true
-	cookieObj.Secure = true
-	cookieObj.SameSite = http.SameSiteLaxMode
-	cookieObj.Path = "/"
-	cookieObj.Name = name
-	cookieObj.Value = value
-	return cookieObj
 }
 
 func (h *GenericOIDCLoginHandler) GetMapClaims(r *http.Request, subjectId string, username string) (jwt.MapClaims, error) {
