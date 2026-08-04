@@ -189,6 +189,45 @@ export type MultiAreaDrop = {
   dropAreas: DropArea[];
 };
 
+// ImgCandidate mirrors the Go question.ImgCandidate struct: a draggable image
+// snippet of an image-based drag-and-drop question, identified by nodeId.
+// width/height give the snippet's intrinsic pixel size.
+export type ImgCandidate = {
+  nodeId: string;
+  width: number;
+  height: number;
+  imgDataSrc: string;
+};
+
+// ImgDrop mirrors the Go question.ImgDrop struct: a single drop target laid out
+// at an absolute position over the drop area's background image.
+export type ImgDrop = {
+  nodeId: string;
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+};
+
+// ImgDropsArea mirrors the Go question.ImgDropsArea struct: the background image
+// that hosts the positioned drop targets of an image-based drag-and-drop
+// question.
+export type ImgDropsArea = {
+  imgBackgroundUrl: string;
+  width: number;
+  height: number;
+  imgDrops: ImgDrop[];
+};
+
+// ImgDragAndDrop mirrors the Go question.ImgDragAndDrop struct: an image-based
+// drag-and-drop question where the candidate drags image snippets onto
+// absolutely positioned drop targets over a background image. It is an
+// alternative payload to the candidate/drop lists for a drag-and-drop question.
+export type ImgDragAndDrop = {
+  imgCandidates: ImgCandidate[];
+  imgDropsArea: ImgDropsArea;
+};
+
 // Connect mirrors the Go question.Connect struct {"src", "dst"}: one
 // connection in a drag-and-drop answer, from the candidate src onto the drop
 // dst.
@@ -241,6 +280,11 @@ export type Question = {
   candidates?: DragCandidate[];
   multiAreaDrop?: MultiAreaDrop;
   drops?: DropTarget[];
+  // Image-based drag-and-drop payload: an alternative to the candidate/drop
+  // lists above, present when the drag-and-drop question is image-based. When
+  // set, the candidate/drop lists are absent and the board renders image
+  // snippets over a positioned background.
+  imgDragAndDrop?: ImgDragAndDrop;
 };
 
 // NextQuestionResponse is the JSON body of a successful

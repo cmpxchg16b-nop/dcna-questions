@@ -15,6 +15,7 @@ import {
 import { Assessment, Connect, Question } from "@/api/types";
 import { isConnectionAnswerCorrect } from "@/api/dragAndDrop";
 import DragAndDropBoard from "./DragAndDropBoard";
+import ImgDragAndDropBoard from "./ImgDragAndDropBoard";
 
 type QuestionCardProps = {
   question: Question;
@@ -175,15 +176,24 @@ export default function QuestionCard({
             ))}
           </FormGroup>
         )}
-        {question.type === "drag-and-drop" && (
-          <DragAndDropBoard
-            question={question}
-            connections={connections}
-            onConnectionsChange={onConnectionsChange}
-            disabled={disabled}
-            assessment={assessment}
-          />
-        )}
+        {question.type === "drag-and-drop" &&
+          (question.imgDragAndDrop ? (
+            <ImgDragAndDropBoard
+              question={question}
+              connections={connections}
+              onConnectionsChange={onConnectionsChange}
+              disabled={disabled}
+              assessment={assessment}
+            />
+          ) : (
+            <DragAndDropBoard
+              question={question}
+              connections={connections}
+              onConnectionsChange={onConnectionsChange}
+              disabled={disabled}
+              assessment={assessment}
+            />
+          ))}
         {question.type !== "single-choice" &&
           question.type !== "multiple-choice" &&
           question.type !== "drag-and-drop" && (

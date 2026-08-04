@@ -196,11 +196,11 @@
           </correctanswer>
         </question>
         <question id="7" type="drag-and-drop" score="1">
-          <description></description>
+          <description>Drag and place the snippets in the left hand side to the correct locations in the right hand side.</description>
           <imgDragAndDrop>
             <imgCandidate nodeId="node-a" width="79" height="57" imgDataSrc="assets/example-drag-and-drop-p2-1.png" />
-            <imgCandidate nodeId="node-b" width="79" height="57" imgDataSrc="assets/example-drag-and-drop-p2-1.png" />
-            <imgCandidate nodeId="node-c" width="79" height="57" imgDataSrc="assets/example-drag-and-drop-p2-1.png" />
+            <imgCandidate nodeId="node-b" width="79" height="57" imgDataSrc="assets/example-drag-and-drop-p2-2.png" />
+            <imgCandidate nodeId="node-c" width="79" height="57" imgDataSrc="assets/example-drag-and-drop-p2-3.png" />
             <imgDropsArea imgBackgroundUrl="assets/example-drag-and-drop-p1.png" width="480" height="540">
               <imgDrop nodeId="drop-a" positionX="265" positionY="100" width="79" height="57" />
               <imgDrop nodeId="drop-b" positionX="265" positionY="200" width="79" height="57" />
