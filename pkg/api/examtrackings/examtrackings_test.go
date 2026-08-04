@@ -12,6 +12,7 @@ import (
 	"dcna-questions/pkg/api/examtrackings"
 	"dcna-questions/pkg/models/examreport"
 	"dcna-questions/pkg/session"
+	pkgutils "dcna-questions/pkg/utils"
 )
 
 // fakeTrackingServer is an ExamTrackingServer that records the userid it was
@@ -68,36 +69,43 @@ func decodeJSON(t *testing.T, body string, v any) {
 	}
 }
 
-// testEnv wires a handler behind a ServeMux that mirrors the documented mount,
-// sharing a session between setup and the request under test.
+// testEnv wires a handler behind a ServeMux that mirrors the documented mount.
+// The session subsystem is stateless: instead of allocating a session object,
+// serve sets the context value the JWT middleware would set (the subject id) and
+// runs the request through WithSessionId so a Session is built and attached.
 type testEnv struct {
-	sm   *session.OnMemorySessionManager
-	ts   *fakeTrackingServer
-	sess *session.Session
-	mux  *http.ServeMux
+	sm        *session.OnMemorySessionManager
+	ts        *fakeTrackingServer
+	subjectID string
+	mux       *http.ServeMux
 }
 
 func newTestEnv(t *testing.T, ts *fakeTrackingServer) *testEnv {
 	t.Helper()
 	sm := session.NewOnMemorySessionManager()
-	_, sess := sm.CreateSession()
 	h := examtrackings.NewExamTrackingsHandler(sm, ts)
 	mux := http.NewServeMux()
 	mux.Handle("/api/examtrackings", h)
 	mux.Handle("/api/examtrackings/", h)
-	return &testEnv{sm: sm, ts: ts, sess: sess, mux: mux}
+	return &testEnv{sm: sm, ts: ts, subjectID: "subject-test", mux: mux}
 }
 
-// serve issues a request through the env's mux, attaching the session to the
-// context when withSession is true (mirroring the session middleware).
+// serve issues a request through the env's mux. When withSession is true the
+// request is first run through WithSessionId (mirroring the production
+// middleware chain) after seeding the subject id in the context, so the handler
+// receives a resolved Session. When false, no session is attached and the
+// handler's GetSessionFromContext misses (producing the 500 guarded below).
 func (e *testEnv) serve(t *testing.T, method, target string, withSession bool) *httptest.ResponseRecorder {
 	t.Helper()
 	r := httptest.NewRequest(method, target, nil)
+	h := http.Handler(e.mux)
 	if withSession {
-		r = r.WithContext(e.sm.WithSession(r.Context(), e.sess))
+		ctx := context.WithValue(r.Context(), pkgutils.CtxKeySubjectId, e.subjectID)
+		r = r.WithContext(ctx)
+		h = session.WithSessionId(e.mux, e.sm)
 	}
 	rr := httptest.NewRecorder()
-	e.mux.ServeHTTP(rr, r)
+	h.ServeHTTP(rr, r)
 	return rr
 }
 
@@ -129,8 +137,8 @@ func TestExamTrackingsHandler(t *testing.T) {
 				if got.ExamReports[0].Id != "r1" || got.ExamReports[1].Id != "r2" {
 					t.Errorf("report ids = %q, %q, want r1, r2", got.ExamReports[0].Id, got.ExamReports[1].Id)
 				}
-				if env.ts.getUserid != env.sess.Id() {
-					t.Errorf("tracking server queried with userid %q, want session id %q", env.ts.getUserid, env.sess.Id())
+				if env.ts.getUserid != env.subjectID {
+					t.Errorf("tracking server queried with userid %q, want subject id %q", env.ts.getUserid, env.subjectID)
 				}
 			},
 		},
@@ -169,7 +177,7 @@ func TestExamTrackingsHandler(t *testing.T) {
 			},
 		},
 		{
-			name:       "opaque session id flows as the user id: a fresh session sees only its own reports",
+			name:       "subject id flows as the user id: a caller sees only its own reports",
 			method:     http.MethodGet,
 			target:     "/api/examtrackings",
 			ts:         &fakeTrackingServer{getReports: []examreport.ExamReport{sampleReport("only-mine")}},
@@ -178,10 +186,10 @@ func TestExamTrackingsHandler(t *testing.T) {
 				if env.ts.getUserid == "" {
 					t.Fatal("tracking server was never queried")
 				}
-				// The userid passed must be the opaque session id, not a fixed
-				// constant or empty string.
-				if env.ts.getUserid != env.sess.Id() {
-					t.Errorf("userid = %q, want session id %q", env.ts.getUserid, env.sess.Id())
+				// The userid passed must be the subject id, not a fixed constant
+				// or empty string.
+				if env.ts.getUserid != env.subjectID {
+					t.Errorf("userid = %q, want subject id %q", env.ts.getUserid, env.subjectID)
 				}
 			},
 		},
@@ -269,38 +277,40 @@ func TestExamTrackingsHandler(t *testing.T) {
 }
 
 // TestExamTrackingsHandler_EndToEnd walks the documented write/read-back flow: a
-// report Put under a userid (as the exam server does on session end) is returned
-// to a subsequent GET scoped to that same session id. It uses the real
-// OnMemoryExamTrackingServer rather than a fake, so it exercises the actual store
-// the handler is wired to in main.go.
+// report Put under a subject id (as the exam server does on session end) is
+// returned to a subsequent GET scoped to that same subject id. It uses the real
+// OnMemoryExamTrackingServer rather than a fake, so it exercises the actual
+// store the handler is wired to in main.go.
 func TestExamTrackingsHandler_EndToEnd(t *testing.T) {
 	ts := examreport.NewOnMemoryExamTrackingServer()
 	sm := session.NewOnMemorySessionManager()
-	_, sess := sm.CreateSession()
+	subjectID := "subject-endtoend"
 
 	// Simulate the exam server persisting two finished-session reports under the
-	// caller's session id (which stands in for the user id).
+	// caller's subject id.
 	ctx := context.Background()
-	if err := ts.Put(ctx, sess.Id(), sampleReport("e1")); err != nil {
+	if err := ts.Put(ctx, subjectID, sampleReport("e1")); err != nil {
 		t.Fatalf("Put e1: %v", err)
 	}
-	if err := ts.Put(ctx, sess.Id(), sampleReport("e2")); err != nil {
+	if err := ts.Put(ctx, subjectID, sampleReport("e2")); err != nil {
 		t.Fatalf("Put e2: %v", err)
 	}
-	// A second, unrelated session has its own reports that must not leak.
-	_, other := sm.CreateSession()
-	if err := ts.Put(ctx, other.Id(), sampleReport("not-mine")); err != nil {
+	// A second, unrelated subject has its own reports that must not leak.
+	if err := ts.Put(ctx, "subject-other", sampleReport("not-mine")); err != nil {
 		t.Fatalf("Put other: %v", err)
 	}
 
 	h := examtrackings.NewExamTrackingsHandler(sm, ts)
 	mux := http.NewServeMux()
 	mux.Handle("/api/examtrackings", h)
+	wrapped := session.WithSessionId(mux, sm)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/examtrackings", nil).
-		WithContext(sm.WithSession(context.Background(), sess))
+	// Seed the subject id in the context (as the JWT middleware would) and run
+	// through WithSessionId so the handler receives a resolved Session.
+	r := httptest.NewRequest(http.MethodGet, "/api/examtrackings", nil)
+	r = r.WithContext(context.WithValue(r.Context(), pkgutils.CtxKeySubjectId, subjectID))
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, r)
+	wrapped.ServeHTTP(rr, r)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())

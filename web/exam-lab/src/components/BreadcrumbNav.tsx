@@ -17,6 +17,11 @@ function crumbsFor(pathname: string, examSessionId: string | null): Crumb[] {
   if (pathname === "/") {
     return [{ label: "Home" }];
   }
+  // The login page is a modal dialog outside the app's page hierarchy, so it
+  // gets no breadcrumb trail at all.
+  if (pathname === "/login") {
+    return [];
+  }
   if (pathname === "/examsession") {
     return [
       { label: "Home", href: "/" },

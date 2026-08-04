@@ -5,6 +5,16 @@ const nextConfig = (phase: string): NextConfig => {
   const config: NextConfig = {
     /* config options here */
     output: "export",
+    turbopack: {
+      rules: {
+        // Import *.xml files (e.g. loginOptions.xml) as parsed JS objects.
+        // xml-loader emits a JS module, hence `as: "*.js"`.
+        "*.xml": {
+          loaders: ["xml-loader"],
+          as: "*.js",
+        },
+      },
+    },
   };
 
   // Dev-only proxy: forward /api/* to the Go server so the frontend's relative

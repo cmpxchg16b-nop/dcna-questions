@@ -185,9 +185,9 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Collection: POST create, GET list.
 		switch r.Method {
 		case http.MethodPost:
-			h.handleCreate(w, r, sess.Id())
+			h.handleCreate(w, r, sess.SubjectId())
 		case http.MethodGet:
-			h.handleList(w, r, sess.Id())
+			h.handleList(w, r, sess.SubjectId())
 		default:
 			h.methodNotAllowed(w, "GET, POST")
 		}
@@ -195,9 +195,9 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Item: GET single session, DELETE terminate.
 		switch r.Method {
 		case http.MethodGet:
-			h.handleGetSession(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+			h.handleGetSession(w, r, examserver.ExamSessionId(segments[0]), sess.SubjectId())
 		case http.MethodDelete:
-			h.handleDelete(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+			h.handleDelete(w, r, examserver.ExamSessionId(segments[0]), sess.SubjectId())
 		default:
 			h.methodNotAllowed(w, "GET, DELETE")
 		}
@@ -206,25 +206,25 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.methodNotAllowed(w, "GET")
 			return
 		}
-		h.handleGetNextQuestion(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+		h.handleGetNextQuestion(w, r, examserver.ExamSessionId(segments[0]), sess.SubjectId())
 	case len(segments) == 2 && segments[1] == "cursors":
 		if r.Method != http.MethodPut {
 			h.methodNotAllowed(w, "PUT")
 			return
 		}
-		h.handleSeekCursor(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+		h.handleSeekCursor(w, r, examserver.ExamSessionId(segments[0]), sess.SubjectId())
 	case len(segments) == 2 && segments[1] == "answer":
 		if r.Method != http.MethodPost {
 			h.methodNotAllowed(w, "POST")
 			return
 		}
-		h.handleSubmitAnswer(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+		h.handleSubmitAnswer(w, r, examserver.ExamSessionId(segments[0]), sess.SubjectId())
 	case len(segments) == 2 && segments[1] == "my_answer":
 		if r.Method != http.MethodGet {
 			h.methodNotAllowed(w, "GET")
 			return
 		}
-		h.handleGetMyAnswer(w, r, examserver.ExamSessionId(segments[0]), sess.Id())
+		h.handleGetMyAnswer(w, r, examserver.ExamSessionId(segments[0]), sess.SubjectId())
 	default:
 		http.NotFound(w, r)
 	}

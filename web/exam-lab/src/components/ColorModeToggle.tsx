@@ -50,7 +50,10 @@ export default function ColorModeToggle() {
           position: "fixed",
           top: 8,
           right: 8,
-          zIndex: (theme) => theme.zIndex.appBar,
+          // One step above theme.zIndex.modal so the toggle stays clickable
+          // over modal dialogs and their backdrops (e.g. the login page's
+          // always-open Dialog).
+          zIndex: (theme) => theme.zIndex.modal + 1,
         }}
       >
         {mode ? MODE_ICON[mode] : <Box sx={{ width: 24, height: 24 }} />}

@@ -14,6 +14,7 @@ import (
 	"dcna-questions/pkg/models/examserver"
 	"dcna-questions/pkg/models/question"
 	"dcna-questions/pkg/session"
+	pkgutils "dcna-questions/pkg/utils"
 )
 
 // fakeExamLoader is an ExamLoader that serves a fixed set of exams keyed by URL.
@@ -197,32 +198,41 @@ func newRepoWith(exams ...*question.Exam) *question.ExamRepository {
 }
 
 // testEnv wires a handler behind a ServeMux that mirrors the documented mount.
+// The session subsystem is stateless: serve sets the subject id in the context
+// (as the JWT middleware would) and runs the request through WithSessionId so
+// the handler receives a resolved Session.
 type testEnv struct {
-	sm     *session.OnMemorySessionManager
-	server *fakeExamServer
-	sess   *session.Session
-	mux    *http.ServeMux
+	sm        *session.OnMemorySessionManager
+	server    *fakeExamServer
+	subjectID string
+	mux       *http.ServeMux
 }
 
 func newTestEnv(t *testing.T, repo *question.ExamRepository, server *fakeExamServer) *testEnv {
 	t.Helper()
 	sm := session.NewOnMemorySessionManager()
-	_, sess := sm.CreateSession()
 	h := examsessions.NewExamSessionHandler(sm, server, repo)
 	mux := http.NewServeMux()
 	mux.Handle("/api/examsessions", h)
 	mux.Handle("/api/examsessions/", h)
-	return &testEnv{sm: sm, server: server, sess: sess, mux: mux}
+	return &testEnv{sm: sm, server: server, subjectID: "subject-test", mux: mux}
 }
 
+// serve issues a request through the env's mux. When withSession is true the
+// request is first run through WithSessionId (mirroring the production chain)
+// after seeding the subject id in the context. When false, no session is
+// attached so the handler's GetSessionFromContext misses (500).
 func (e *testEnv) serve(t *testing.T, method, target, body string, withSession bool) *httptest.ResponseRecorder {
 	t.Helper()
 	r := httptest.NewRequest(method, target, strings.NewReader(body))
+	h := http.Handler(e.mux)
 	if withSession {
-		r = r.WithContext(e.sm.WithSession(r.Context(), e.sess))
+		ctx := context.WithValue(r.Context(), pkgutils.CtxKeySubjectId, e.subjectID)
+		r = r.WithContext(ctx)
+		h = session.WithSessionId(e.mux, e.sm)
 	}
 	rr := httptest.NewRecorder()
-	e.mux.ServeHTTP(rr, r)
+	h.ServeHTTP(rr, r)
 	return rr
 }
 
@@ -238,7 +248,7 @@ func TestExamSessionHandler(t *testing.T) {
 		wantStatus int
 		wantAllow  string
 		checkBody  func(t *testing.T, body string)
-		checkCalls func(t *testing.T, s *fakeExamServer, sessID string)
+		checkCalls func(t *testing.T, s *fakeExamServer, subjectID string)
 	}{
 		{
 			name:       "create success",
@@ -259,12 +269,12 @@ func TestExamSessionHandler(t *testing.T) {
 					t.Errorf("exam_session_id = %q, want sess-1", got.ExamSessionID)
 				}
 			},
-			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
+			checkCalls: func(t *testing.T, s *fakeExamServer, subjectID string) {
 				if s.startedExam == nil || s.startedExam.Id != "exam-1" {
 					t.Errorf("started exam = %+v, want id exam-1", s.startedExam)
 				}
-				if s.startedUser != sessID {
-					t.Errorf("started user = %q, want %q", s.startedUser, sessID)
+				if s.startedUser != subjectID {
+					t.Errorf("started user = %q, want %q", s.startedUser, subjectID)
 				}
 				if s.startedOpts != 0 {
 					t.Errorf("started opts = %d, want 0 when options absent", s.startedOpts)
@@ -425,9 +435,9 @@ func TestExamSessionHandler(t *testing.T) {
 					}
 				}
 			},
-			checkCalls: func(t *testing.T, s *fakeExamServer, sessID string) {
-				if len(s.listCalls) != 1 || s.listCalls[0] != sessID {
-					t.Errorf("list calls = %v, want [%s]", s.listCalls, sessID)
+			checkCalls: func(t *testing.T, s *fakeExamServer, subjectID string) {
+				if len(s.listCalls) != 1 || s.listCalls[0] != subjectID {
+					t.Errorf("list calls = %v, want [%s]", s.listCalls, subjectID)
 				}
 			},
 		},
@@ -848,7 +858,7 @@ func TestExamSessionHandler(t *testing.T) {
 				tc.checkBody(t, rr.Body.String())
 			}
 			if tc.checkCalls != nil {
-				tc.checkCalls(t, env.server, env.sess.Id())
+				tc.checkCalls(t, env.server, env.subjectID)
 			}
 		})
 	}

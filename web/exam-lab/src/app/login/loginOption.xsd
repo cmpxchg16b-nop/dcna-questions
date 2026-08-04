@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Schema for loginOptions.xml, the login page's configurable IdP list.
+     The XML instance references this schema in the same directory via
+     xsi:noNamespaceSchemaLocation="loginOption.xsd". -->
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root element; holds zero or more loginOption entries. -->
+  <xsd:element name="loginOptions">
+    <xsd:complexType>
+      <xsd:sequence>
+        <xsd:element name="loginOption" type="loginOptionType"
+                     minOccurs="0" maxOccurs="unbounded"/>
+      </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+
+  <!-- kind identifies the IdP type and selects the login icon (see
+       getLoginIcon in page.tsx); name is the option's unique key. Several
+       options may share a kind under different names (e.g. "entra-public"
+       and "entra-corporation", both with kind "entra"). -->
+  <xsd:complexType name="loginOptionType">
+    <xsd:attribute name="kind" type="xsd:string" use="required"/>
+    <xsd:attribute name="name" type="xsd:string" use="required"/>
+    <xsd:attribute name="displayName" type="xsd:string" use="required"/>
+    <xsd:attribute name="loginURL" type="xsd:string" use="required"/>
+    <xsd:attribute name="label" type="xsd:string" use="optional"/>
+  </xsd:complexType>
+
+</xsd:schema>

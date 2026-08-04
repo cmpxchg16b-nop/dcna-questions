@@ -69,7 +69,7 @@ func (h *ExamTrackingsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 
 	// The user session id stands in for a user id until accounting is built.
-	reports, err := h.trackingServer.GetExamReportsByUserId(r.Context(), sess.Id())
+	reports, err := h.trackingServer.GetExamReportsByUserId(r.Context(), sess.SubjectId())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

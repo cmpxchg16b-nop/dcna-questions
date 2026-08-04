@@ -2,11 +2,15 @@
 package log
 
 import (
+	"context"
+	cryptoRand "crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"dcna-questions/pkg/session"
+	"dcna-questions/pkg/utils"
 )
 
 // responseWriter wraps an http.ResponseWriter to capture the response status
@@ -61,7 +65,7 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 // WithSessionAwaredLog. The log level reflects the status: Error for 5xx, Warn
 // for 4xx, Info otherwise. Any extra attributes supplied by the caller (e.g.
 // session fields) are appended to the standard set.
-func accessLog(logger *slog.Logger, r *http.Request, rw *responseWriter, start time.Time, extra ...slog.Attr) {
+func accessLog(logger *slog.Logger, r *http.Request, rw *responseWriter, extra ...slog.Attr) {
 	level := slog.LevelInfo
 	switch {
 	case rw.status >= 500:
@@ -70,16 +74,18 @@ func accessLog(logger *slog.Logger, r *http.Request, rw *responseWriter, start t
 		level = slog.LevelWarn
 	}
 
-	attrs := make([]slog.Attr, 0, 6+len(extra))
+	attrs := make([]slog.Attr, 0, 4+len(extra))
 	attrs = append(attrs,
 		slog.String("method", r.Method),
 		slog.String("url", r.URL.RequestURI()),
 		slog.String("remote", r.RemoteAddr),
-		slog.Int("status", rw.status),
-		slog.Int("bytes", rw.bytes),
-		slog.Duration("duration", time.Since(start)),
+		slog.String("real_ip", utils.GetRemoteAddr(r)),
 	)
 	attrs = append(attrs, extra...)
+
+	if traceId, ok := r.Context().Value(utils.CtxLogTraceId).(string); ok && traceId != "" {
+		attrs = append(attrs, slog.String("trace_id", traceId))
+	}
 
 	logger.LogAttrs(r.Context(), level, "http request", attrs...)
 }
@@ -94,10 +100,48 @@ func WithHTTPLog(logger *slog.Logger, h http.Handler) http.Handler {
 		logger = slog.Default()
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
+		accessLog(logger, r, rw)
+		h.ServeHTTP(rw, r)
+	})
+}
+
+// WithOverallLog wraps h so that an access record is emitted after the handler
+// completes. Unlike WithHTTPLog (which logs on request entry), this records the
+// request's outcome, appending the response status, bytes written, and duration
+// as extra attributes. Because it runs after h.ServeHTTP, the status-based log
+// level reflects the actual response: Error for 5xx, Warn for 4xx, Info
+// otherwise. A nil logger falls back to slog.Default().
+func WithOverallLog(logger *slog.Logger, h http.Handler) http.Handler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 		h.ServeHTTP(rw, r)
-		accessLog(logger, r, rw, start)
+		accessLog(logger, r, rw,
+			slog.Int("status", rw.status),
+			slog.Int("bytes", rw.bytes),
+			slog.Duration("duration", time.Since(start)),
+		)
+	})
+}
+
+// WithLogTraceId wraps h so that each request is assigned a random log trace
+// id, stored in the request context under utils.CtxLogTraceId. The trace id
+// correlates log statements emitted across multiple locations while handling
+// the same request. It should be nested outside (before) any logging
+// middleware that should record the trace id, e.g.:
+//
+//	log.WithLogTraceId(log.WithHTTPLog(logger, mux))
+func WithLogTraceId(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b := make([]byte, 16)
+		cryptoRand.Read(b)
+		traceId := hex.EncodeToString(b)
+		r = r.WithContext(context.WithValue(r.Context(), utils.CtxLogTraceId, traceId))
+		h.ServeHTTP(w, r)
 	})
 }
 
@@ -115,19 +159,19 @@ func WithSessionAwaredLog(logger *slog.Logger, sm session.SessionManager, h http
 		logger = slog.Default()
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
 		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
-		h.ServeHTTP(rw, r)
 
 		var extra []slog.Attr
 		if sm != nil {
 			if sess, ok := sm.GetSessionFromContext(r.Context()); ok {
 				extra = append(extra,
 					slog.String("session_id", sess.Id()),
+					slog.String("subject_id", sess.SubjectId()),
 					slog.Time("session_expiry", sess.Expiry()),
 				)
 			}
 		}
-		accessLog(logger, r, rw, start, extra...)
+		accessLog(logger, r, rw, extra...)
+		h.ServeHTTP(rw, r)
 	})
 }
