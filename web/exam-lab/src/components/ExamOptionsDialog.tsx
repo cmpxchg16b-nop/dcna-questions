@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Box,
   Button,
@@ -51,6 +52,7 @@ function ExamOptionsForm({
   exam: ExamExcerpt;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const createSession = useCreateExamSession();
   const [randomQuestions, setRandomQuestions] = useState(false);
   const [randomOptions, setRandomOptions] = useState(false);
@@ -159,7 +161,14 @@ function ExamOptionsForm({
             createSession.mutate(
               { examId: exam.Id, options, acceptQuestionTypes },
               {
-                onSuccess: onClose,
+                // Session created: go straight to the exam session page, same
+                // as the certification-exam flow in the home page.
+                onSuccess: (examSessionId) => {
+                  const params = new URLSearchParams({
+                    exam_session_id: examSessionId,
+                  });
+                  router.push(`/examsession?${params}`);
+                },
               },
             )
           }
