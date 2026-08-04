@@ -204,6 +204,11 @@
         <xs:element name="imgCandidate" minOccurs="1" maxOccurs="unbounded">
           <xs:complexType>
             <xs:attribute name="nodeId" type="xs:string" use="required" />
+            <xs:attribute name="nodeLabel" type="xs:string" use="required">
+              <xs:annotation>
+                <xs:documentation>Descriptive text, usually reflects the answer in text, for the drag-and-drop option, use for rendering correct answer in the frontend.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
             <xs:attribute name="width" type="xs:integer" use="required" />
             <xs:attribute name="height" type="xs:integer" use="required" />
             <xs:attribute name="imgDataSrc" type="xs:string" use="required" />
@@ -215,6 +220,11 @@
               <xs:element name="imgDrop" minOccurs="1" maxOccurs="unbounded">
                 <xs:complexType>
                   <xs:attribute name="nodeId" type="xs:string" use="required" />
+                  <xs:attribute name="nodeLabel" type="xs:string" use="required">
+                    <xs:annotation>
+                      <xs:documentation>Descriptive text, usually reflects the drop in text, for the drag-and-drop option, use for rendering correct answer in the frontend.</xs:documentation>
+                    </xs:annotation>
+                  </xs:attribute>
                   <xs:attribute name="positionX" type="xs:integer" use="required" />
                   <xs:attribute name="positionY" type="xs:integer" use="required" />
                   <xs:attribute name="width" type="xs:integer" use="required" />
