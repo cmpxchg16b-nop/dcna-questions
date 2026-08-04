@@ -24,7 +24,9 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable, nil)
+	// exam1.xml is a certification exam, so it must not be created seekable;
+	// GetNextQuestion walks questions sequentially regardless of seekability.
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -72,6 +74,76 @@ func TestStartNewExamSession_EmptyExam(t *testing.T) {
 	empty := &pkgmodelquestions.Exam{Id: "x"}
 	if _, err := srv.StartNewExamSession(ctx, empty, "user-1", 0, nil); err != errEmptyExam {
 		t.Fatalf("expected errEmptyExam for empty exam, got %v", err)
+	}
+}
+
+// TestStartNewExamSession_CertificationRejectsSeekable confirms that a
+// certification exam cannot be started with ExamOptionSeekable: the candidate
+// must answer questions in the fixed order they are served.
+func TestStartNewExamSession_CertificationRejectsSeekable(t *testing.T) {
+	mkQ := func(id string) pkgmodelquestions.Question {
+		return pkgmodelquestions.Question{Id: id, Type: pkgmodelquestions.QuestionTypeSingleChoice}
+	}
+	certExam := &pkgmodelquestions.Exam{
+		Id:           "cert",
+		ExamCategory: pkgmodelquestions.ExamCategoryCertification,
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{mkQ("q1")}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	if _, err := srv.StartNewExamSession(ctx, certExam, "user-1", ExamOptionSeekable, nil); err != errSeekableNotAllowed {
+		t.Fatalf("certification exam with ExamOptionSeekable = %v, want errSeekableNotAllowed", err)
+	}
+
+	// The same certification exam without the seekable bit starts fine.
+	if _, err := srv.StartNewExamSession(ctx, certExam, "user-1", 0, nil); err != nil {
+		t.Fatalf("certification exam without seekable: %v", err)
+	}
+}
+
+// TestStartNewExamSession_PracticeAllowsSeekable confirms that a practice exam
+// may be started seekable and that seeking then works end to end.
+func TestStartNewExamSession_PracticeAllowsSeekable(t *testing.T) {
+	mkQ := func(id string) pkgmodelquestions.Question {
+		return pkgmodelquestions.Question{Id: id, Type: pkgmodelquestions.QuestionTypeSingleChoice}
+	}
+	practiceExam := &pkgmodelquestions.Exam{
+		Id:           "practice",
+		ExamCategory: pkgmodelquestions.ExamCategoryPractice,
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{mkQ("1"), mkQ("2"), mkQ("3")}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	examId, err := srv.StartNewExamSession(ctx, practiceExam, "user-1", ExamOptionSeekable, nil)
+	if err != nil {
+		t.Fatalf("practice exam with ExamOptionSeekable: %v", err)
+	}
+
+	// Walk to the first question to obtain a cursor, then seek back to it.
+	q, cursor, err := srv.GetNextQuestion(ctx, examId, "user-1", nil)
+	if err != nil || q == nil {
+		t.Fatalf("GetNextQuestion: q=%v err=%v", q, err)
+	}
+	if _, err := srv.SeekCursorTo(ctx, examId, "user-1", cursor, 0); err != nil {
+		t.Errorf("SeekCursorTo on practice exam = %v, want nil", err)
 	}
 }
 

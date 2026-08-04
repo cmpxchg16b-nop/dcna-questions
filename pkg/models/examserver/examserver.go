@@ -28,13 +28,14 @@ const (
 )
 
 var (
-	errExamNotFound  = errors.New("exam not found")
-	errNotOwner      = errors.New("exam session does not belong to the caller")
-	errNotSeekable   = errors.New("exam is not seekable")
-	errInvalidCursor = errors.New("invalid question cursor")
-	errOutOfRange    = errors.New("question index out of range")
-	errShuttingDown  = errors.New("exam server is shutting down")
-	errEmptyExam     = errors.New("exam has no questions")
+	errExamNotFound       = errors.New("exam not found")
+	errNotOwner           = errors.New("exam session does not belong to the caller")
+	errNotSeekable        = errors.New("exam is not seekable")
+	errSeekableNotAllowed = errors.New("seekable exam sessions are not allowed for certification exams")
+	errInvalidCursor      = errors.New("invalid question cursor")
+	errOutOfRange         = errors.New("question index out of range")
+	errShuttingDown       = errors.New("exam server is shutting down")
+	errEmptyExam          = errors.New("exam has no questions")
 )
 
 type ExamSessionExcerpt struct {
@@ -191,6 +192,13 @@ func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pk
 	cmd := func() {
 		if exam == nil || len(exam.QuestionSet.QuestionCollections) == 0 {
 			resp <- result{err: errEmptyExam}
+			return
+		}
+		// A certification exam is a proctored, high-stakes assessment: the
+		// candidate must answer questions in the fixed order they are served and
+		// cannot jump back and forth. Only practice exams may be seekable.
+		if examOptions&ExamOptionSeekable != 0 && exam.ExamCategory == pkgmodelquestions.ExamCategoryCertification {
+			resp <- result{err: errSeekableNotAllowed}
 			return
 		}
 		opts := examOptions
