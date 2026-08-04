@@ -1,9 +1,11 @@
-# The Dockerfile only COPYs the pre-built binary, so shrink the build context
-# by excluding everything that isn't needed at image build time.
+# The multi-stage Dockerfile needs the Go source and the pre-built web export
+# (web/exam-lab/out) for //go:embed. Exclude everything else to shrink context.
 .git
 .github
 **/node_modules
 web/exam-lab/.next
-web/exam-lab/out
+web/exam-lab/src
+web/exam-lab/public
 web/exam-lab/tsconfig.tsbuildinfo
+bin/
 **/.DS_Store

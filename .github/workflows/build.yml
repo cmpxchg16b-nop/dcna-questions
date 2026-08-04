@@ -1,10 +1,11 @@
 name: build
 
-# Builds the single-binary exam-server and a minimal OCI image for every target
-# platform whenever code lands on main. The web assets (Next.js static export)
-# are embedded into the Go binary at compile time via //go:embed, so they are
-# built once and shared across the per-platform matrix instead of rebuilding
-# Next.js four times.
+# Builds the single-binary exam-server (4 platforms) and a single multi-arch
+# OCI image (linux/amd64 + linux/arm64) whenever code lands on main.
+#
+# The web assets (Next.js static export) are embedded into the Go binary at
+# compile time via //go:embed, so they are built once and shared with every
+# downstream job rather than rebuilding Next.js repeatedly.
 
 on:
   push:
@@ -55,11 +56,10 @@ jobs:
           path: web/exam-lab/out
           retention-days: 1
 
-  # Cross-compile the Go binary and package it into an OCI image, one job per
-  # target platform. CGO is disabled so every binary is fully static, which
-  # lets a scratch-based image work for all four targets.
-  build:
-    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+  # Cross-compile the single-binary executable for every target platform.
+  # Binaries are uploaded as downloadable artifacts per platform.
+  build-binary:
+    name: Binary ${{ matrix.goos }}/${{ matrix.goarch }}
     needs: build-web
     runs-on: ubuntu-latest
     strategy:
@@ -98,14 +98,28 @@ jobs:
           go build -trimpath -ldflags="-s -w" -o bin/exam-server ./cmd/server
           file bin/exam-server
 
-      # Deliverable 1: the single-binary executable, downloadable per platform.
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: exam-server-${{ matrix.goos }}-${{ matrix.goarch }}
           path: bin/exam-server
 
-      # Deliverable 2: an OCI image containing the binary, pushed to GHCR.
+  # Build a single multi-arch OCI image (linux/amd64 + linux/arm64) and push it
+  # to GHCR under one tag. The Dockerfile uses $BUILDPLATFORM + Go cross-
+  # compilation, so no QEMU is needed and both arches build natively.
+  build-image:
+    name: Multi-arch OCI image
+    needs: build-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download web export
+        uses: actions/download-artifact@v4
+        with:
+          name: web-out
+          path: web/exam-lab/out
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -119,18 +133,20 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=${{ matrix.goos }}-${{ matrix.goarch }}
-            type=sha,format=short,prefix=${{ matrix.goos }}-${{ matrix.goarch }}-sha-
+            type=raw,value=latest
+            type=sha,format=short
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push image
+      - name: Build and push multi-arch image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: ${{ matrix.goos }}/${{ matrix.goarch }}
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
