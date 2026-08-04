@@ -372,12 +372,10 @@ export default function Page() {
         ) : (
           effectiveQuestion && (
             <Fragment>
-              <Typography gutterBottom>
-                Question {currentQuestionIndex + 1} of {numQuestions}
-              </Typography>
               <QuestionCard
                 key={effectiveQuestion.id}
                 question={effectiveQuestion}
+                questionNumber={currentQuestionIndex + 1}
                 selected={selection}
                 onSelectionChange={setSelection}
                 connections={connections}

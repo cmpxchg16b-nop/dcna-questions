@@ -19,6 +19,9 @@ import ImgDragAndDropBoard from "./ImgDragAndDropBoard";
 
 type QuestionCardProps = {
   question: Question;
+  // questionNumber is the 1-based position of the question in the exam,
+  // rendered as a "N. " prefix on the description.
+  questionNumber: number;
   // selected holds the chosen option ids. The card is controlled so the page
   // can drive the Check/Next/Skip footer state, restore previously submitted
   // selections, and reset the selection per question. Single-choice keeps a
@@ -43,6 +46,7 @@ type QuestionCardProps = {
 // candidate's own wrong picks in red.
 export default function QuestionCard({
   question,
+  questionNumber,
   selected,
   onSelectionChange,
   connections,
@@ -116,7 +120,9 @@ export default function QuestionCard({
   return (
     <Card>
       <CardContent>
-        <Typography gutterBottom>{question.description.text}</Typography>
+        <Typography gutterBottom>
+          {questionNumber}. {question.description.text}
+        </Typography>
         {question.exhibits?.map((exhibit) => (
           <Box
             key={exhibit.image.src}
