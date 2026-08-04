@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:noNamespaceSchemaLocation="exam.xsd"
+  xsi:noNamespaceSchemaLocation="exams/exam.xsd"
 >
   <exam id="1" shortname="DCNA" code="DC-01">
     <title>DN42 Certified Network Associate</title>

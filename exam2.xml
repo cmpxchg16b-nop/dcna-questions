@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:noNamespaceSchemaLocation="exam.xsd"
+  xsi:noNamespaceSchemaLocation="exams/exam.xsd"
 >
   <exam id="2" shortname="DCPE" code="DC-02">
     <title>DCNA Practice Exam</title>
