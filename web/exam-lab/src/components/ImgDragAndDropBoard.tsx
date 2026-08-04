@@ -176,6 +176,15 @@ export default function ImgDragAndDropBoard({
           )
         : undefined;
     const hovered = dragOverDropId === drop.nodeId;
+    // The drop targets overlay the background image, which is a light diagram
+    // regardless of the app's color mode, so their idle styling uses fixed
+    // dark tones rather than theme palette colors (theme text/divider colors
+    // go light in dark mode and would vanish against the light image). Empty
+    // targets get a faint dark scrim plus a clearly visible dashed border; a
+    // soft light halo behind the border keeps it readable on mid-tone images.
+    const idleBorder = candidate
+      ? "rgba(0, 0, 0, 0.35)"
+      : "rgba(0, 0, 0, 0.65)";
     return (
       <Box
         key={drop.nodeId}
@@ -212,10 +221,20 @@ export default function ImgDragAndDropBoard({
                   ? "primary.main"
                   : picked
                     ? "primary.light"
-                    : "divider",
+                    : idleBorder,
+          // The halo is a light ring just outside the dashed border; it
+          // separates the dark border from whatever the image shows beneath.
+          boxShadow:
+            accepted !== undefined || hovered || picked || candidate
+              ? "none"
+              : "0 0 0 2px rgba(255, 255, 255, 0.6)",
           borderRadius: 1,
           cursor: disabled ? "default" : "pointer",
-          bgcolor: hovered ? "action.hover" : "transparent",
+          bgcolor: hovered
+            ? "action.hover"
+            : candidate
+              ? "transparent"
+              : "rgba(0, 0, 0, 0.08)",
         }}
       >
         {candidate && (
