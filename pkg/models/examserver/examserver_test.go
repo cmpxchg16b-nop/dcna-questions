@@ -48,11 +48,11 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 		}
 	}
 
-	// exam1.xml has one collection with 7 questions (ids 1, 2, 3, 4, 5, 6, 7).
-	if len(seen) != 7 {
-		t.Fatalf("expected 7 questions, got %d (%v)", len(seen), seen)
+	// exam1.xml has one collection with 4 questions (ids 1, 4, 6, 7).
+	if len(seen) != 4 {
+		t.Fatalf("expected 4 questions, got %d (%v)", len(seen), seen)
 	}
-	for i, want := range []string{"1", "2", "3", "4", "5", "6"} {
+	for i, want := range []string{"1", "4", "6", "7"} {
 		if seen[i] != want {
 			t.Errorf("question %d: got id %q, want %q", i, seen[i], want)
 		}
@@ -486,9 +486,8 @@ func TestStartNewExamSession_AcceptQuestionTypes(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	// exam1.xml: questions 1, 4, 6 are single-choice, 2 is multiple-choice,
-	// and 3, 5 are drag-and-drop. Accepting only the choice types must skip
-	// the drag-and-drop questions.
+	// exam1.xml: questions 1, 4, 6 are single-choice and 7 is drag-and-drop.
+	// Accepting only the choice types must skip the drag-and-drop question.
 	accept := []pkgmodelquestions.QuestionType{
 		pkgmodelquestions.QuestionTypeSingleChoice,
 		pkgmodelquestions.QuestionTypeMultipleChoice,
@@ -515,7 +514,7 @@ func TestStartNewExamSession_AcceptQuestionTypes(t *testing.T) {
 		}
 	}
 
-	want := []string{"1", "2", "4", "6"}
+	want := []string{"1", "4", "6"}
 	if len(seen) != len(want) {
 		t.Fatalf("expected %d questions, got %d (%v)", len(want), len(seen), seen)
 	}

@@ -36,62 +36,6 @@
             </options>
           </correctanswer>
         </question>
-        <question id="2" type="multiple-choice" score="1">
-          <description>Refer to the exhibit. An engineer must configure an L3Out peering with the backbone network. The L3Out must forward unicast and multicast traffic over the link.
-            Which two methods should be used to configure L3Out to meet these requirements? (Choose two.)</description>
-          <exhibits>
-            <exhibit>
-              <image src="assets/9b44f37d-60b7-4b05-82db-2effb6aa58d6.jpg" />
-            </exhibit>
-          </exhibits>
-          <options>
-            <option id="1">Layer 3 routed port</option>
-            <option id="2">VPC with SVI</option>
-            <option id="3">port channel with SVI</option>
-            <option id="4">Layer 3 routed subinterface</option>
-            <option id="5">Layer 3 floating SVI</option>
-          </options>
-          <correctanswer>
-            <options>
-              <option id="1" />
-              <option id="4" />
-            </options>
-          </correctanswer>
-        </question>
-        <question id="3" type="drag-and-drop" score="1">
-          <description>An engineer deploys a Cisco ACI fabric. The engineer created a VPC policy group named Allot_MET_RIO7_RIO8 for the enclosure and these objects have been configured:
-            &#8226; Physical Domain Bare_Metal_L3In_Dom
-            &#8226; VLAN pool NFVI_VLPool
-            &#8226; AAEP NFVI_AAEP
-            Drag and drop objects from the left to the objects under which they must be added to configure an EPG named 12_MSSMET2_LDE_int_EPG. Not all objects are used.</description>
-          <candidates>
-            <candidate id="1">NFVI_VLPool</candidate>
-            <candidate id="2">Bare_Metal_L3ln_Dom</candidate>
-            <candidate id="3">NFVI_AAEP</candidate>
-            <candidate id="4">Allot_MET_RIO7_RIO8</candidate>
-          </candidates>
-          <drops>
-            <drop id="1">AAEP</drop>
-            <drop id="2">physical domain</drop>
-            <drop id="3">VPC policy group</drop>
-          </drops>
-          <correctanswer>
-            <connectionsolutions>
-              <connectionsolution requiredUniqueConnections="3">
-                <!-- drag 2 and drop it to 1 -->
-                <connect dst="1" src="2" />
-
-                <!-- drag 1 and drop it to 2 -->
-                <connect dst="2" src="1" />
-
-                <!-- drag 3 and drop it to 3 -->
-                <connect dst="3" src="3" />
-              </connectionsolution>
-
-              <!-- in some case, a drag-and-drop question can also have multiple correct answers, then we just define more connectionsolution objects -->
-            </connectionsolutions>
-          </correctanswer>
-        </question>
         <question id="4" type="single-choice" score="1">
           <description>Refer to the exhibit. An engineer is investigating a reachability issue in an experimental BGP overlay network. ICMPv6 echo requests from the local router to fdea:6e46:2f1c::1 time out, and traceroute dies several hops into the path. The engineer verifies that the iBGP session to i-bzip9 is established, that no ACLs are blocking ICMPv6, and the rp_filter kernel parameter is set to 0 for all interfaces. Which statement best explains why the pings fail?</description>
           <exhibits>
@@ -122,62 +66,6 @@
                 id="3"
               >The entry is a ghost route, and traffic is blackholed along the phantom path.</option>
             </options>
-          </correctanswer>
-        </question>
-        <question id="5" type="drag-and-drop" score="1">
-          <description>Drag and drop the Cisco ACI filter entry options from the left onto the correct categories on the right indicating what are required or optional parameters.
-            Select and Place:</description>
-          <candidates>
-            <candidate id="1">Name</candidate>
-            <candidate id="2">ARP Flag</candidate>
-            <candidate id="3">Ether Type</candidate>
-            <candidate id="4">IP Protocol</candidate>
-            <candidate id="5">Source Port From</candidate>
-          </candidates>
-          <multiareadrop>
-            <!-- in a multi-area drop, drop entries share the same id namespace, so even two drops are in different drop areas, their Ids still mustn't be duplicated -->
-            <droparea id="drop-area-1">
-              <droparealabel>Optional Parameters</droparealabel>
-              <drop id="1" />
-              <drop id="2" />
-              <drop id="3" />
-            </droparea>
-            <droparea id="drop-area-2">
-              <droparealabel>Required Parameters</droparealabel>
-              <drop id="4" />
-              <drop id="5" />
-            </droparea>
-          </multiareadrop>
-          <correctanswer>
-            <connectionsolutions>
-              <!-- 5 unique connections are required -->
-              <connectionsolution requiredUniqueConnections="5">
-
-                <!--
-                    A connectcombination object simply represents a list of Cartesian products yield from cross-multiplying the connectsources and connectdestinations
-                    In this example, connect sources are: 1, 3; connect destinations are 4, 5
-                    so the list of cartesian products would be:
-                    { (1, 4), (1, 5), (3, 4), (3, 5) }
-                    any connection falls within this set is considered correct
-                    -->
-                <connectcombination>
-                  <connectsource id="1" />
-                  <connectsource id="3" />
-                  <connectdestination id="4" />
-                  <connectdestination id="5" />
-                </connectcombination>
-                <connectcombination>
-                  <connectsource id="2" />
-                  <connectsource id="4" />
-                  <connectsource id="5" />
-                  <connectdestination id="1" />
-                  <connectdestination id="2" />
-                  <connectdestination id="3" />
-                </connectcombination>
-              </connectionsolution>
-
-              <!-- in some case, a drag-and-drop question can also have multiple correct answers, then we just define more connectionsolution objects -->
-            </connectionsolutions>
           </correctanswer>
         </question>
         <question id="6" type="single-choice" score="1">

@@ -131,16 +131,13 @@ func TestExamLoader_LoadFileRealRepoExam(t *testing.T) {
 		t.Fatalf("unexpected exam meta: %+v", exam)
 	}
 	qs := exam.QuestionSet.QuestionCollections
-	if len(qs) != 1 || len(qs[0].Questions) != 7 {
-		t.Fatalf("expected 1 collection with 7 questions, got %d collections", len(qs))
+	if len(qs) != 1 || len(qs[0].Questions) != 4 {
+		t.Fatalf("expected 1 collection with 4 questions, got %d collections", len(qs))
 	}
-	// Question 3 is the drag-and-drop with a bullet (&#8226;) in its description.
-	q3 := qs[0].Questions[2]
-	if q3.Type != QuestionTypeDragAndDrop {
-		t.Fatalf("expected q3 drag-and-drop, got %q", q3.Type)
-	}
-	if !strings.Contains(string(q3.Description.Text), "•") {
-		t.Fatalf("expected bullet in q3 description, got %q", q3.Description.Text)
+	// Question 7 is the image-based drag-and-drop question.
+	q7 := qs[0].Questions[3]
+	if q7.Id != "7" || q7.Type != QuestionTypeDragAndDrop {
+		t.Fatalf("expected q7 drag-and-drop, got id %q type %q", q7.Id, q7.Type)
 	}
 }
 

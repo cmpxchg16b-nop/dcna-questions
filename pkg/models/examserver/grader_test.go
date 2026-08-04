@@ -186,7 +186,7 @@ func connects(pairs ...[2]string) []pkgmodelquestions.Connect {
 // that the solution accepts, drawn from its explicit connects or the Cartesian
 // products of its connect combinations.
 func TestSimpleOnMemoryGrader_DragAndDrop(t *testing.T) {
-	// Like exam1.xml question 3: three explicit connects, all three required.
+	// Like exam1.xml question 7: three explicit connects, all three required.
 	flatSolution := pkgmodelquestions.ConnectionSolution{
 		RequiredUniqueConnections: 3,
 		Connects: []pkgmodelquestions.Connect{
@@ -195,8 +195,8 @@ func TestSimpleOnMemoryGrader_DragAndDrop(t *testing.T) {
 			{Src: "3", Dst: "3"},
 		},
 	}
-	// Like exam1.xml question 5: two connect combinations with five unique
-	// connections required; any product of a combination is accepted.
+	// A connect-combination solution: two connect combinations with five
+	// unique connections required; any product of a combination is accepted.
 	comboSolution := pkgmodelquestions.ConnectionSolution{
 		RequiredUniqueConnections: 5,
 		ConnectCombinations: []pkgmodelquestions.ConnectCombination{
