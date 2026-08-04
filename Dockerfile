@@ -38,10 +38,17 @@ FROM scratch
 LABEL org.opencontainers.image.title="exam-server" \
       org.opencontainers.image.source="https://github.com/cmpxchg16b-nop/dcna-questions"
 
+WORKDIR /app
+
 # Run as a non-root user (numeric UID; no /etc/passwd needed with scratch).
 USER 65532:65532
 
 COPY --from=builder /exam-server /usr/local/bin/exam-server
 
+# Ship the exam documents and static assets alongside the binary so the server
+# starts with sensible defaults. Paths are relative to WORKDIR (/app).
+COPY assets/ ./assets/
+COPY exams/ ./exams/
+
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/exam-server"]
+ENTRYPOINT ["/usr/local/bin/exam-server", "--assets-dir=assets", "--load-exam-dir=exams"]
