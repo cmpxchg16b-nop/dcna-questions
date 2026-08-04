@@ -38,6 +38,10 @@ export default function BreadcrumbNav() {
   const searchParams = useSearchParams();
   const crumbs = crumbsFor(pathname, searchParams.get("exam_session_id"));
 
+  // A lone segment (e.g. just "Home" on the home page) has no hierarchy to
+  // navigate, so the whole bar is hidden.
+  if (crumbs.length < 2) return null;
+
   return (
     <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
       {crumbs.map((crumb, i) => {
