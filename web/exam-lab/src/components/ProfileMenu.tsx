@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Avatar,
+  Button,
   ButtonBase,
   Divider,
   ListItemIcon,
@@ -14,6 +17,12 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import { useProfile } from "@/hooks/useProfile";
 import { useLogout } from "@/hooks/useLogout";
 
+// PROFILE_POLL_INTERVAL_MS is how often ProfileMenu re-fetches GET
+// /api/profile. Polling keeps the top bar in sync with the session: a login
+// or logout in another tab — or a JWT that expired mid-session — is picked
+// up here within one interval instead of on the next full page load.
+const PROFILE_POLL_INTERVAL_MS = 3000;
+
 // avatarHue hashes the subject id to a stable hue (0–359), so each user gets
 // a consistent avatar color without the server assigning one.
 function avatarHue(subjectId: string): number {
@@ -24,16 +33,46 @@ function avatarHue(subjectId: string): number {
   return ((hash % 360) + 360) % 360;
 }
 
-// ProfileMenu is the account area at the right end of the top bar: a round
-// avatar with the subject's first initial, plus the subject id text when the
-// viewport is sm (600px) or wider. Clicking it opens a menu showing the
-// subject id and a Log Out item. It renders nothing while the profile is
-// loading or when the caller is unauthenticated (GET /api/profile 401s).
+// ProfileMenu is the account area at the right end of the top bar. For an
+// authenticated caller it is a round avatar with the subject's first initial,
+// plus the subject id text when the viewport is sm (600px) or wider; clicking
+// it opens a menu showing the subject id and a Log Out item. For an
+// unauthenticated caller (GET /api/profile 401s) it renders as a Login link
+// button instead, and — unless the current page is already under /login —
+// navigates to the login page. It renders nothing while the profile is
+// loading, so the bar never flashes the wrong affordance.
 export default function ProfileMenu() {
-  const { data } = useProfile();
+  const { data, isPending, isError } = useProfile(PROFILE_POLL_INTERVAL_MS);
   const logout = useLogout();
+  const router = useRouter();
+  const pathname = usePathname();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const open = anchorEl !== null;
+
+  // Session guard: a failed profile fetch means there is no (valid) session,
+  // so the user belongs on the login page. The /login prefix is exempt so the
+  // polling on the login page itself doesn't cause a navigation loop.
+  useEffect(() => {
+    if (isError && !pathname.startsWith("/login")) {
+      router.replace("/login");
+    }
+  }, [isError, pathname, router]);
+
+  if (isPending) return null;
+
+  if (isError) {
+    return (
+      <Button
+        component={Link}
+        href="/login"
+        variant="outlined"
+        size="small"
+        sx={{ textTransform: "none", ml: 0.5 }}
+      >
+        Login
+      </Button>
+    );
+  }
 
   const subjectId = data?.subject_id;
   if (!subjectId) return null;

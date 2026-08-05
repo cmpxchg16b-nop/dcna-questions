@@ -12,11 +12,15 @@ async function fetchProfile(): Promise<ProfileResponse> {
 
 // useProfile fetches and caches the caller's profile under the "profile"
 // query key. Retries are disabled: the expected failure is a 401 while logged
-// out, which retrying cannot fix.
-export function useProfile() {
+// out, which retrying cannot fix. Pass refetchInterval (ms) to poll the
+// endpoint so session changes (login, logout, expiry) are picked up without
+// a reload; polling continues across the error state, so a later login still
+// flips the query back to success.
+export function useProfile(refetchInterval?: number) {
   return useQuery({
     queryKey: ["profile"],
     queryFn: fetchProfile,
     retry: false,
+    refetchInterval,
   });
 }

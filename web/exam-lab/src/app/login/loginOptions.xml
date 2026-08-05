@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!-- Login options shown by src/app/login/page.tsx, configurable here without
      touching the codebase. Validated against loginOption.xsd (same dir).
      The external-IdP URLs (google, entra, iedon, kioubit) are
@@ -6,18 +6,44 @@
      build-time env vars. Options with an empty loginURL are hidden by the
      login page. -->
 <loginOptions
-     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-     xsi:noNamespaceSchemaLocation="loginOption.xsd">
-     <loginOption kind="github" name="github" displayName="Github"
-          loginURL="/login/oauth2/github" />
-     <loginOption kind="google" name="google" displayName="Google"
-          loginURL="/login/oauth2/google" />
-     <loginOption kind="entra" name="entra" displayName="Entra ID"
-          loginURL="/login/oauth2/entra" />
-     <loginOption kind="iedon" name="iedon" displayName="iEdon"
-          loginURL="/login/oauth2/iedon" />
-     <loginOption kind="kioubit" name="kioubit" displayName="Kioubit"
-          loginURL="/login/oauth2/kioubit" />
-     <loginOption kind="visitor" name="visitor" displayName=""
-          label="Sign in as Visitor" loginURL="/login/anonymous" />
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="loginOption.xsd"
+>
+     <loginOption
+    kind="github"
+    name="github"
+    displayName="Github"
+    loginURL="/login/oauth2/github"
+  />
+     <loginOption
+    kind="google"
+    name="google"
+    displayName="Google"
+    loginURL="/login/oauth2/google"
+  />
+     <loginOption
+    kind="entra"
+    name="entra"
+    displayName="Entra ID"
+    loginURL="/login/oauth2/entra"
+  />
+     <loginOption
+    kind="iedon"
+    name="iedon"
+    displayName="iEdon"
+    loginURL="/login/oauth2/iedon"
+  />
+     <loginOption
+    kind="kioubit"
+    name="kioubit"
+    displayName="Kioubit"
+    loginURL="/login/oauth2/kioubit"
+  />
+     <loginOption
+    kind="visitor"
+    name="visitor"
+    displayName=""
+    label="Sign in as Visitor"
+    loginURL="/api/login/visitor"
+  />
 </loginOptions>
