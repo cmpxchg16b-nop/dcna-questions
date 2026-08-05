@@ -36,6 +36,14 @@ export type ExamDocs = ExamExcerpt[];
 // set. Maps to the Go ndjsonLine struct {"Err":"...","Data":{...}}.
 export type ExamDocsLine = { Data?: ExamExcerpt; Err?: string };
 
+// ProfileResponse is the JSON body of a successful GET /api/profile:
+// {"session_id": "...", "subject_id": "..."}. Mirrors the Go ProfileResponse
+// struct in pkg/api/profile/profile.go.
+export type ProfileResponse = {
+  session_id: string;
+  subject_id: string;
+};
+
 // ExamSessionSummary mirrors the Go examSessionSummary struct in
 // pkg/api/examsessions/examsession.go. Unlike ExamDocumentExcerpt it carries
 // json tags, so its wire fields are snake_case. started_at is a

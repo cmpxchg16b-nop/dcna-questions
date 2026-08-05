@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { AppBar, Box, Toolbar } from "@mui/material";
 import BreadcrumbNav from "./BreadcrumbNav";
 import ColorModeToggle from "./ColorModeToggle";
+import ProfileMenu from "./ProfileMenu";
 
 // TopBar groups the breadcrumb trail (left) and the color-mode toggle
 // (right) into one sticky bar above the page content. The bar always
@@ -45,6 +46,7 @@ export default function TopBar() {
             trail is hidden. */}
         <Box sx={{ flexGrow: 1 }} />
         <ColorModeToggle />
+        <ProfileMenu />
       </Toolbar>
     </AppBar>
   );

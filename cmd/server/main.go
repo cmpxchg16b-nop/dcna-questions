@@ -6,6 +6,7 @@ import (
 	pkgapiexamsessions "dcna-questions/pkg/api/examsessions"
 	pkgapiexamtrackings "dcna-questions/pkg/api/examtrackings"
 	pkgapiloginvisitor "dcna-questions/pkg/api/login/visitor"
+	pkgapilogout "dcna-questions/pkg/api/logout"
 	pkgapiprofile "dcna-questions/pkg/api/profile"
 	pkgauth "dcna-questions/pkg/auth"
 	pkgcookie "dcna-questions/pkg/cookie"
@@ -82,6 +83,10 @@ func (cli *CLI) Run() error {
 	muxHandlerDyn := http.NewServeMux()
 	muxHandlerDyn.Handle("/api/examdocs", examHandler)
 	muxHandlerDyn.Handle("/api/profile", pkgapiprofile.NewProfileHandler())
+	// /api/logout is on the JWT whitelist below, so the handler also runs for
+	// requests whose token is already expired or invalid — clearing cookies
+	// must never depend on a still-valid session.
+	muxHandlerDyn.Handle("/api/logout", pkgapilogout.NewLogoutHandler(""))
 	muxHandlerDyn.Handle("/api/examsessions", examSessionHandler)
 	muxHandlerDyn.Handle("/api/examsessions/", examSessionHandler)
 	muxHandlerDyn.Handle("/api/examtrackings", examTrackingsHandler)

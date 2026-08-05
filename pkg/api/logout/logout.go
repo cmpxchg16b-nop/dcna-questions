@@ -13,6 +13,12 @@ type LogoutHandler struct {
 	RedirectAfterLogout string
 }
 
+// NewLogoutHandler constructs a LogoutHandler. redirectAfterLogout may be
+// empty, in which case the handler redirects to "/".
+func NewLogoutHandler(redirectAfterLogout string) *LogoutHandler {
+	return &LogoutHandler{RedirectAfterLogout: redirectAfterLogout}
+}
+
 func (h *LogoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
