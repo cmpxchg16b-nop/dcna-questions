@@ -7,8 +7,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
+	"sync"
 	"time"
 
 	pkgapicommon "dcna-questions/pkg/api/common"
@@ -17,17 +17,28 @@ import (
 	pkgoidc "dcna-questions/pkg/oidc"
 	pkgutils "dcna-questions/pkg/utils"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"golang.org/x/oauth2"
 )
 
 // GenericOIDCLoginHandler implements the OAuth 2.0 Authorization Code flow
 // with OpenID Connect extensions against any OIDC-compliant provider.
-// Endpoints are discovered automatically from the provider's
+//
+// It builds on top of two standard libraries:
+//   - github.com/coreos/go-oidc/v3/oidc for provider discovery and ID token
+//     verification;
+//   - golang.org/x/oauth2 for the authorize-URL construction and the
+//     authorization-code -> token exchange.
+//
+// The provider's endpoints are discovered automatically from its
 // {.well-known/openid-configuration} document.
 //
 // Register this handler on a path ending with "/", e.g. "/login/as/oidc/".
-// Sub-paths "/start" and "/auth" are handled automatically.
+// Sub-paths "/start" and "/auth" are handled automatically. The "state"
+// parameter (a server-issued, cookie-bound nonce) provides CSRF protection
+// across the redirect to the IdP.
 type GenericOIDCLoginHandler struct {
 	SessionLifespan time.Duration
 
@@ -58,12 +69,19 @@ type GenericOIDCLoginHandler struct {
 	NonceIssuer   pkgauth.NonceIssuer
 	cookieBuilder pkgcookie.CookieBuilder
 
-	discoveryCache *pkgoidc.DiscoveryCache
-	providerCache  *pkgoidc.ProviderCache
+	// The OIDC provider, oauth2 config and the (optional) revocation endpoint
+	// are resolved lazily on first use and then cached for the lifetime of the
+	// handler. oidc.Provider already fetches and caches the discovery document,
+	// so there is no need for a separate discovery cache.
+	providerInit sync.Once
+	provider     *oidc.Provider
+	oauth2Config *oauth2.Config
+	revokeURL    string
+	initErr      error
 }
 
 // NewGenericOIDCLoginHandler constructs a GenericOIDCLoginHandler, injecting its
-// dependencies including the CookieBuilder used to create the session and nonce
+// dependencies including the CookieBuilder used to create the session and state
 // cookies.
 func NewGenericOIDCLoginHandler(
 	sessionLifespan time.Duration,
@@ -109,18 +127,37 @@ func (h *GenericOIDCLoginHandler) getProviderName() string {
 	return "oidc"
 }
 
-func (h *GenericOIDCLoginHandler) getDiscovery(ctx context.Context) (*pkgoidc.DiscoveryDocument, error) {
-	if h.discoveryCache == nil {
-		h.discoveryCache = pkgoidc.NewDiscoveryCache(h.IssuerURL, 1*time.Hour)
-	}
-	return h.discoveryCache.Get(ctx)
-}
+// initProvider discovers the OIDC provider (which caches the discovery
+// document internally) and builds the oauth2.Config used for authorize-URL
+// construction and token exchange. The result is cached for the handler's
+// lifetime.
+func (h *GenericOIDCLoginHandler) initProvider(ctx context.Context) error {
+	h.providerInit.Do(func() {
+		provider, err := oidc.NewProvider(ctx, h.IssuerURL)
+		if err != nil {
+			h.initErr = fmt.Errorf("failed to discover OIDC provider %q: %w", h.IssuerURL, err)
+			return
+		}
+		// Pull the optional revocation endpoint out of the raw discovery claims.
+		var claims struct {
+			RevocationEndpoint string `json:"revocation_endpoint"`
+		}
+		if err := provider.Claims(&claims); err != nil {
+			h.initErr = fmt.Errorf("failed to decode OIDC discovery claims: %w", err)
+			return
+		}
 
-func (h *GenericOIDCLoginHandler) getProviderCache() *pkgoidc.ProviderCache {
-	if h.providerCache == nil {
-		h.providerCache = pkgoidc.NewProviderCache(h.IssuerURL)
-	}
-	return h.providerCache
+		h.provider = provider
+		h.revokeURL = claims.RevocationEndpoint
+		h.oauth2Config = &oauth2.Config{
+			ClientID:     h.ClientId,
+			ClientSecret: h.ClientSecret,
+			RedirectURL:  h.RedirectURL,
+			Endpoint:     provider.Endpoint(),
+			Scopes:       strings.Fields(h.getScope()),
+		}
+	})
+	return h.initErr
 }
 
 func (h *GenericOIDCLoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -136,50 +173,29 @@ func (h *GenericOIDCLoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	h.handleNotFoundForThis(w, r)
 }
 
-func (h *GenericOIDCLoginHandler) buildAuthorizeURL(nonce, authzEndpoint string) string {
-	urlVals := url.Values{}
-	urlVals.Set("client_id", h.ClientId)
-	urlVals.Set("redirect_uri", h.RedirectURL)
-	urlVals.Set("response_type", "code")
-	urlVals.Set("scope", h.getScope())
-	urlVals.Set("state", nonce)
-	urlVals.Set("nonce", nonce)
-	urlObj, err := url.Parse(authzEndpoint)
-	if err != nil {
-		log.New(os.Stderr, "GenericOIDCLoginHandler", 0).Printf("Invalid authorization endpoint URL: %v", err)
-		return ""
-	}
-	urlObj.RawQuery = urlVals.Encode()
-	return urlObj.String()
-}
-
 func (h *GenericOIDCLoginHandler) handleStart(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	disc, err := h.getDiscovery(ctx)
-	if err != nil {
-		log.Printf("Failed to fetch OIDC discovery document for %q: %v", h.IssuerURL, err)
+	if err := h.initProvider(ctx); err != nil {
+		log.Printf("Failed to initialise OIDC provider %q: %v", h.IssuerURL, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to fetch OIDC provider configuration"})
 		return
 	}
 
-	nonce, err := h.NonceIssuer.IssueNonce(ctx)
+	// The state value doubles as a CSRF token: it is stored in a cookie and
+	// echoed back by the IdP, then validated in /auth before the code is
+	// exchanged.
+	state, err := h.NonceIssuer.IssueNonce(ctx)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to issue nonce"})
+		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to issue state"})
 		return
 	}
 
-	http.SetCookie(w, h.cookieBuilder.BuildCookieFromKeyValue(pkgapicommon.DefaultNonceCookieKey, nonce))
+	http.SetCookie(w, h.cookieBuilder.BuildCookieFromKeyValue(pkgapicommon.DefaultNonceCookieKey, state))
 
-	redirURL := h.buildAuthorizeURL(nonce, disc.AuthorizationEndpoint)
-	if redirURL == "" {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to build authorization URL (internal error)"})
-		return
-	}
-	http.Redirect(w, r, redirURL, http.StatusTemporaryRedirect)
+	http.Redirect(w, r, h.oauth2Config.AuthCodeURL(state), http.StatusTemporaryRedirect)
 }
 
 func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter, r *http.Request) {
@@ -193,38 +209,35 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 	}
 
 	ctx := r.Context()
-	nonce := r.URL.Query().Get("state")
-	nonceFromCookie, err := r.Cookie(pkgapicommon.DefaultNonceCookieKey)
-	if err != nil {
+	if err := h.initProvider(ctx); err != nil {
+		log.Printf("Failed to initialise OIDC provider %q: %v", h.IssuerURL, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to fetch OIDC provider configuration"})
+		return
+	}
+
+	// Validate the state/CSRF token echoed back by the IdP against the one we
+	// stored in a cookie at /start.
+	state := r.URL.Query().Get("state")
+	stateFromCookie, err := r.Cookie(pkgapicommon.DefaultNonceCookieKey)
+	if err != nil || stateFromCookie == nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(pkgutils.ErrorResponse{Error: fmt.Sprintf("Nonce not found in cookies: %v", err)})
+		json.NewEncoder(w).Encode(pkgutils.ErrorResponse{Error: fmt.Sprintf("State not found in cookies: %v", err)})
 		return
 	}
-	if nonceFromCookie == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(pkgutils.ErrorResponse{Error: "Nonce not found in cookies"})
+	if stateFromCookie.Value != state {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(pkgutils.ErrorResponse{Error: "State from cookie does not match state in request"})
+		return
+	}
+	valid, err := h.NonceIssuer.ValidateNonce(ctx, state)
+	if err != nil || !valid {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: fmt.Sprintf("Invalid state: %v", err)})
 		return
 	}
 
-	if nonceFromCookie.Value != nonce {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(pkgutils.ErrorResponse{Error: "Nonce from cookie does not match nonce in request"})
-		return
-	}
-
-	valid, err := h.NonceIssuer.ValidateNonce(ctx, nonce)
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: fmt.Sprintf("Invalid nonce: %v", err)})
-		return
-	}
-	if !valid {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Invalid nonce"})
-		return
-	}
-
-	// Clear the nonce cookie after successful validation
+	// Clear the state cookie now that it has been consumed.
 	http.SetCookie(w, &http.Cookie{
 		Name:     pkgapicommon.DefaultNonceCookieKey,
 		Value:    "",
@@ -235,75 +248,32 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	authZCode := r.URL.Query().Get("code")
-	if authZCode == "" {
+	code := r.URL.Query().Get("code")
+	if code == "" {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "No authorization code found in request"})
 		return
 	}
 
-	// Fetch discovery document to get the token endpoint
-	disc, err := h.getDiscovery(ctx)
-	if err != nil {
-		log.Printf("Failed to fetch OIDC discovery document for %q: %v", h.IssuerURL, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to fetch OIDC provider configuration"})
-		return
-	}
-
-	// Exchange authorization code for tokens
-	bodyVals := url.Values{}
-	bodyVals.Set("client_id", h.ClientId)
-	bodyVals.Set("client_secret", h.ClientSecret)
-	bodyVals.Set("code", authZCode)
-	bodyVals.Set("grant_type", "authorization_code")
-	bodyVals.Set("redirect_uri", h.RedirectURL)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, disc.TokenEndpoint, strings.NewReader(bodyVals.Encode()))
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to create token exchange request"})
-		return
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
+	// Exchange the authorization code for tokens. oauth2 handles the form
+	// encoding, the grant_type and the redirect_uri.
+	oauth2Token, err := h.oauth2Config.Exchange(ctx, code)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: fmt.Sprintf("Failed to exchange token: %v", err)})
 		return
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		tokenErrResp := new(pkgoidc.TokenErrorResponse)
-		if decodeErr := json.NewDecoder(resp.Body).Decode(tokenErrResp); decodeErr != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: fmt.Sprintf("Token exchange failed with status %d", resp.StatusCode)})
-			return
-		}
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: fmt.Sprintf("Token exchange failed: %s: %s", tokenErrResp.Error, tokenErrResp.ErrorDescription)})
-		return
-	}
-
-	tokenResp := new(pkgoidc.TokenResponse)
-	if err := json.NewDecoder(resp.Body).Decode(tokenResp); err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to decode token response"})
-		return
-	}
-
-	// Verify the ID token (signature, issuer, audience, expiry, nonce).
-	// The ID token is the primary identity artifact in OIDC.
-	if tokenResp.IdToken == "" {
+	// The ID token is the primary identity artifact in OIDC; extract it from
+	// the token response and verify it (signature, issuer, audience, expiry).
+	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
+	if !ok || rawIDToken == "" {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "No ID token in token response from OIDC provider"})
 		return
 	}
 
-	idToken, err := pkgoidc.VerifyIDToken(ctx, h.getProviderCache(), h.ClientId, tokenResp.IdToken, nonce)
+	idToken, err := h.provider.Verifier(&oidc.Config{ClientID: h.ClientId}).Verify(ctx, rawIDToken)
 	if err != nil {
 		log.Printf("ID token verification failed for OIDC provider %q: %v", h.getProviderName(), err)
 		w.WriteHeader(http.StatusUnauthorized)
@@ -311,9 +281,9 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 		return
 	}
 
-	// Revoke the access token if the provider exposes a revocation endpoint
-	if disc.RevocationEndpoint != "" {
-		defer revokeOIDCToken(disc.RevocationEndpoint, tokenResp.AccessToken)
+	// Revoke the access token if the provider exposes a revocation endpoint.
+	if h.revokeURL != "" {
+		defer revokeOIDCToken(h.revokeURL, oauth2Token.AccessToken)
 	}
 
 	// Extract user identity from the verified ID token claims first.
@@ -342,22 +312,27 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 	}
 
 	// Enrich profile from the userinfo endpoint if the provider exposes one.
-	if disc.UserInfoEndpoint != "" {
-		userinfo, err := pkgoidc.FetchUserInfo(ctx, disc.UserInfoEndpoint, tokenResp.AccessToken)
+	if endpoint := h.provider.UserInfoEndpoint(); endpoint != "" {
+		userinfo, err := h.provider.UserInfo(ctx, oauth2.StaticTokenSource(oauth2Token))
 		if err != nil {
-			log.Printf("Failed to fetch userinfo from %q (non-fatal): %v", disc.UserInfoEndpoint, err)
+			log.Printf("Failed to fetch userinfo from %q (non-fatal): %v", endpoint, err)
 		} else {
-			if userinfo.Sub != "" && userinfo.Sub != userId {
-				log.Printf("userinfo sub %q differs from ID token sub %q", userinfo.Sub, userId)
-			}
-			if username == "" {
-				username = userinfo.PreferredUsername
-			}
-			if username == "" {
-				username = userinfo.Email
-			}
-			if username == "" {
-				username = userinfo.Name
+			info := new(pkgoidc.UserInfoResponse)
+			if err := userinfo.Claims(info); err != nil {
+				log.Printf("Failed to decode userinfo claims (non-fatal): %v", err)
+			} else {
+				if info.Sub != "" && info.Sub != userId {
+					log.Printf("userinfo sub %q differs from ID token sub %q", info.Sub, userId)
+				}
+				if username == "" {
+					username = info.PreferredUsername
+				}
+				if username == "" {
+					username = info.Email
+				}
+				if username == "" {
+					username = info.Name
+				}
 			}
 		}
 	}
