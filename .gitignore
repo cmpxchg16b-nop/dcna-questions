@@ -6,3 +6,4 @@ exams/cisco1.xml
 exams/cisco2.xml
 bin/server
 .env.local
+oidcLoginOptions.xml

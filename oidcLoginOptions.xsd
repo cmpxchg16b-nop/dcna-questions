@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Schema for oidcLoginOptions.xml, the configurable list of generic OIDC
+     login providers. Each <oidcLoginOption/> mirrors the configuration fields
+     of GenericOIDCLoginHandler in pkg/api/login/oidc/general/oidcgeneral.go.
+     The XML instance references this schema via
+     xsi:noNamespaceSchemaLocation="oidcLoginOptions.xsd". -->
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root element; holds zero or more oidcLoginOption entries. -->
+  <xsd:element name="oidcLoginOptions">
+    <xsd:complexType>
+      <xsd:sequence>
+        <xsd:element name="oidcLoginOption" type="oidcLoginOptionType"
+                     minOccurs="0" maxOccurs="unbounded"/>
+      </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+
+  <!-- A single OIDC provider configuration. Attribute names mirror the Go
+       struct fields of GenericOIDCLoginHandler (with a lowercased first
+       letter), and map directly onto the constructor parameters of
+       NewGenericOIDCLoginHandler.
+
+       Attributes with sensible code-side defaults are optional here:
+         * providerName      defaults to "oidc"
+         * scope             defaults to "openid profile email"
+         * sessionLifespan   a Go time.Duration string (e.g. "168h")
+         * loginSuccessRedirectURL  defaults to "/"
+
+       Attributes without defaults are required:
+         * issuerURL, clientId, clientSecret, redirectURL -->
+  <xsd:complexType name="oidcLoginOptionType">
+    <xsd:attribute name="issuerURL" type="xsd:string" use="required"/>
+    <xsd:attribute name="clientId" type="xsd:string" use="required"/>
+    <xsd:attribute name="clientSecret" type="xsd:string" use="required"/>
+    <xsd:attribute name="redirectURL" type="xsd:string" use="required"/>
+    <xsd:attribute name="providerName" type="xsd:string" use="optional"/>
+    <xsd:attribute name="scope" type="xsd:string" use="optional"/>
+    <xsd:attribute name="sessionLifespan" type="xsd:string" use="optional"/>
+    <xsd:attribute name="loginSuccessRedirectURL" type="xsd:string" use="optional"/>
+  </xsd:complexType>
+
+</xsd:schema>
