@@ -27,12 +27,17 @@
     displayName="Entra ID"
     loginURL=""
   />
-  <loginOption kind="iedon" name="iedon" displayName="iEdon" loginURL="/api/login/oidc/iedon/start" />
+  <loginOption
+    kind="iedon"
+    name="iedon"
+    displayName="iEdon"
+    loginURL="/api/login/oidc/iedon/start"
+  />
   <loginOption
     kind="kioubit"
     name="kioubit"
     displayName="Kioubit"
-    loginURL=""
+    loginURL="/api/login/oidc/kioubit/start"
   />
   <loginOption
     kind="visitor"
