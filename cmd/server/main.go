@@ -6,6 +6,7 @@ import (
 	pkgapiexamsessions "dcna-questions/pkg/api/examsessions"
 	pkgapiexamtrackings "dcna-questions/pkg/api/examtrackings"
 	pkgapiloginoauth2github "dcna-questions/pkg/api/login/oauth2/github"
+	pkgapiloginoidcgeneral "dcna-questions/pkg/api/login/oidc/general"
 	pkgapiloginvisitor "dcna-questions/pkg/api/login/visitor"
 	pkgapilogout "dcna-questions/pkg/api/logout"
 	pkgapiprofile "dcna-questions/pkg/api/profile"
@@ -37,6 +38,7 @@ type CLI struct {
 	AssetsDir                     string        `name:"assets-dir" help:"Directory of static assets to serve under /assets/." env:"ASSETS_DIR" type:"existingdir"`
 	LoadExam                      []string      `name:"load-exam" help:"Paths to exam documents to load." env:"LOAD_EXAM" type:"existingfile"`
 	LoadExamDir                   []string      `name:"load-exam-dir" help:"Directories of exam documents to load." env:"LOAD_EXAM_DIR" type:"existingdir"`
+	LoadOIDCOptionsXML            string        `name:"load-oidc-options-xml" help:"Path to the OIDC login options XML document (see oidcLoginOptions.xsd)." env:"LOAD_OIDC_OPTIONS_XML" type:"existingfile"`
 	JWTAuthSecretFromEnv          string        `name:"jwt-auth-secret-from-env" help:"Name of the environment variable that contains the JWT secret" default:"JWT_SECRET"`
 	JWTAuthSecretFromFile         string        `name:"jwt-auth-secret-from-file" help:"Path to the file that contains the JWT secret"`
 	SubjectBlacklistTxtPath       string        `name:"subj-blacklist-path" help:"Path to the blacklist text file, one subject id per a line"`
@@ -153,6 +155,53 @@ func (cli *CLI) Run() error {
 		)
 		muxHandlerDyn.Handle("/api/login/oauth2/github", githubLoginHandler)
 		muxHandlerDyn.Handle("/api/login/oauth2/github/", githubLoginHandler)
+		logger.Info("registered Github login handler", "path", "/api/login/oauth2/github/")
+	}
+
+	// Generic OIDC providers loaded from the XML document referenced by
+	// --load-oidc-options-xml. Each <oidcLoginOption/> with a non-empty
+	// issuerURL registers a GenericOIDCLoginHandler at
+	// /api/login/oidc/{providerName}[/...]. Entries with an empty issuerURL
+	// are skipped so the shipped sample file can be used as-is.
+	if cli.LoadOIDCOptionsXML != "" {
+		oidcOpts, err := loadOIDCLoginOptions(cli.LoadOIDCOptionsXML)
+		if err != nil {
+			return err
+		}
+		nonceIssuer := &pkgauth.StaticKeyNonceIssuer{
+			NonceLifespan:  cli.NonceLifespan,
+			SecretProvider: keyProvider,
+		}
+		for _, opt := range oidcOpts.Options {
+			if opt.IssuerURL == "" {
+				continue
+			}
+			providerName := opt.ProviderName
+			if providerName == "" {
+				providerName = "oidc"
+			}
+			sessionLifespan, err := parseSessionLifespan(opt.SessionLifespan, 168*time.Hour)
+			if err != nil {
+				return fmt.Errorf("OIDC provider %q: %w", providerName, err)
+			}
+			handler := pkgapiloginoidcgeneral.NewGenericOIDCLoginHandler(
+				sessionLifespan,
+				opt.ProviderName,
+				opt.IssuerURL,
+				opt.ClientId,
+				opt.ClientSecret,
+				opt.RedirectURL,
+				opt.Scope,
+				opt.LoginSuccessRedirectURL,
+				tokenIssuer,
+				nonceIssuer,
+				cookieBuilder,
+			)
+			base := "/api/login/oidc/" + providerName
+			muxHandlerDyn.Handle(base, handler)
+			muxHandlerDyn.Handle(base+"/", handler)
+			logger.Info("registered OIDC login handler", "provider", providerName, "path", base+"/", "issuer", opt.IssuerURL)
+		}
 	}
 
 	if cli.AssetsDir != "" {
