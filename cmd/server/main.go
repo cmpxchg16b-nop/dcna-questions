@@ -37,7 +37,7 @@ type CLI struct {
 	AssetsDir                     string        `name:"assets-dir" help:"Directory of static assets to serve under /assets/." env:"ASSETS_DIR" type:"existingdir"`
 	LoadExam                      []string      `name:"load-exam" help:"Paths to exam documents to load." env:"LOAD_EXAM" type:"existingfile"`
 	LoadExamDir                   []string      `name:"load-exam-dir" help:"Directories of exam documents to load." env:"LOAD_EXAM_DIR" type:"existingdir"`
-	JWTAuthSecretFromEnv          string        `name:"jwt-auth-secret-from-env" help:"Name of the environment variable that contains the JWT secret"`
+	JWTAuthSecretFromEnv          string        `name:"jwt-auth-secret-from-env" help:"Name of the environment variable that contains the JWT secret" default:"JWT_SECRET"`
 	JWTAuthSecretFromFile         string        `name:"jwt-auth-secret-from-file" help:"Path to the file that contains the JWT secret"`
 	SubjectBlacklistTxtPath       string        `name:"subj-blacklist-path" help:"Path to the blacklist text file, one subject id per a line"`
 	RejectVisitor                 bool          `name:"reject-visitor" help:"Reject requests from visitors (subjects with the 'visitor:' prefix)" default:"false"`
