@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <!-- Login options shown by src/app/login/page.tsx, configurable here without
      touching the codebase. Validated against loginOption.xsd (same dir).
      The external-IdP URLs (google, entra, iedon, kioubit) are
@@ -9,37 +9,32 @@
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="loginOption.xsd"
 >
-     <loginOption
+  <loginOption
     kind="github"
     name="github"
     displayName="Github"
     loginURL="/api/login/oauth2/github/start"
   />
-     <loginOption
+  <loginOption
     kind="google"
     name="google"
     displayName="Google"
-    loginURL="/login/oauth2/google"
+    loginURL=""
   />
-     <loginOption
+  <loginOption
     kind="entra"
     name="entra"
     displayName="Entra ID"
-    loginURL="/login/oauth2/entra"
+    loginURL=""
   />
-     <loginOption
-    kind="iedon"
-    name="iedon"
-    displayName="iEdon"
-    loginURL="/login/oauth2/iedon"
-  />
-     <loginOption
+  <loginOption kind="iedon" name="iedon" displayName="iEdon" loginURL="" />
+  <loginOption
     kind="kioubit"
     name="kioubit"
     displayName="Kioubit"
-    loginURL="/login/oauth2/kioubit"
+    loginURL=""
   />
-     <loginOption
+  <loginOption
     kind="visitor"
     name="visitor"
     displayName=""
