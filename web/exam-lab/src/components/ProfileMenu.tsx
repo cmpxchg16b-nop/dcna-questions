@@ -100,13 +100,11 @@ export default function ProfileMenu() {
         // slide under the bar.
         sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
       >
-        <MenuItem
-          disabled
-          dense
-          sx={{ "&.Mui-disabled": { opacity: 1 } }}
-        >
+        <MenuItem disabled sx={{ "&.Mui-disabled": { opacity: 1 } }}>
+          {/* body1 matches the Log Out item's font size; only the color
+              marks it as a non-interactive header line. */}
           <Typography
-            variant="body2"
+            variant="body1"
             color="text.secondary"
             sx={{ overflowWrap: "anywhere" }}
           >

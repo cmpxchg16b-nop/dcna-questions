@@ -45,8 +45,8 @@ export default function TopBar() {
         {/* Spacer pins the toggle to the far right even when the breadcrumb
             trail is hidden. */}
         <Box sx={{ flexGrow: 1 }} />
-        <ColorModeToggle />
         <ProfileMenu />
+        <ColorModeToggle />
       </Toolbar>
     </AppBar>
   );
