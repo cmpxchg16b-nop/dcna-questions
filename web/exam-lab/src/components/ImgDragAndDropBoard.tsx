@@ -10,6 +10,7 @@ import {
   Question,
 } from "@/api/types";
 import { isConnectionAccepted } from "@/api/dragAndDrop";
+import { resolveAssetSrc } from "@/utils";
 
 type ImgDragAndDropBoardProps = {
   question: Question;
@@ -136,7 +137,7 @@ export default function ImgDragAndDropBoard({
       <Box
         key={id}
         component="img"
-        src={`/${candidate.imgDataSrc}`}
+        src={resolveAssetSrc(candidate.imgDataSrc)}
         alt={`Image snippet ${id}`}
         role={disabled ? undefined : "button"}
         tabIndex={disabled ? undefined : 0}
@@ -246,7 +247,7 @@ export default function ImgDragAndDropBoard({
         {candidate && (
           <Box
             component="img"
-            src={`/${candidate.imgDataSrc}`}
+            src={resolveAssetSrc(candidate.imgDataSrc)}
             alt={`Placed snippet ${candidate.nodeId}`}
             draggable={!disabled}
             onDragStart={(e) => startDrag(e, candidate.nodeId)}
@@ -299,7 +300,7 @@ export default function ImgDragAndDropBoard({
         >
           <Box
             component="img"
-            src={`/${dropsArea.imgBackgroundUrl}`}
+            src={resolveAssetSrc(dropsArea.imgBackgroundUrl)}
             alt="Drop area background"
             draggable={false}
             sx={{
@@ -340,7 +341,7 @@ export default function ImgDragAndDropBoard({
                     {src && (
                       <Box
                         component="img"
-                        src={`/${src.imgDataSrc}`}
+                        src={resolveAssetSrc(src.imgDataSrc)}
                         alt={c.src}
                         sx={{
                           width: 32,

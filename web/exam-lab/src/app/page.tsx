@@ -1,188 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  List,
-  Typography,
-} from "@mui/material";
-import { useExamDocs } from "@/hooks/useExamDocs";
-import { useExamSessions } from "@/hooks/useExamSessions";
-import { useExamTrackings } from "@/hooks/useExamTrackings";
-import { useEndExamSession } from "@/hooks/useEndExamSession";
-import { useCreateExamSession } from "@/hooks/useCreateExamSession";
-import ExamCard from "@/components/ExamCard";
-import ExamOptionsDialog from "@/components/ExamOptionsDialog";
-import ExamReportCard from "@/components/ExamReportCard";
-import ExamSessionCard from "@/components/ExamSessionCard";
-import {
-  CLIENT_SUPPORTED_QUESTION_TYPES,
-  ExamExcerpt,
-  ExamOptionRandomOptions,
-  ExamOptionRandomQuestions,
-  ExamSessionSummary,
-} from "@/api/types";
+import { Box } from "@mui/material";
+import ExamSessionsListDisplay from "@/components/ExamSessionsListDisplay";
+import ExamResultsListDisplay from "@/components/ExamResultsListDisplay";
+import ExamDocumentsListDisplay from "@/components/ExamDocumentsListDisplay";
+import UserUploadsListDisplay from "@/components/UserUploadsListDisplay";
 
 export default function Home() {
-  const router = useRouter();
-  const { data: exams, isPending: isExamsPending } = useExamDocs();
-  const { data: sessions, isPending: isSessionsPending } = useExamSessions();
-  const { data: reports, isPending: isReportsPending } = useExamTrackings();
-  const endSession = useEndExamSession();
-  const createSession = useCreateExamSession();
-  const [sessionToEnd, setSessionToEnd] = useState<ExamSessionSummary | null>(
-    null,
-  );
-  const [examToTake, setExamToTake] = useState<ExamExcerpt | null>(null);
-
-  // Certification exams are proctored: no customization dialog — the session
-  // is created with fixed options (randomized question/option order, not
-  // seekable, only client-renderable question types) and the user goes
-  // straight to the exam session page. Practice exams still open the options
-  // dialog so the user can customize the session.
-  const handleTake = (exam: ExamExcerpt) => {
-    if (exam.ExamCategory !== "certification-exam") {
-      setExamToTake(exam);
-      return;
-    }
-    createSession.mutate(
-      {
-        examId: exam.Id,
-        options: ExamOptionRandomQuestions | ExamOptionRandomOptions,
-        acceptQuestionTypes: CLIENT_SUPPORTED_QUESTION_TYPES,
-      },
-      {
-        onSuccess: (examSessionId) => {
-          const params = new URLSearchParams({
-            exam_session_id: examSessionId,
-          });
-          router.push(`/examsession?${params}`);
-        },
-      },
-    );
-  };
+  // generation is a refresh signal shared by the four sections below: each
+  // one appends it to its React Query keys, so bumping it refetches every
+  // section. A section whose mutation affects data surfaced by another
+  // section reports it through onGenerationChange — e.g. toggling an
+  // upload's Associate checkbox changes the exam documents the server
+  // serves, which the exams list would otherwise never refetch. Mutations
+  // with hook-level invalidations (end/create session, upload, delete) do
+  // not need this: those invalidate their query key prefixes directly.
+  const [generation, setGeneration] = useState(0);
+  const bumpGeneration = () => setGeneration((g) => g + 1);
 
   return (
     <Box>
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h4" component="h2" gutterBottom>
-          Exam Sessions
-        </Typography>
-        <Typography gutterBottom>
-          {!isSessionsPending && sessions.length === 0
-            ? "No ongoing exam sessions"
-            : "Here are the ongoing exam sessions"}
-        </Typography>
-        {isSessionsPending ? (
-          <Typography>…</Typography>
-        ) : (
-          sessions.length > 0 && (
-            <List>
-              {sessions.map((session) => (
-                <ExamSessionCard
-                  key={session.exam_session_id}
-                  session={session}
-                  onEnd={setSessionToEnd}
-                />
-              ))}
-            </List>
-          )
-        )}
-      </Box>
-
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h4" component="h2" gutterBottom>
-          Trackings
-        </Typography>
-        <Typography gutterBottom>
-          {!isReportsPending && reports.length === 0
-            ? "No exam reports yet"
-            : "Here are the exams that you have completed"}
-        </Typography>
-        {isReportsPending ? (
-          <Typography>…</Typography>
-        ) : (
-          reports.length > 0 && (
-            <List>
-              {/* The server returns reports oldest-first; show the most
-                  recently finished exam at the top. */}
-              {[...reports].reverse().map((report) => (
-                <ExamReportCard key={report.id} report={report} />
-              ))}
-            </List>
-          )
-        )}
-      </Box>
-
-      <ExamOptionsDialog
-        exam={examToTake}
-        onClose={() => setExamToTake(null)}
+      <ExamSessionsListDisplay generation={generation} />
+      <ExamResultsListDisplay generation={generation} />
+      <ExamDocumentsListDisplay generation={generation} />
+      <UserUploadsListDisplay
+        generation={generation}
+        onGenerationChange={bumpGeneration}
       />
-
-      <Dialog
-        open={sessionToEnd !== null}
-        onClose={() => setSessionToEnd(null)}
-      >
-        <DialogTitle>End exam session?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            End session {sessionToEnd?.exam_session_id} for{" "}
-            {sessionToEnd?.exam_excerpt.Title}? This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSessionToEnd(null)}>Cancel</Button>
-          <Button
-            color="error"
-            variant="contained"
-            loading={endSession.isPending}
-            onClick={() => {
-              if (!sessionToEnd) return;
-              endSession.mutate(sessionToEnd.exam_session_id, {
-                onSuccess: () => setSessionToEnd(null),
-              });
-            }}
-          >
-            End Exam
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h4" component="h2" gutterBottom>
-          Exams
-        </Typography>
-        <Typography gutterBottom>
-          {!isExamsPending && exams.length === 0
-            ? "No exam is found"
-            : "Here are the exams you can take"}
-        </Typography>
-        {isExamsPending ? (
-          <Typography>…</Typography>
-        ) : (
-          exams.length > 0 && (
-            <List>
-              {exams.map((exam) => (
-                <ExamCard
-                  key={exam.Id}
-                  exam={exam}
-                  onTake={handleTake}
-                  loading={
-                    createSession.isPending &&
-                    createSession.variables?.examId === exam.Id
-                  }
-                />
-              ))}
-            </List>
-          )
-        )}
-      </Box>
     </Box>
   );
 }

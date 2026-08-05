@@ -50,7 +50,7 @@ func TestE2E_VisitorPracticeAndCertification(t *testing.T) {
 
 	sm := pkgsession.NewOnMemorySessionManager()
 	mux := http.NewServeMux()
-	mux.Handle("/api/examdocs", pkgapiexamdocs.NewExamHandler(repo))
+	mux.Handle("/api/examdocs", pkgapiexamdocs.NewExamHandler(sm, repo))
 	mux.Handle("/api/examsessions", pkgapiexamsessions.NewExamSessionHandler(sm, examServer, repo))
 	mux.Handle("/api/examsessions/", pkgapiexamsessions.NewExamSessionHandler(sm, examServer, repo))
 	mux.Handle("/api/examtrackings", pkgapiexamtrackings.NewExamTrackingsHandler(sm, trackingServer))

@@ -1,0 +1,93 @@
+"use client";
+
+import { useState } from "react";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  List,
+  Typography,
+} from "@mui/material";
+import { useExamTrackings } from "@/hooks/useExamTrackings";
+import { useDeleteExamTracking } from "@/hooks/useDeleteExamTracking";
+import ExamReportCard from "@/components/ExamReportCard";
+import { ExamReport } from "@/api/types";
+
+type ExamResultsListDisplayProps = {
+  generation: number;
+};
+
+// The Trackings section: the caller's finished-exam reports, most recently
+// finished first, plus the confirmation dialog for deleting one. Deleting a
+// report touches no other section, so useDeleteExamTracking's own
+// "examtrackings" invalidation is enough — no generation bump needed.
+export default function ExamResultsListDisplay({
+  generation,
+}: ExamResultsListDisplayProps) {
+  const { data: reports, isPending } = useExamTrackings(generation);
+  const deleteTracking = useDeleteExamTracking();
+  const [reportToDelete, setReportToDelete] = useState<ExamReport | null>(null);
+
+  return (
+    <Box sx={{ mt: 4 }}>
+      <Typography variant="h4" component="h2" gutterBottom>
+        Trackings
+      </Typography>
+      <Typography gutterBottom>
+        {!isPending && reports.length === 0
+          ? "No exam reports yet"
+          : "Here are the exams that you have completed"}
+      </Typography>
+      {isPending ? (
+        <Typography>…</Typography>
+      ) : (
+        reports.length > 0 && (
+          <List>
+            {/* The server returns reports oldest-first; show the most
+                recently finished exam at the top. */}
+            {[...reports].reverse().map((report) => (
+              <ExamReportCard
+                key={report.id}
+                report={report}
+                onDelete={setReportToDelete}
+              />
+            ))}
+          </List>
+        )
+      )}
+
+      <Dialog
+        open={reportToDelete !== null}
+        onClose={() => setReportToDelete(null)}
+      >
+        <DialogTitle>Delete exam report?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Delete the report for {reportToDelete?.title}? This cannot be
+            undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReportToDelete(null)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            loading={deleteTracking.isPending}
+            onClick={() => {
+              if (!reportToDelete) return;
+              deleteTracking.mutate(reportToDelete.id, {
+                onSuccess: () => setReportToDelete(null),
+              });
+            }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}

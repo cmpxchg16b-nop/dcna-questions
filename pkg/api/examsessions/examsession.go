@@ -1,5 +1,5 @@
 // Package examsessions implements the /api/examsessions HTTP endpoint, exposing
-// CRUD over exam sessions scoped to the caller's user session.
+// CRUD over exam sessions scoped to the caller (by subject/user id).
 //
 //	POST   /api/examsessions           create a session for the exam whose id is
 //	        given in the request body as {"exam_id": "...", "options": <n>,
@@ -31,9 +31,10 @@
 //	mux.Handle("/api/examsessions", h)
 //	mux.Handle("/api/examsessions/", h)
 //
-// The caller's user session is resolved from the request context via the
-// SessionManager (see package session); it must already be attached by the
-// session middleware.
+// The caller's session is resolved from the request context via the
+// SessionManager (see package session) and its subject id (user id) is used to
+// scope all operations; the session must already be attached by the session
+// middleware.
 package examsessions
 
 import (
@@ -54,7 +55,7 @@ const maxBodyBytes = 1 << 20 // 1 MiB
 
 // ExamSessionHandler serves the /api/examsessions API. It resolves the exam
 // document to run from an ExamRepository and drives session lifecycle through an
-// ExamServer, both scoped to the caller's user session.
+// ExamServer, both scoped to the caller (by subject/user id).
 type ExamSessionHandler struct {
 	sm     session.SessionManager
 	server examserver.ExamServer
@@ -62,8 +63,9 @@ type ExamSessionHandler struct {
 }
 
 // NewExamSessionHandler constructs an ExamSessionHandler. sm resolves the
-// caller's user session from the request context; server manages exam session
-// lifecycle; repo looks up the exam document to run when a session is created.
+// caller's session from the request context and uses its subject id (user id) to
+// scope operations; server manages exam session lifecycle; repo looks up the exam
+// document to run when a session is created.
 func NewExamSessionHandler(sm session.SessionManager, server examserver.ExamServer, repo *question.ExamRepository) *ExamSessionHandler {
 	return &ExamSessionHandler{sm: sm, server: server, repo: repo}
 }
@@ -232,7 +234,7 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // handleCreate starts a new exam session for the exam document named in the
 // request body.
-func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request, userSessionID string) {
+func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request, userId string) {
 	req, ok := decodeCreate(r)
 	if !ok {
 		http.Error(w, `invalid request body: expected {"exam_id": "..."}`, http.StatusBadRequest)
@@ -249,7 +251,9 @@ func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	exam, err := h.repo.GetExamDocumentById(req.ExamID)
+	ctx := r.Context()
+
+	exam, err := h.repo.GetExamDocumentById(ctx, req.ExamID, userId)
 	if err != nil {
 		// GetExamDocumentById only fails when the exam is unavailable, so map the
 		// lot to 404 rather than surfacing the repository internals.
@@ -270,7 +274,7 @@ func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sessionID, err := h.server.StartNewExamSession(r.Context(), exam, userSessionID, req.Options, req.AcceptQuestionTypes)
+	sessionID, err := h.server.StartNewExamSession(ctx, exam, userId, req.Options, req.AcceptQuestionTypes)
 	if err != nil {
 		// With the empty-exam case handled above, the realistic remaining
 		// failures are the server shutting down or the request being canceled,
@@ -286,8 +290,8 @@ func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request
 }
 
 // handleList returns the caller's active exam sessions.
-func (h *ExamSessionHandler) handleList(w http.ResponseWriter, r *http.Request, userSessionID string) {
-	excerpts := h.server.ListExamSessions(r.Context(), userSessionID)
+func (h *ExamSessionHandler) handleList(w http.ResponseWriter, r *http.Request, userId string) {
+	excerpts := h.server.ListExamSessions(r.Context(), userId)
 	out := make([]examSessionSummary, 0, len(excerpts))
 	for _, e := range excerpts {
 		out = append(out, toSummary(e))
@@ -298,8 +302,8 @@ func (h *ExamSessionHandler) handleList(w http.ResponseWriter, r *http.Request, 
 // handleGetSession returns a single exam session by id, scoped to the caller.
 // The caller's user id is forwarded to GetExamSessionById so ownership is
 // enforced by the server.
-func (h *ExamSessionHandler) handleGetSession(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
-	excerpt, err := h.server.GetExamSessionById(r.Context(), examID, userSessionID)
+func (h *ExamSessionHandler) handleGetSession(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userId string) {
+	excerpt, err := h.server.GetExamSessionById(r.Context(), examID, userId)
 	if err != nil {
 		// GetExamSessionById fails when the session is missing or doesn't
 		// belong to the caller; both are reported as 404 (examserver keeps its
@@ -312,8 +316,8 @@ func (h *ExamSessionHandler) handleGetSession(w http.ResponseWriter, r *http.Req
 
 // handleDelete terminates a single exam session by id. The caller's user id is
 // forwarded to EndExamSession so ownership can be enforced by the server.
-func (h *ExamSessionHandler) handleDelete(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
-	if err := h.server.EndExamSession(r.Context(), examID, userSessionID); err != nil {
+func (h *ExamSessionHandler) handleDelete(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userId string) {
+	if err := h.server.EndExamSession(r.Context(), examID, userId); err != nil {
 		// The only failure is a missing session (or the server shutting down);
 		// treat both as not found so a repeated delete converges to 404.
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -325,8 +329,8 @@ func (h *ExamSessionHandler) handleDelete(w http.ResponseWriter, r *http.Request
 // handleGetNextQuestion returns the next question in the session plus the cursor
 // to continue from. An absent cursor_id starts from the beginning; when no more
 // questions remain, both cursor_id and question are null.
-func (h *ExamSessionHandler) handleGetNextQuestion(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
-	q, next, err := h.server.GetNextQuestion(r.Context(), examID, userSessionID, parseCursorID(r))
+func (h *ExamSessionHandler) handleGetNextQuestion(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userId string) {
+	q, next, err := h.server.GetNextQuestion(r.Context(), examID, userId, parseCursorID(r))
 	if err != nil {
 		// examserver's sentinels are unexported, so not-found cannot be told
 		// apart from an invalid cursor here; surface a generic server error.
@@ -344,13 +348,13 @@ func (h *ExamSessionHandler) handleGetNextQuestion(w http.ResponseWriter, r *htt
 // handleSeekCursor repositions the session cursor to a new virtual index and
 // returns the fresh cursor to read from. The index is the required "index"
 // query parameter.
-func (h *ExamSessionHandler) handleSeekCursor(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
+func (h *ExamSessionHandler) handleSeekCursor(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userId string) {
 	index, ok := parseIndex(r)
 	if !ok {
 		http.Error(w, `invalid or missing "index" query parameter`, http.StatusBadRequest)
 		return
 	}
-	repositioned, err := h.server.SeekCursorTo(r.Context(), examID, userSessionID, parseCursorID(r), index)
+	repositioned, err := h.server.SeekCursorTo(r.Context(), examID, userId, parseCursorID(r), index)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -366,8 +370,8 @@ func (h *ExamSessionHandler) handleSeekCursor(w http.ResponseWriter, r *http.Req
 // session. The caller's user id is forwarded to GetMyAnswer so ownership is
 // enforced by the server. A session that has not yet been answered responds
 // with a null exam_answer rather than an error.
-func (h *ExamSessionHandler) handleGetMyAnswer(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
-	ans, err := h.server.GetMyAnswer(r.Context(), examID, userSessionID)
+func (h *ExamSessionHandler) handleGetMyAnswer(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userId string) {
+	ans, err := h.server.GetMyAnswer(r.Context(), examID, userId)
 	if err != nil {
 		// GetMyAnswer fails when the session is missing or doesn't belong to the
 		// caller; both are reported as 404 (examserver keeps its sentinels
@@ -382,7 +386,7 @@ func (h *ExamSessionHandler) handleGetMyAnswer(w http.ResponseWriter, r *http.Re
 // check_only=true the answer is graded but not persisted; otherwise it is saved
 // as the latest submission (and surfaces later via my_answer). Either way the
 // assessment is returned.
-func (h *ExamSessionHandler) handleSubmitAnswer(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userSessionID string) {
+func (h *ExamSessionHandler) handleSubmitAnswer(w http.ResponseWriter, r *http.Request, examID examserver.ExamSessionId, userId string) {
 	raw, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes))
 	if err != nil {
 		http.Error(w, "failed reading body", http.StatusBadRequest)
@@ -397,7 +401,7 @@ func (h *ExamSessionHandler) handleSubmitAnswer(w http.ResponseWriter, r *http.R
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	assessment, err := h.server.SubmitAnswer(r.Context(), examID, userSessionID, &answer, parseCheckOnly(r))
+	assessment, err := h.server.SubmitAnswer(r.Context(), examID, userId, &answer, parseCheckOnly(r))
 	if err != nil {
 		// examserver's sentinels are unexported, so not-found/owner/grade errors
 		// cannot be told apart here; surface a generic server error, matching the

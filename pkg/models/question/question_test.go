@@ -1,6 +1,7 @@
 package question
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,7 +128,7 @@ func TestExamLoader_LoadFileRealRepoExam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
-	if exam.Id != "1" || exam.ShortName != "DCNA" {
+	if exam.Id != "example-1" || exam.ShortName != "DCNA" {
 		t.Fatalf("unexpected exam meta: %+v", exam)
 	}
 	qs := exam.QuestionSet.QuestionCollections
@@ -257,7 +258,7 @@ func TestDynamicDirExamSource_GetFindsXMLFiles(t *testing.T) {
 	}
 	// Each URL should resolve to a readable, valid exam.
 	for _, url := range got[0].URLs {
-		exam, err := got[0].Loader.LoadFrom(url)
+		exam, err := got[0].Loader.LoadFrom(context.Background(), url)
 		if err != nil {
 			t.Fatalf("LoadFrom(%q): %v", url, err)
 		}

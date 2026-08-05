@@ -15,10 +15,10 @@ import (
 	pkgutils "dcna-questions/pkg/utils"
 )
 
-// fakeTrackingServer is an ExamTrackingServer that records the userid it was
-// queried with and returns canned results. Only GetExamReportsByUserId is
-// exercised by the handler; Put is stubbed to satisfy the interface so the fake
-// can also be reused in the end-to-end test.
+// fakeTrackingServer is an ExamTrackingServer that records the operations it
+// was asked to perform and returns canned results. GetExamReportsByUserId and
+// DeleteExamTracking are exercised by the handler; Put is stubbed to satisfy
+// the interface so the fake can also be reused in the end-to-end test.
 type fakeTrackingServer struct {
 	getUserid  string
 	getReports []examreport.ExamReport
@@ -28,6 +28,12 @@ type fakeTrackingServer struct {
 	putUserid  string
 	putReports []examreport.ExamReport
 	putErr     error
+
+	// DeleteExamTracking records the userids and report ids it was asked to
+	// delete, in order.
+	deleteUserid string
+	deleteIds    []string
+	deleteErr    error
 }
 
 func (s *fakeTrackingServer) Put(_ context.Context, userid string, report examreport.ExamReport) error {
@@ -39,6 +45,12 @@ func (s *fakeTrackingServer) Put(_ context.Context, userid string, report examre
 func (s *fakeTrackingServer) GetExamReportsByUserId(_ context.Context, userid string) ([]examreport.ExamReport, error) {
 	s.getUserid = userid
 	return s.getReports, s.getErr
+}
+
+func (s *fakeTrackingServer) DeleteExamTracking(_ context.Context, userid string, examReportId string) error {
+	s.deleteUserid = userid
+	s.deleteIds = append(s.deleteIds, examReportId)
+	return s.deleteErr
 }
 
 // sampleReport builds a distinguishable ExamReport for assertion targets.
@@ -194,11 +206,94 @@ func TestExamTrackingsHandler(t *testing.T) {
 			},
 		},
 		{
-			name:       "deeper path beneath the prefix is a 404",
+			name:       "GET on a report id responds 405 with Allow: DELETE",
 			method:     http.MethodGet,
 			target:     "/api/examtrackings/r1",
 			ts:         &fakeTrackingServer{},
+			wantStatus: http.StatusMethodNotAllowed,
+			wantAllow:  "DELETE",
+		},
+		{
+			name:       "POST on a report id responds 405 with Allow: DELETE",
+			method:     http.MethodPost,
+			target:     "/api/examtrackings/r1",
+			ts:         &fakeTrackingServer{},
+			wantStatus: http.StatusMethodNotAllowed,
+			wantAllow:  "DELETE",
+		},
+		{
+			name:       "deeper path beneath a report id is a 404",
+			method:     http.MethodGet,
+			target:     "/api/examtrackings/r1/extra",
+			ts:         &fakeTrackingServer{},
 			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "DELETE a report responds 204 and forwards the subject id and report id",
+			method:     http.MethodDelete,
+			target:     "/api/examtrackings/r1",
+			ts:         &fakeTrackingServer{},
+			wantStatus: http.StatusNoContent,
+			check: func(t *testing.T, rr *httptest.ResponseRecorder, env *testEnv) {
+				if env.ts.deleteUserid != env.subjectID {
+					t.Errorf("delete userid = %q, want subject id %q", env.ts.deleteUserid, env.subjectID)
+				}
+				if len(env.ts.deleteIds) != 1 || env.ts.deleteIds[0] != "r1" {
+					t.Errorf("delete ids = %v, want [r1]", env.ts.deleteIds)
+				}
+			},
+		},
+		{
+			name:       "DELETE on a trailing-slash report id still resolves the id",
+			method:     http.MethodDelete,
+			target:     "/api/examtrackings/r9/",
+			ts:         &fakeTrackingServer{},
+			wantStatus: http.StatusNoContent,
+			check: func(t *testing.T, rr *httptest.ResponseRecorder, env *testEnv) {
+				if len(env.ts.deleteIds) != 1 || env.ts.deleteIds[0] != "r9" {
+					t.Errorf("delete ids = %v, want [r9]", env.ts.deleteIds)
+				}
+			},
+		},
+		{
+			name:       "DELETE an unknown report responds 404",
+			method:     http.MethodDelete,
+			target:     "/api/examtrackings/no-such",
+			ts:         &fakeTrackingServer{deleteErr: examreport.ErrExamTrackingNotFound},
+			wantStatus: http.StatusNotFound,
+			check: func(t *testing.T, rr *httptest.ResponseRecorder, env *testEnv) {
+				if !strings.Contains(rr.Body.String(), "exam report not found") {
+					t.Errorf("body = %q, want it to mention exam report not found", rr.Body.String())
+				}
+			},
+		},
+		{
+			name:       "DELETE tracking server error surfaces as 500",
+			method:     http.MethodDelete,
+			target:     "/api/examtrackings/r1",
+			ts:         &fakeTrackingServer{deleteErr: errors.New("storage unavailable")},
+			wantStatus: http.StatusInternalServerError,
+			check: func(t *testing.T, rr *httptest.ResponseRecorder, env *testEnv) {
+				if !strings.Contains(rr.Body.String(), "storage unavailable") {
+					t.Errorf("body = %q, want it to surface the tracking server error", rr.Body.String())
+				}
+			},
+		},
+		{
+			name:       "DELETE with missing session in context responds 500",
+			method:     http.MethodDelete,
+			target:     "/api/examtrackings/r1",
+			noSession:  true,
+			ts:         &fakeTrackingServer{},
+			wantStatus: http.StatusInternalServerError,
+			check: func(t *testing.T, rr *httptest.ResponseRecorder, env *testEnv) {
+				if !strings.Contains(rr.Body.String(), "session not found") {
+					t.Errorf("body = %q, want it to mention session not found", rr.Body.String())
+				}
+				if len(env.ts.deleteIds) != 0 {
+					t.Errorf("tracking server got deletes %v, want no call when session is absent", env.ts.deleteIds)
+				}
+			},
 		},
 		{
 			name:       "POST on the collection responds 405 with Allow: GET",
@@ -327,5 +422,54 @@ func TestExamTrackingsHandler_EndToEnd(t *testing.T) {
 	}
 	if got.ExamReports[0].Id != "e1" || got.ExamReports[1].Id != "e2" {
 		t.Errorf("report ids = %q, %q, want e1, e2 in insertion order", got.ExamReports[0].Id, got.ExamReports[1].Id)
+	}
+
+	// DELETE one of the caller's own reports through the handler (subtree mount,
+	// as in main.go), then confirm the list shrinks to the other one.
+	delMux := http.NewServeMux()
+	delMux.Handle("/api/examtrackings", h)
+	delMux.Handle("/api/examtrackings/", h)
+	delWrapped := session.WithSessionId(delMux, sm)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/examtrackings/e1", nil)
+	delReq = delReq.WithContext(context.WithValue(delReq.Context(), pkgutils.CtxKeySubjectId, subjectID))
+	delRR := httptest.NewRecorder()
+	delWrapped.ServeHTTP(delRR, delReq)
+	if delRR.Code != http.StatusNoContent {
+		t.Fatalf("DELETE status = %d, want 204 (body %q)", delRR.Code, delRR.Body.String())
+	}
+
+	// Deleting the same report again is a 404.
+	delRR2 := httptest.NewRecorder()
+	delWrapped.ServeHTTP(delRR2, delReq)
+	if delRR2.Code != http.StatusNotFound {
+		t.Fatalf("second DELETE status = %d, want 404", delRR2.Code)
+	}
+
+	// The other subject's report is not deletable by this caller, and survives.
+	delOther := httptest.NewRequest(http.MethodDelete, "/api/examtrackings/not-mine", nil)
+	delOther = delOther.WithContext(context.WithValue(delOther.Context(), pkgutils.CtxKeySubjectId, subjectID))
+	delOtherRR := httptest.NewRecorder()
+	delWrapped.ServeHTTP(delOtherRR, delOther)
+	if delOtherRR.Code != http.StatusNotFound {
+		t.Fatalf("DELETE other subject's report status = %d, want 404", delOtherRR.Code)
+	}
+
+	r2 := httptest.NewRequest(http.MethodGet, "/api/examtrackings", nil)
+	r2 = r2.WithContext(context.WithValue(r2.Context(), pkgutils.CtxKeySubjectId, subjectID))
+	rr2 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr2, r2)
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("GET after delete status = %d, want 200", rr2.Code)
+	}
+	var got2 listResponse
+	decodeJSON(t, rr2.Body.String(), &got2)
+	if len(got2.ExamReports) != 1 || got2.ExamReports[0].Id != "e2" {
+		t.Fatalf("reports after delete = %+v, want only e2", got2.ExamReports)
+	}
+
+	otherReports, err := ts.GetExamReportsByUserId(ctx, "subject-other")
+	if err != nil || len(otherReports) != 1 {
+		t.Fatalf("other subject's reports = %+v, %v; want untouched", otherReports, err)
 	}
 }

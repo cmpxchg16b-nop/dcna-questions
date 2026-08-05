@@ -3,6 +3,7 @@ package question
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -351,7 +352,12 @@ var namedEntities = func() map[string]string {
 }()
 
 type ExamLoader interface {
-	LoadFrom(url string) (*Exam, error)
+	LoadFrom(ctx context.Context, url string) (*Exam, error)
+}
+
+// ExamDocumentPostProcessor transforms an Exam after it has been loaded.
+type ExamDocumentPostProcessor interface {
+	PostProcess(exam *Exam) (*Exam, error)
 }
 
 // FileExamLoader decodes Exam documents from XML. It is stateless and safe for
@@ -393,9 +399,10 @@ func (l *FileExamLoader) LoadFile(path string) (*Exam, error) {
 }
 
 // LoadFile reads the XML file at path and decodes it into an Exam.
-func (l *FileExamLoader) LoadFrom(url string) (*Exam, error) {
+func (l *FileExamLoader) LoadFrom(ctx context.Context, url string) (*Exam, error) {
 	return l.LoadFile(url)
 }
+
 
 // validate reports structural problems with a decoded exam. It catches the
 // kinds of mistakes (a typo'd question type, a missing id) that would otherwise
@@ -439,6 +446,13 @@ func (s *StaticFileExamSource) Get() []ExamSourceEntry {
 	return s.entries
 }
 
+// GetByUserId always returns nil: a StaticFileExamSource is system-scoped and
+// user-unaware, so it exposes no per-user entries. Use Get for the full,
+// unfiltered set.
+func (s *StaticFileExamSource) GetByUserId(ctx context.Context, userId string) ([]ExamSourceEntry, error) {
+	return nil, nil
+}
+
 type DynamicDirExamSource struct {
 	dir string
 }
@@ -465,8 +479,16 @@ func (s *DynamicDirExamSource) Get() []ExamSourceEntry {
 	return []ExamSourceEntry{{Loader: NewFileExamLoader(), URLs: urls}}
 }
 
+// GetByUserId always returns nil: a DynamicDirExamSource is system-scoped and
+// user-unaware, so it exposes no per-user entries. Use Get for the full,
+// unfiltered set.
+func (s *DynamicDirExamSource) GetByUserId(ctx context.Context, userId string) ([]ExamSourceEntry, error) {
+	return nil, nil
+}
+
 type ExamSource interface {
 	Get() []ExamSourceEntry
+	GetByUserId(ctx context.Context, userId string) ([]ExamSourceEntry, error)
 }
 
 // ExamRepository aggregates exam documents drawn from one or more ExamSources.
@@ -505,11 +527,11 @@ func (r *ExamRepository) cachedExam(id string) (*Exam, bool) {
 // sources. A source URL that fails to load is skipped: it contributes no id to
 // the cache, so a later lookup for an exam that failed to load reports "not
 // found" rather than its underlying load error.
-func (r *ExamRepository) reload() {
+func (r *ExamRepository) reload(ctx context.Context) {
 	for _, src := range r.sources {
 		for _, entry := range src.Get() {
 			for _, url := range entry.URLs {
-				exam, err := entry.Loader.LoadFrom(url)
+				exam, err := entry.Loader.LoadFrom(ctx, url)
 				if err != nil {
 					continue
 				}
@@ -544,7 +566,7 @@ func (r *ExamRepository) ListExamDocuments() <-chan ExamDataEvent {
 		for _, src := range r.sources {
 			for _, entry := range src.Get() {
 				for _, url := range entry.URLs {
-					exam, err := entry.Loader.LoadFrom(url)
+					exam, err := entry.Loader.LoadFrom(context.Background(), url)
 					if err != nil {
 						events <- ExamDataEvent{Err: fmt.Errorf("load exam %q: %w", url, err)}
 						continue
@@ -558,16 +580,67 @@ func (r *ExamRepository) ListExamDocuments() <-chan ExamDataEvent {
 	return events
 }
 
-// GetExamDocumentById returns the exam whose id matches. It consults the cache
-// first; only on a miss does it reload the entire collection and re-check. The
-// cache is also populated as a side effect of ListExamDocuments, so lookups for
-// already-streamed exams hit without touching the sources. A lookup that still
-// misses after a reload returns "not found".
-func (r *ExamRepository) GetExamDocumentById(id string) (*Exam, error) {
+// ListExamDocumentsByUserId is the per-user analogue of ListExamDocuments:
+// it streams only the exams visible to the given user, drawing each source's
+// per-user entries via GetByUserId. Like ListExamDocuments it multiplexes
+// successes and failures over a single unbuffered channel of ExamDataEvent,
+// loads and emits one exam at a time (lazily), emits load errors as in-band
+// events while continuing, and closes the channel once every source has been
+// exhausted. The caller tests for failure by checking the event's Err field.
+//
+// Unlike ListExamDocuments, per-user exams are not cached: a per-user scope is
+// not cachable by default, so loaded exams are streamed straight to the caller
+// and never inserted into the shared cache.
+func (r *ExamRepository) ListExamDocumentsByUserId(ctx context.Context, userID string) <-chan ExamDataEvent {
+	events := make(chan ExamDataEvent)
+	go func() {
+		defer close(events)
+		for _, src := range r.sources {
+			entries, err := src.GetByUserId(ctx, userID)
+			if err != nil {
+				events <- ExamDataEvent{Err: fmt.Errorf("list exams for user %q: %w", userID, err)}
+				continue
+			}
+			for _, entry := range entries {
+				for _, url := range entry.URLs {
+					exam, err := entry.Loader.LoadFrom(ctx, url)
+					if err != nil {
+						events <- ExamDataEvent{Err: fmt.Errorf("load exam %q: %w", url, err)}
+						continue
+					}
+					events <- ExamDataEvent{Data: exam}
+				}
+			}
+		}
+	}()
+	return events
+}
+
+// GetExamDocumentById returns the exam whose id matches. It consults the
+// user-scoped exams first; only on a miss does it fall back to the system-wide
+// cache (and reload on miss). The cache is also populated as a side effect of
+// ListExamDocuments, so lookups for already-streamed system exams hit without
+// touching the sources.
+//
+// userId scopes the lookup to the caller: that user's user-scoped exams (e.g.
+// their uploaded associations) are streamed on demand via
+// ListExamDocumentsByUserId and take precedence over system-wide exams. Per-user
+// exams are deliberately not cached, so each such lookup re-streams them. A
+// lookup that still misses after both scopes returns "not found".
+func (r *ExamRepository) GetExamDocumentById(ctx context.Context, id string, userId string) (*Exam, error) {
+	// User-scoped exams take precedence over system-wide exams.
+	for ev := range r.ListExamDocumentsByUserId(ctx, userId) {
+		if ev.Err != nil {
+			continue
+		}
+		if ev.Data != nil && ev.Data.Id == id {
+			return ev.Data, nil
+		}
+	}
 	if exam, ok := r.cachedExam(id); ok {
 		return exam, nil
 	}
-	r.reload()
+	r.reload(ctx)
 	if exam, ok := r.cachedExam(id); ok {
 		return exam, nil
 	}

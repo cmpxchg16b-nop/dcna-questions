@@ -2,6 +2,7 @@ package main
 
 import (
 	dcnaquestions "dcna-questions"
+	pkgapiexamassociations "dcna-questions/pkg/api/examassociations"
 	pkgapiexamdocs "dcna-questions/pkg/api/examdocs"
 	pkgapiexamsessions "dcna-questions/pkg/api/examsessions"
 	pkgapiexamtrackings "dcna-questions/pkg/api/examtrackings"
@@ -10,11 +11,14 @@ import (
 	pkgapiloginvisitor "dcna-questions/pkg/api/login/visitor"
 	pkgapilogout "dcna-questions/pkg/api/logout"
 	pkgapiprofile "dcna-questions/pkg/api/profile"
+	pkgapiuseruploads "dcna-questions/pkg/api/useruploads"
 	pkgauth "dcna-questions/pkg/auth"
 	pkgcookie "dcna-questions/pkg/cookie"
 	pkgmodelsexamreport "dcna-questions/pkg/models/examreport"
 	pkgmodelsexamserver "dcna-questions/pkg/models/examserver"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
+	pkgmodelsuserexamdocsfsbasedassociation "dcna-questions/pkg/models/userexamdocs/fsbasedassociation"
+	pkgmodelsuserupload "dcna-questions/pkg/models/userupload"
 	pkgsession "dcna-questions/pkg/session"
 	"fmt"
 	"os"
@@ -62,6 +66,14 @@ func (cli *CLI) Run() error {
 
 	var sources []pkgmodelsquestion.ExamSource
 
+	sm := pkgsession.NewOnMemorySessionManager()
+	userUploadManager := pkgmodelsuserupload.NewOnMemoryUserUploadManager()
+	associationManager := pkgmodelsuserexamdocsfsbasedassociation.NewFsBasedAssociationManager(userUploadManager, sm)
+	go associationManager.Run(ctx)
+	defer associationManager.Shutdown()
+
+	sources = append(sources, associationManager)
+
 	if len(cli.LoadExam) > 0 {
 		sources = append(sources, pkgmodelsquestion.NewStaticFileExamSource([]pkgmodelsquestion.ExamSourceEntry{
 			{Loader: pkgmodelsquestion.NewFileExamLoader(), URLs: cli.LoadExam},
@@ -77,7 +89,7 @@ func (cli *CLI) Run() error {
 	}
 
 	repo := pkgmodelsquestion.NewExamRepository(sources)
-	examHandler := pkgapiexamdocs.NewExamHandler(repo)
+	examHandler := pkgapiexamdocs.NewExamHandler(sm, repo)
 
 	// A single ExamTrackingServer is shared by the exam server (which persists
 	// finished-session reports) and the /api/examtrackings handler (which reads
@@ -88,7 +100,6 @@ func (cli *CLI) Run() error {
 	go examServer.Run(context.Background())
 	defer examServer.Shutdown()
 
-	sm := pkgsession.NewOnMemorySessionManager()
 	examSessionHandler := pkgapiexamsessions.NewExamSessionHandler(sm, examServer, repo)
 	examTrackingsHandler := pkgapiexamtrackings.NewExamTrackingsHandler(sm, trackingServer)
 
@@ -102,6 +113,16 @@ func (cli *CLI) Run() error {
 	muxHandlerDyn.Handle("/api/examsessions", examSessionHandler)
 	muxHandlerDyn.Handle("/api/examsessions/", examSessionHandler)
 	muxHandlerDyn.Handle("/api/examtrackings", examTrackingsHandler)
+	// The subtree registration lets DELETE /api/examtrackings/{id} reach the
+	// handler, which parses the report id out of the path itself.
+	muxHandlerDyn.Handle("/api/examtrackings/", examTrackingsHandler)
+	userUploadsHandler := pkgapiuseruploads.NewUserUploadsHandler(sm, userUploadManager)
+	muxHandlerDyn.Handle("/api/useruploads", userUploadsHandler)
+	muxHandlerDyn.Handle("/api/useruploads/", userUploadsHandler)
+	examAssociationsHandler := pkgapiexamassociations.NewExamAssociationsHandler(sm, associationManager)
+	muxHandlerDyn.Handle("/api/examassociations", examAssociationsHandler)
+	muxHandlerDyn.Handle("/api/examassociations/{association_id}", examAssociationsHandler)
+	muxHandlerDyn.Handle("/api/dyn-assets/uploads/{upload_id}/{vfs_path...}", associationManager)
 
 	jwtSec, err := cli.getJWTSecret()
 	if err != nil {

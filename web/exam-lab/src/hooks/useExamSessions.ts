@@ -13,12 +13,19 @@ async function fetchExamSessions(): Promise<ExamSessions> {
 }
 
 // useExamSessions fetches and caches the caller's exam sessions under the
-// "examsessions" query key. `data` is always a defined array (empty while the
-// first request is pending), and `isPending` is true during the initial fetch
-// so callers can show a loading placeholder.
-export function useExamSessions(): { data: ExamSessions; isPending: boolean } {
+// "examsessions" query key. `generation` is appended to the key, so bumping it
+// mounts a fresh query and refetches the list — the mechanism by which the
+// parent page lets one section refresh another (prefix-based invalidations
+// such as invalidateQueries({queryKey: ["examsessions"]}) still match). `data`
+// is always a defined array (empty while the first request is pending), and
+// `isPending` is true during the initial fetch so callers can show a loading
+// placeholder.
+export function useExamSessions(generation: number): {
+  data: ExamSessions;
+  isPending: boolean;
+} {
   const { data = [], isPending } = useQuery({
-    queryKey: ["examsessions"],
+    queryKey: ["examsessions", generation],
     queryFn: fetchExamSessions,
   });
   return { data, isPending };

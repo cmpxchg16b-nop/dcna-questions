@@ -7,19 +7,25 @@ import { ExamReports, ExamTrackingListResponse } from "@/api/types";
 // same-origin fetch sends automatically.
 async function fetchExamTrackings(): Promise<ExamReports> {
   const res = await fetch("/api/examtrackings");
-  if (!res.ok)
-    throw new Error(`failed to fetch exam trackings: ${res.status}`);
+  if (!res.ok) throw new Error(`failed to fetch exam trackings: ${res.status}`);
   const body = (await res.json()) as ExamTrackingListResponse;
   return body.exam_reports;
 }
 
 // useExamTrackings fetches and caches the caller's exam reports under the
-// "examtrackings" query key. `data` is always a defined array (empty while the
-// first request is pending), and `isPending` is true during the initial fetch
-// so callers can show a loading placeholder.
-export function useExamTrackings(): { data: ExamReports; isPending: boolean } {
+// "examtrackings" query key. `generation` is appended to the key, so bumping
+// it mounts a fresh query and refetches the list — the mechanism by which the
+// parent page lets one section refresh another (prefix-based invalidations
+// such as invalidateQueries({queryKey: ["examtrackings"]}) still match).
+// `data` is always a defined array (empty while the first request is pending),
+// and `isPending` is true during the initial fetch so callers can show a
+// loading placeholder.
+export function useExamTrackings(generation: number): {
+  data: ExamReports;
+  isPending: boolean;
+} {
   const { data = [], isPending } = useQuery({
-    queryKey: ["examtrackings"],
+    queryKey: ["examtrackings", generation],
     queryFn: fetchExamTrackings,
   });
   return { data, isPending };

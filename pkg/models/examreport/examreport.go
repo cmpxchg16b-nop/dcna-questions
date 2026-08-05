@@ -9,11 +9,16 @@ package examreport
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"strconv"
 	"sync"
 
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
 )
+
+// ErrExamTrackingNotFound is returned by DeleteExamTracking when the user has
+// no exam report with the given id.
+var ErrExamTrackingNotFound = errors.New("examreport: exam report not found")
 
 // Person is one named <person> within an <examtaker>: a real exam candidate
 // identified by full name. Fistname is spelled as in the XSD attribute.
@@ -92,6 +97,11 @@ type ExamTrackingServer interface {
 
 	// GetExamReportsByUserId returns all exam reports recorded for userid.
 	GetExamReportsByUserId(ctx context.Context, userid string) ([]ExamReport, error)
+
+	// DeleteExamTracking removes the exam report identified by examReportId
+	// from userid's reports. It returns ErrExamTrackingNotFound when the user
+	// has no report with that id.
+	DeleteExamTracking(ctx context.Context, userid string, examReportId string) error
 }
 
 // OnMemoryExamTrackingServer is an in-memory, lock-free implementation of
@@ -109,6 +119,11 @@ type ExamTrackingServer interface {
 // is monotonically increased only by Put (it never decreases), there is no ABA
 // problem: each Put observes a strictly increasing index and no report is ever
 // overwritten or lost, with no mutex required.
+//
+// DeleteExamTracking removes a report's map entry but never decrements the
+// count, so deletion leaves a hole in the user's index space: Put's invariants
+// above are untouched, and Get skips the hole exactly as it skips the
+// in-flight window of a concurrent Put.
 type OnMemoryExamTrackingServer struct {
 	// reports maps "{userid}:{index}" to ExamReport.
 	reports sync.Map
@@ -159,6 +174,34 @@ func (s *OnMemoryExamTrackingServer) GetExamReportsByUserId(ctx context.Context,
 		}
 	}
 	return out, nil
+}
+
+// DeleteExamTracking removes the report with the given id from userid's
+// reports, or returns ErrExamTrackingNotFound when the user has no such
+// report. It is safe for concurrent use.
+//
+// The scan tolerates concurrent Puts: a slot whose count was already claimed
+// but whose report is not yet stored simply fails the Load and is skipped,
+// exactly as in Get. Deletion never decrements the count, so indexes stay
+// monotonic and a deleted index is never reused; because each index is
+// written at most once, the Load-then-Delete pair can only ever remove the
+// report it observed — no CAS or mutex is needed. Two concurrent deletes of
+// the same id may both return nil; the net effect is one deletion, so the
+// operation is safely idempotent.
+func (s *OnMemoryExamTrackingServer) DeleteExamTracking(ctx context.Context, userid string, examReportId string) error {
+	v, ok := s.counts.Load(userid)
+	if !ok {
+		return ErrExamTrackingNotFound
+	}
+	n := v.(int64)
+	for i := int64(0); i < n; i++ {
+		key := reportKey(userid, i)
+		if rv, ok := s.reports.Load(key); ok && rv.(ExamReport).Id == examReportId {
+			s.reports.Delete(key)
+			return nil
+		}
+	}
+	return ErrExamTrackingNotFound
 }
 
 // reportKey builds the synthesized reports-map key "{userid}:{index}".

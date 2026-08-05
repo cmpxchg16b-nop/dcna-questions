@@ -3,6 +3,7 @@ package examreport
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -330,6 +331,130 @@ func TestPutGet_ConcurrentMixed(t *testing.T) {
 	final, _ := srv.GetExamReportsByUserId(ctx, userid)
 	if len(final) != puts {
 		t.Errorf("final report count = %d, want %d", len(final), puts)
+	}
+}
+
+func TestDeleteExamTracking_Basic(t *testing.T) {
+	srv := NewOnMemoryExamTrackingServer()
+	ctx := context.Background()
+
+	// Deleting from a user with no reports is a not-found.
+	if err := srv.DeleteExamTracking(ctx, "nobody", "r1"); !errors.Is(err, ErrExamTrackingNotFound) {
+		t.Fatalf("Delete unknown user = %v, want ErrExamTrackingNotFound", err)
+	}
+
+	_ = srv.Put(ctx, "alice", mustReport(t, "r1"))
+	_ = srv.Put(ctx, "alice", mustReport(t, "r2"))
+	_ = srv.Put(ctx, "alice", mustReport(t, "r3"))
+	_ = srv.Put(ctx, "bob", mustReport(t, "r2")) // same id, another user
+
+	// Alice cannot delete bob's report even though the id matches her own: her
+	// own r2 is removed, bob's r2 must survive.
+	if err := srv.DeleteExamTracking(ctx, "alice", "r2"); err != nil {
+		t.Fatalf("Delete r2: unexpected error: %v", err)
+	}
+
+	alice, _ := srv.GetExamReportsByUserId(ctx, "alice")
+	if len(alice) != 2 || alice[0].Id != "r1" || alice[1].Id != "r3" {
+		t.Fatalf("alice reports after delete = %+v, want [r1 r3] in order", alice)
+	}
+	bob, _ := srv.GetExamReportsByUserId(ctx, "bob")
+	if len(bob) != 1 || bob[0].Id != "r2" {
+		t.Fatalf("bob reports after alice's delete = %+v, want [r2]", bob)
+	}
+
+	// Re-deleting the same id and deleting an unknown id are both not-found.
+	if err := srv.DeleteExamTracking(ctx, "alice", "r2"); !errors.Is(err, ErrExamTrackingNotFound) {
+		t.Errorf("re-delete r2 = %v, want ErrExamTrackingNotFound", err)
+	}
+	if err := srv.DeleteExamTracking(ctx, "alice", "no-such"); !errors.Is(err, ErrExamTrackingNotFound) {
+		t.Errorf("delete unknown id = %v, want ErrExamTrackingNotFound", err)
+	}
+
+	// Puts after a deletion keep claiming fresh indexes: no reuse of the hole.
+	_ = srv.Put(ctx, "alice", mustReport(t, "r4"))
+	alice, _ = srv.GetExamReportsByUserId(ctx, "alice")
+	wantIds := []string{"r1", "r3", "r4"}
+	if len(alice) != len(wantIds) {
+		t.Fatalf("alice reports = %+v, want %v", alice, wantIds)
+	}
+	for i, w := range wantIds {
+		if alice[i].Id != w {
+			t.Errorf("alice[%d].Id = %q, want %q", i, alice[i].Id, w)
+		}
+	}
+}
+
+// TestDeleteExamTracking_ConcurrentWithPut runs Puts, Deletes, and Gets
+// against the same user concurrently to stress the lock-free interaction
+// under -race. Deletes may legitimately report not-found (racing another
+// delete of the same id, or scanning before the matching Put landed), but any
+// nil delete must correspond to a report that disappears, and Gets must never
+// panic or observe an absurd count.
+func TestDeleteExamTracking_ConcurrentWithPut(t *testing.T) {
+	srv := NewOnMemoryExamTrackingServer()
+	ctx := context.Background()
+	userid := "racer-delete"
+
+	const puts = 200
+	// Pre-seed half the reports so deletes have targets from the start.
+	for i := 0; i < puts/2; i++ {
+		_ = srv.Put(ctx, userid, mustReport(t, fmt.Sprintf("seed-%d", i)))
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	var opErr atomic.Value // stores error
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < puts; i++ {
+			if err := srv.Put(ctx, userid, mustReport(t, fmt.Sprintf("live-%d", i))); err != nil {
+				opErr.Store(fmt.Errorf("Put: %w", err))
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < puts/2; i++ {
+			err := srv.DeleteExamTracking(ctx, userid, fmt.Sprintf("seed-%d", i))
+			if err != nil && !errors.Is(err, ErrExamTrackingNotFound) {
+				opErr.Store(fmt.Errorf("Delete: %w", err))
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < puts; i++ {
+			rs, err := srv.GetExamReportsByUserId(ctx, userid)
+			if err != nil {
+				opErr.Store(fmt.Errorf("Get: %w", err))
+				return
+			}
+			if len(rs) < 0 || len(rs) > 2*puts {
+				opErr.Store(fmt.Errorf("Get returned %d reports (want 0..%d)", len(rs), 2*puts))
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	if v := opErr.Load(); v != nil {
+		t.Fatalf("concurrent op error: %v", v)
+	}
+
+	// All seeds were deleted (each seed id is deleted exactly once and seeds
+	// existed before the deleter started), so only live-* reports may remain.
+	final, _ := srv.GetExamReportsByUserId(ctx, userid)
+	for _, r := range final {
+		if !strings.HasPrefix(r.Id, "live-") {
+			t.Errorf("unexpected surviving report %q; seeds should all be deleted", r.Id)
+		}
 	}
 }
 

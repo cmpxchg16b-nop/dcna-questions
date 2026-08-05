@@ -22,12 +22,19 @@ async function fetchExamDocs(): Promise<ExamDocs> {
 }
 
 // useExamDocs fetches and caches the list of exam documents under the
-// "examdocs" query key. `data` is always a defined array (empty while the first
-// request is pending), and `isPending` is true during the initial fetch so
-// callers can show a loading placeholder.
-export function useExamDocs(): { data: ExamDocs; isPending: boolean } {
+// "examdocs" query key. `generation` is appended to the key, so bumping it
+// mounts a fresh query and refetches the list — the mechanism by which the
+// parent page lets one section refresh another (prefix-based invalidations
+// such as invalidateQueries({queryKey: ["examdocs"]}) still match). `data` is
+// always a defined array (empty while the first request is pending), and
+// `isPending` is true during the initial fetch so callers can show a loading
+// placeholder.
+export function useExamDocs(generation: number): {
+  data: ExamDocs;
+  isPending: boolean;
+} {
   const { data = [], isPending } = useQuery({
-    queryKey: ["examdocs"],
+    queryKey: ["examdocs", generation],
     queryFn: fetchExamDocs,
   });
   return { data, isPending };

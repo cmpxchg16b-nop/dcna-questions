@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { Assessment, Connect, Question } from "@/api/types";
 import { isConnectionAnswerCorrect } from "@/api/dragAndDrop";
+import { resolveAssetSrc } from "@/utils";
 import DragAndDropBoard from "./DragAndDropBoard";
 import ImgDragAndDropBoard from "./ImgDragAndDropBoard";
 
@@ -124,12 +125,20 @@ export default function QuestionCard({
           {questionNumber}. {question.description.text}
         </Typography>
         {question.exhibits?.map((exhibit) => (
+          // maxHeight caps tall exhibits at a fraction of the viewport so
+          // they don't push the answer options below the fold; with only max
+          // bounds set, the image scales down proportionally.
           <Box
             key={exhibit.image.src}
             component="img"
-            src={`/${exhibit.image.src}`}
+            src={resolveAssetSrc(exhibit.image.src)}
             alt="Question exhibit"
-            sx={{ display: "block", maxWidth: "100%", mb: 2 }}
+            sx={{
+              display: "block",
+              maxWidth: "100%",
+              maxHeight: "40vh",
+              mb: 2,
+            }}
           />
         ))}
         {assessment && isCorrect !== undefined && (

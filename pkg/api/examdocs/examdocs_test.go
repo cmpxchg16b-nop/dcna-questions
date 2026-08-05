@@ -1,6 +1,7 @@
 package examdocs_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 
 	examdocs "dcna-questions/pkg/api/examdocs"
 	"dcna-questions/pkg/models/question"
+	"dcna-questions/pkg/session"
+	pkgutils "dcna-questions/pkg/utils"
 )
 
 // fakeLoader is an ExamLoader that serves canned exams by URL and can be wired
@@ -22,7 +25,7 @@ type fakeLoader struct {
 	errURL map[string]bool
 }
 
-func (l *fakeLoader) LoadFrom(url string) (*question.Exam, error) {
+func (l *fakeLoader) LoadFrom(ctx context.Context, url string) (*question.Exam, error) {
 	if l.errURL[url] {
 		return nil, errors.New("disk read failed")
 	}
@@ -30,6 +33,42 @@ func (l *fakeLoader) LoadFrom(url string) (*question.Exam, error) {
 		return e, nil
 	}
 	return nil, errors.New("exam not found")
+}
+
+// fakeSource is an ExamSource with separate system-wide and per-user entry
+// sets, so tests can exercise the handler's merged, per-user-first stream.
+type fakeSource struct {
+	system  []question.ExamSourceEntry
+	perUser map[string][]question.ExamSourceEntry
+	userErr error
+}
+
+func (s *fakeSource) Get() []question.ExamSourceEntry { return s.system }
+
+func (s *fakeSource) GetByUserId(_ context.Context, userId string) ([]question.ExamSourceEntry, error) {
+	if s.userErr != nil {
+		return nil, s.userErr
+	}
+	return s.perUser[userId], nil
+}
+
+// serveRequest issues a request against the handler wrapped in the session
+// middleware (mirroring the production chain), with the subject id seeded in
+// the context as the JWT middleware would. When withSession is false the
+// request bypasses the session middleware entirely, so the handler's
+// GetSessionFromContext misses (producing the 500 guarded in ServeHTTP).
+func serveRequest(t *testing.T, h http.Handler, sm *session.OnMemorySessionManager, method, target string, withSession bool) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(method, target, nil)
+	handler := h
+	if withSession {
+		ctx := context.WithValue(r.Context(), pkgutils.CtxKeySubjectId, "subject-test")
+		r = r.WithContext(ctx)
+		handler = session.WithSessionId(h, sm)
+	}
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, r)
+	return rr
 }
 
 // ndLine mirrors the handler's on-the-wire ndjsonLine so tests can decode each
@@ -196,11 +235,9 @@ func TestExamHandler(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			h := examdocs.NewExamHandler(question.NewExamRepository([]question.ExamSource{question.NewStaticFileExamSource(tc.sources)}))
-			rr := httptest.NewRecorder()
-			r := httptest.NewRequest(tc.method, "/api/examdocs", nil)
-
-			h.ServeHTTP(rr, r)
+			sm := session.NewOnMemorySessionManager()
+			h := examdocs.NewExamHandler(sm, question.NewExamRepository([]question.ExamSource{question.NewStaticFileExamSource(tc.sources)}))
+			rr := serveRequest(t, h, sm, tc.method, "/api/examdocs", true)
 
 			if rr.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d (body %q)", rr.Code, tc.wantStatus, rr.Body.String())
@@ -213,6 +250,81 @@ func TestExamHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestExamHandler_PerUserFirst verifies the merged listing: the caller's
+// per-user exams stream ahead of the system-wide ones, other users' exams are
+// not visible, and a per-user source failure degrades to an in-band Err line
+// without suppressing the system exams.
+func TestExamHandler_PerUserFirst(t *testing.T) {
+	newHandler := func(t *testing.T, src question.ExamSource) (http.Handler, *session.OnMemorySessionManager) {
+		t.Helper()
+		sm := session.NewOnMemorySessionManager()
+		return examdocs.NewExamHandler(sm, question.NewExamRepository([]question.ExamSource{src})), sm
+	}
+
+	systemEntries := []question.ExamSourceEntry{
+		{Loader: &fakeLoader{byURL: map[string]*question.Exam{"sys": examWith("SYS", "cS", 1)}}, URLs: []string{"sys"}},
+	}
+	userEntries := []question.ExamSourceEntry{
+		{Loader: &fakeLoader{byURL: map[string]*question.Exam{"usr": examWith("USR", "cU", 1)}}, URLs: []string{"usr"}},
+	}
+
+	t.Run("caller sees its own exams first, then system exams", func(t *testing.T) {
+		h, sm := newHandler(t, &fakeSource{system: systemEntries, perUser: map[string][]question.ExamSourceEntry{"subject-test": userEntries}})
+		rr := serveRequest(t, h, sm, http.MethodGet, "/api/examdocs", true)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())
+		}
+		lines := parseLines(t, rr.Body.String())
+		if len(lines) != 2 {
+			t.Fatalf("got %d lines, want 2 (body %q)", len(lines), rr.Body.String())
+		}
+		if lines[0].Data == nil || lines[0].Data.Id != "USR" {
+			t.Errorf("line 0 = %+v, want the per-user exam USR first", lines[0])
+		}
+		if lines[1].Data == nil || lines[1].Data.Id != "SYS" {
+			t.Errorf("line 1 = %+v, want the system exam SYS second", lines[1])
+		}
+	})
+
+	t.Run("other users' per-user exams are not visible", func(t *testing.T) {
+		h, sm := newHandler(t, &fakeSource{system: systemEntries, perUser: map[string][]question.ExamSourceEntry{"someone-else": userEntries}})
+		rr := serveRequest(t, h, sm, http.MethodGet, "/api/examdocs", true)
+		lines := parseLines(t, rr.Body.String())
+		if len(lines) != 1 || lines[0].Data == nil || lines[0].Data.Id != "SYS" {
+			t.Fatalf("lines = %+v, want only the system exam SYS", lines)
+		}
+	})
+
+	t.Run("per-user source failure is an in-band Err line; system exams still stream", func(t *testing.T) {
+		h, sm := newHandler(t, &fakeSource{system: systemEntries, userErr: errors.New("vfs unavailable")})
+		rr := serveRequest(t, h, sm, http.MethodGet, "/api/examdocs", true)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())
+		}
+		lines := parseLines(t, rr.Body.String())
+		if len(lines) != 2 {
+			t.Fatalf("got %d lines, want 2 (body %q)", len(lines), rr.Body.String())
+		}
+		if !strings.Contains(lines[0].Err, "vfs unavailable") {
+			t.Errorf("line 0 = %+v, want the per-user source error first", lines[0])
+		}
+		if lines[1].Data == nil || lines[1].Data.Id != "SYS" {
+			t.Errorf("line 1 = %+v, want the system exam SYS second", lines[1])
+		}
+	})
+
+	t.Run("missing session in context responds 500", func(t *testing.T) {
+		h, sm := newHandler(t, &fakeSource{system: systemEntries})
+		rr := serveRequest(t, h, sm, http.MethodGet, "/api/examdocs", false)
+		if rr.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500 (body %q)", rr.Code, rr.Body.String())
+		}
+		if !strings.Contains(rr.Body.String(), "session not found") {
+			t.Errorf("body = %q, want it to mention session not found", rr.Body.String())
+		}
+	})
 }
 
 // failingWriter is an http.ResponseWriter whose Write always errors, simulating
@@ -244,12 +356,15 @@ func TestExamHandler_ClientDisconnect(t *testing.T) {
 			URLs: []string{"u1", "u2"},
 		},
 	})})
-	h := examdocs.NewExamHandler(repo)
+	sm := session.NewOnMemorySessionManager()
+	h := examdocs.NewExamHandler(sm, repo)
 	r := httptest.NewRequest(http.MethodGet, "/api/examdocs", nil)
+	r = r.WithContext(context.WithValue(r.Context(), pkgutils.CtxKeySubjectId, "subject-test"))
+	wrapped := session.WithSessionId(h, sm)
 
 	done := make(chan struct{})
 	go func() {
-		h.ServeHTTP(&failingWriter{}, r)
+		wrapped.ServeHTTP(&failingWriter{}, r)
 		close(done)
 	}()
 	select {

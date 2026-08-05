@@ -22,7 +22,7 @@ type fakeExamLoader struct {
 	exams map[string]*question.Exam
 }
 
-func (l *fakeExamLoader) LoadFrom(url string) (*question.Exam, error) {
+func (l *fakeExamLoader) LoadFrom(ctx context.Context, url string) (*question.Exam, error) {
 	if e, ok := l.exams[url]; ok {
 		return e, nil
 	}
@@ -78,9 +78,9 @@ type fakeExamServer struct {
 	submCheckOnly bool
 }
 
-func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userSessionId string, opts examserver.ExamOptions, acceptQuestionTypes []question.QuestionType) (examserver.ExamSessionId, error) {
+func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userId string, opts examserver.ExamOptions, acceptQuestionTypes []question.QuestionType) (examserver.ExamSessionId, error) {
 	s.startedExam = exam
-	s.startedUser = userSessionId
+	s.startedUser = userId
 	s.startedOpts = opts
 	s.startedAccept = acceptQuestionTypes
 	if s.startErr != nil {
@@ -92,8 +92,8 @@ func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.E
 	return "default-session", nil
 }
 
-func (s *fakeExamServer) ListExamSessions(_ context.Context, userSessionId string) []examserver.ExamSessionExcerpt {
-	s.listCalls = append(s.listCalls, userSessionId)
+func (s *fakeExamServer) ListExamSessions(_ context.Context, userId string) []examserver.ExamSessionExcerpt {
+	s.listCalls = append(s.listCalls, userId)
 	return s.listResult
 }
 

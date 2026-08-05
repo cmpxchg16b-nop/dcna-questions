@@ -402,3 +402,46 @@ export type MyAnswerResponse = {
 export type SubmitAnswerResponse = {
   assessment: Assessment | null;
 };
+
+// UserUploadSummary mirrors the Go summaryDTO struct in
+// pkg/api/useruploads/useruploads.go: the metadata of one file the caller has
+// uploaded. last_modified_at is a Unix millisecond timestamp, so
+// `new Date(last_modified_at)` works directly.
+export type UserUploadSummary = {
+  upload_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  last_modified_at: number;
+  sha256: string;
+  user_id: string;
+};
+
+// UserUploadListResponse is the JSON body of a successful
+// GET /api/useruploads: {"uploads": [{...}, ...]}.
+export type UserUploadListResponse = {
+  uploads: UserUploadSummary[];
+};
+
+// UserUploads is the resolved list of upload summaries exposed by useUploads.
+export type UserUploads = UserUploadSummary[];
+
+// ExamAssociation mirrors the Go associationDTO struct in
+// pkg/api/examassociations/examassociations.go: a binding between one of the
+// caller's uploads and the exam documents contained in it. The server keeps at
+// most one association per upload, so upload_id is unique within the list.
+export type ExamAssociation = {
+  id: string;
+  user_id: string;
+  upload_id: string;
+};
+
+// ExamAssociationListResponse is the JSON body of a successful
+// GET /api/examassociations: {"associations": [{...}, ...]}.
+export type ExamAssociationListResponse = {
+  associations: ExamAssociation[];
+};
+
+// ExamAssociations is the resolved list of associations exposed by
+// useExamAssociations.
+export type ExamAssociations = ExamAssociation[];
