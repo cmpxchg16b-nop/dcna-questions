@@ -5,6 +5,7 @@ import (
 	pkgapiexamdocs "dcna-questions/pkg/api/examdocs"
 	pkgapiexamsessions "dcna-questions/pkg/api/examsessions"
 	pkgapiexamtrackings "dcna-questions/pkg/api/examtrackings"
+	pkgapiloginoauth2github "dcna-questions/pkg/api/login/oauth2/github"
 	pkgapiloginvisitor "dcna-questions/pkg/api/login/visitor"
 	pkgapilogout "dcna-questions/pkg/api/logout"
 	pkgapiprofile "dcna-questions/pkg/api/profile"
@@ -32,17 +33,26 @@ import (
 var logger = slog.Default()
 
 type CLI struct {
-	Addr                        string        `name:"addr" help:"Listening address." env:"ADDR" default:":8080"`
-	AssetsDir                   string        `name:"assets-dir" help:"Directory of static assets to serve under /assets/." env:"ASSETS_DIR" type:"existingdir"`
-	LoadExam                    []string      `name:"load-exam" help:"Paths to exam documents to load." env:"LOAD_EXAM" type:"existingfile"`
-	LoadExamDir                 []string      `name:"load-exam-dir" help:"Directories of exam documents to load." env:"LOAD_EXAM_DIR" type:"existingdir"`
-	JWTAuthSecretFromEnv        string        `name:"jwt-auth-secret-from-env" help:"Name of the environment variable that contains the JWT secret"`
-	JWTAuthSecretFromFile       string        `name:"jwt-auth-secret-from-file" help:"Path to the file that contains the JWT secret"`
-	SubjectBlacklistTxtPath     string        `name:"subj-blacklist-path" help:"Path to the blacklist text file, one subject id per a line"`
-	RejectVisitor               bool          `name:"reject-visitor" help:"Reject requests from visitors (subjects with the 'visitor:' prefix)" default:"false"`
-	VisitorSessionValidity      time.Duration `name:"validity-of-visitor-session" help:"Validity of visitor session" default:"168h"`
-	VisitorSessionTicketGenIntv time.Duration `name:"visitor-jwt-ticket-gen-intv" help:"We issue visitor token based on some ticket generator, this is the interval of how fast it generate tickets" default:"1s"`
-	JWTIssuer                   string        `help:"The issuer of the JWT token" default:"exam-server"`
+	Addr                          string        `name:"addr" help:"Listening address." env:"ADDR" default:":8080"`
+	AssetsDir                     string        `name:"assets-dir" help:"Directory of static assets to serve under /assets/." env:"ASSETS_DIR" type:"existingdir"`
+	LoadExam                      []string      `name:"load-exam" help:"Paths to exam documents to load." env:"LOAD_EXAM" type:"existingfile"`
+	LoadExamDir                   []string      `name:"load-exam-dir" help:"Directories of exam documents to load." env:"LOAD_EXAM_DIR" type:"existingdir"`
+	JWTAuthSecretFromEnv          string        `name:"jwt-auth-secret-from-env" help:"Name of the environment variable that contains the JWT secret"`
+	JWTAuthSecretFromFile         string        `name:"jwt-auth-secret-from-file" help:"Path to the file that contains the JWT secret"`
+	SubjectBlacklistTxtPath       string        `name:"subj-blacklist-path" help:"Path to the blacklist text file, one subject id per a line"`
+	RejectVisitor                 bool          `name:"reject-visitor" help:"Reject requests from visitors (subjects with the 'visitor:' prefix)" default:"false"`
+	VisitorSessionValidity        time.Duration `name:"validity-of-visitor-session" help:"Validity of visitor session" default:"168h"`
+	VisitorSessionTicketGenIntv   time.Duration `name:"visitor-jwt-ticket-gen-intv" help:"We issue visitor token based on some ticket generator, this is the interval of how fast it generate tickets" default:"1s"`
+	JWTIssuer                     string        `help:"The issuer of the JWT token" default:"exam-server"`
+	GithubOAuthClientId           string        `name:"github-oauth-client-id" help:"Github OAuth app client id." env:"GITHUB_OAUTH_CLIENT_ID"`
+	GithubOAuthAppSecret          string        `name:"github-oauth-app-secret" help:"Github OAuth app client secret." env:"GITHUB_OAUTH_APP_SECRET"`
+	GithubOAuthRedirURL           string        `name:"github-oauth-redir-url" help:"Github OAuth redirect URL." env:"GITHUB_OAUTH_REDIR_URL"`
+	GithubOAuthLoginPage          string        `name:"github-oauth-login-page" help:"Github OAuth login/authorize page URL (optional, defaults to Github)." env:"GITHUB_OAUTH_LOGIN_PAGE"`
+	GithubOAuthScope              string        `name:"github-oauth-scope" help:"Github OAuth scopes (optional, defaults to read:user)." env:"GITHUB_OAUTH_SCOPE"`
+	GithubOAuthTokenEndpoint      string        `name:"github-oauth-token-endpoint" help:"Github OAuth token endpoint URL (optional, defaults to Github)." env:"GITHUB_OAUTH_TOKEN_ENDPOINT"`
+	GithubLoginSuccessRedirectURL string        `name:"github-login-success-redirect-url" help:"URL to redirect to after a successful Github login." env:"GITHUB_LOGIN_SUCCESS_REDIRECT_URL"`
+	GithubSessionLifespan         time.Duration `name:"github-session-lifespan" help:"Lifespan of the session JWT issued after a Github login." default:"168h"`
+	NonceLifespan                 time.Duration `name:"nonce-lifespan" help:"Lifespan of the OAuth nonce." default:"10m"`
 }
 
 func (cli *CLI) Run() error {
@@ -118,6 +128,32 @@ func (cli *CLI) Run() error {
 	)
 
 	muxHandlerDyn.Handle("/api/login/visitor", visitorLoginHandler)
+
+	// Github OAuth login. The handler is only wired up when a client id is
+	// configured, since the OAuth flow requires app credentials and a redirect
+	// URL to function. The nonce issuer is signed with the same static key used
+	// for JWT auth.
+	if cli.GithubOAuthClientId != "" {
+		nonceIssuer := &pkgauth.StaticKeyNonceIssuer{
+			NonceLifespan:  cli.NonceLifespan,
+			SecretProvider: keyProvider,
+		}
+		githubLoginHandler := pkgapiloginoauth2github.NewGithubOAuthLoginHandler(
+			cli.GithubSessionLifespan,
+			cli.GithubOAuthClientId,
+			cli.GithubOAuthAppSecret,
+			cli.GithubOAuthRedirURL,
+			cli.GithubOAuthLoginPage,
+			cli.GithubOAuthScope,
+			cli.GithubOAuthTokenEndpoint,
+			cli.GithubLoginSuccessRedirectURL,
+			tokenIssuer,
+			nonceIssuer,
+			cookieBuilder,
+		)
+		muxHandlerDyn.Handle("/api/login/oauth2/github", githubLoginHandler)
+		muxHandlerDyn.Handle("/api/login/oauth2/github/", githubLoginHandler)
+	}
 
 	if cli.AssetsDir != "" {
 		muxHandlerDyn.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(cli.AssetsDir))))

@@ -13,7 +13,7 @@
     kind="github"
     name="github"
     displayName="Github"
-    loginURL="/login/oauth2/github"
+    loginURL="/api/login/oauth2/github/start"
   />
      <loginOption
     kind="google"
