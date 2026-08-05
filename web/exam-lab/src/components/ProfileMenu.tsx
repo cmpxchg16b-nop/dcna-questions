@@ -38,9 +38,10 @@ function avatarHue(subjectId: string): number {
 // plus the subject id text when the viewport is sm (600px) or wider; clicking
 // it opens a menu showing the subject id and a Log Out item. For an
 // unauthenticated caller (GET /api/profile 401s) it renders as a Login link
-// button instead, and — unless the current page is already under /login —
-// navigates to the login page. It renders nothing while the profile is
-// loading, so the bar never flashes the wrong affordance.
+// button instead — hidden entirely on pages under /login, where a login
+// affordance would be redundant — and navigates to the login page unless
+// already there. It renders nothing while the profile is loading, so the bar
+// never flashes the wrong affordance.
 export default function ProfileMenu() {
   const { data, isPending, isError } = useProfile(PROFILE_POLL_INTERVAL_MS);
   const logout = useLogout();
@@ -61,6 +62,9 @@ export default function ProfileMenu() {
   if (isPending) return null;
 
   if (isError) {
+    // Already on the login page: the dialog there is the login affordance,
+    // so the top bar shows nothing.
+    if (pathname.startsWith("/login")) return null;
     return (
       <Button
         component={Link}
