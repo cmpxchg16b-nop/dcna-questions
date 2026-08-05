@@ -106,8 +106,8 @@ export default function ProfileMenu() {
       >
         <Avatar
           sx={{
-            width: 32,
-            height: 32,
+            width: 26,
+            height: 26,
             fontSize: 16,
             color: "#fff",
             bgcolor: `hsl(${avatarHue(subjectId)}, 65%, 45%)`,
