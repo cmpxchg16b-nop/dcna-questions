@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Box } from "@mui/material";
 import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";
-import BreadcrumbNav from "@/components/BreadcrumbNav";
-import ColorModeToggle from "@/components/ColorModeToggle";
+import TopBar from "@/components/TopBar";
 import { Providers } from "./providers";
 import { Suspense } from "react";
 import "./globals.css";
@@ -43,7 +42,7 @@ export default function RootLayout({
             never flashes the wrong scheme. */}
         <InitColorSchemeScript />
         <Providers>
-          <ColorModeToggle />
+          <TopBar />
           {/* Layout-level gutters so page content never touches the viewport
               edges. Responsive padding: 16px on phones, 24px on sm, 32px on
               md and up. flexGrow lets the main region fill the flex-column
@@ -52,12 +51,6 @@ export default function RootLayout({
             component="main"
             sx={{ p: { xs: 2, sm: 3, md: 4 }, flexGrow: 1 }}
           >
-            {/* useSearchParams inside BreadcrumbNav needs its own Suspense
-                boundary so statically prerendered routes don't bail out of
-                SSG. */}
-            <Suspense>
-              <BreadcrumbNav />
-            </Suspense>
             <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
           </Box>
         </Providers>

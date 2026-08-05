@@ -38,6 +38,7 @@ function crumbsFor(pathname: string, examSessionId: string | null): Crumb[] {
 // BreadcrumbNav shows where the current page sits in the hierarchy (e.g.
 // "Home > Exam Sessions > <exam_session_id>") so the user can jump back up
 // with one click. The trail is derived from the URL, so pages need no wiring.
+// Rendered inside TopBar, which owns the surrounding layout/spacing.
 export default function BreadcrumbNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -48,7 +49,7 @@ export default function BreadcrumbNav() {
   if (crumbs.length < 2) return null;
 
   return (
-    <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
+    <Breadcrumbs aria-label="breadcrumb">
       {crumbs.map((crumb, i) => {
         const isLast = i === crumbs.length - 1;
         return !isLast && crumb.href ? (

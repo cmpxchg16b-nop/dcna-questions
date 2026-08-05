@@ -27,7 +27,7 @@ const MODE_LABEL: Record<Mode, string> = {
   dark: "Dark",
 };
 
-// Floating corner button that cycles the lightness preference through
+// Top-bar button that cycles the lightness preference through
 // system → light → dark. The choice is persisted by MUI's color-scheme
 // manager (localStorage key "mui-mode") and applied to <html> as
 // data-mui-color-scheme (see src/theme.ts and app/layout.tsx).
@@ -46,15 +46,6 @@ export default function ColorModeToggle() {
             : "Switch color theme"
         }
         onClick={() => mode && setMode(NEXT_MODE[mode])}
-        sx={{
-          position: "fixed",
-          top: 8,
-          right: 8,
-          // One step above theme.zIndex.modal so the toggle stays clickable
-          // over modal dialogs and their backdrops (e.g. the login page's
-          // always-open Dialog).
-          zIndex: (theme) => theme.zIndex.modal + 1,
-        }}
       >
         {mode ? MODE_ICON[mode] : <Box sx={{ width: 24, height: 24 }} />}
       </IconButton>
