@@ -6,7 +6,7 @@
   <exam id="certification-caro-c" shortname="CARO-C" code="C">
     <title>业余无线电台操作技术能力验证-C类练习题</title>
     <description>根据《业余无线电台管理办法（2024年版）》，取得C类业余无线电台操作技术能力验证证书的，可以申请设置、使用工作在30MHz以下频段且最大发射功率不大于1000瓦，或者工作在30MHz以上频段且最大发射功率不大于25瓦的业余无线电台。</description>
-    <passingscore>4.0</passingscore>
+    <passingscore>961</passingscore>
     <examcategory>practice-exam</examcategory>
     <questionset>
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
