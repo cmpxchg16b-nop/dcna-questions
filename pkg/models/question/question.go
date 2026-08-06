@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -168,6 +169,7 @@ type QuestionDescription struct {
 }
 
 type Question struct {
+	XMLName        xml.Name            `xml:"question" json:"-"`
 	Id             string              `xml:"id,attr" json:"id"`
 	Type           QuestionType        `xml:"type,attr" json:"type"`
 	Score          float32             `xml:"score,attr" json:"score,omitempty"`
@@ -179,6 +181,100 @@ type Question struct {
 	MultiAreaDrop  *MultiAreaDrop      `xml:"multiareadrop" json:"multiAreaDrop,omitempty"`
 	Drops          Drops               `xml:"drops>drop" json:"drops,omitempty"`
 	CorrectAnswer  CorrectAnswer       `xml:"correctanswer" json:"correctAnswer"`
+}
+
+// MarshalXML encodes q as a <question> element. Unlike the default struct
+// marshaling, optional sections (exhibits, options, candidates, drops) are
+// omitted entirely when empty: encoding/xml always emits the parent wrapper
+// of a parent>child slice field, even for an empty slice.
+func (q Question) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Name.Local = "question"
+	start.Attr = []xml.Attr{
+		{Name: xml.Name{Local: "id"}, Value: q.Id},
+		{Name: xml.Name{Local: "type"}, Value: string(q.Type)},
+		{Name: xml.Name{Local: "score"}, Value: strconv.FormatFloat(float64(q.Score), 'f', -1, 32)},
+	}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+
+	if err := e.EncodeElement(q.Description, xml.StartElement{Name: xml.Name{Local: "description"}}); err != nil {
+		return err
+	}
+	if len(q.Exhibits) > 0 {
+		if err := e.EncodeElement(struct {
+			Exhibits []Exhibit `xml:"exhibit"`
+		}{Exhibits: q.Exhibits}, xml.StartElement{Name: xml.Name{Local: "exhibits"}}); err != nil {
+			return err
+		}
+	}
+	if len(q.Options) > 0 {
+		if err := e.EncodeElement(struct {
+			Options []Option `xml:"option"`
+		}{Options: q.Options}, xml.StartElement{Name: xml.Name{Local: "options"}}); err != nil {
+			return err
+		}
+	}
+	if len(q.Candidates) > 0 {
+		if err := e.EncodeElement(struct {
+			Candidates []Candidate `xml:"candidate"`
+		}{Candidates: q.Candidates}, xml.StartElement{Name: xml.Name{Local: "candidates"}}); err != nil {
+			return err
+		}
+	}
+	if q.ImgDragAndDrop != nil {
+		if err := e.EncodeElement(q.ImgDragAndDrop, xml.StartElement{Name: xml.Name{Local: "imgDragAndDrop"}}); err != nil {
+			return err
+		}
+	}
+	if q.MultiAreaDrop != nil {
+		if err := e.EncodeElement(q.MultiAreaDrop, xml.StartElement{Name: xml.Name{Local: "multiareadrop"}}); err != nil {
+			return err
+		}
+	}
+	if len(q.Drops) > 0 {
+		if err := e.EncodeElement(struct {
+			Drops []Drop `xml:"drop"`
+		}{Drops: q.Drops}, xml.StartElement{Name: xml.Name{Local: "drops"}}); err != nil {
+			return err
+		}
+	}
+	if err := e.EncodeElement(q.CorrectAnswer, xml.StartElement{Name: xml.Name{Local: "correctanswer"}}); err != nil {
+		return err
+	}
+
+	return e.EncodeToken(start.End())
+}
+
+// MarshalXML encodes a as a <correctanswer> element, omitting empty sections
+// for the same reason as Question.MarshalXML.
+func (a CorrectAnswer) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Name.Local = "correctanswer"
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+
+	if len(a.Options) > 0 {
+		if err := e.EncodeElement(struct {
+			Options []Option `xml:"option"`
+		}{Options: a.Options}, xml.StartElement{Name: xml.Name{Local: "options"}}); err != nil {
+			return err
+		}
+	}
+	for _, c := range a.Combinations {
+		if err := e.EncodeElement(c, xml.StartElement{Name: xml.Name{Local: "combination"}}); err != nil {
+			return err
+		}
+	}
+	if len(a.ConnectionSolutions) > 0 {
+		if err := e.EncodeElement(struct {
+			ConnectionSolutions []ConnectionSolution `xml:"connectionsolution"`
+		}{ConnectionSolutions: a.ConnectionSolutions}, xml.StartElement{Name: xml.Name{Local: "connectionsolutions"}}); err != nil {
+			return err
+		}
+	}
+
+	return e.EncodeToken(start.End())
 }
 
 // QuestionCollection is a named group of questions. It models a single

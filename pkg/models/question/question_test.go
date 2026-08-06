@@ -2,6 +2,7 @@ package question
 
 import (
 	"context"
+	"encoding/xml"
 	"os"
 	"path/filepath"
 	"strings"
@@ -280,5 +281,76 @@ func TestDynamicDirExamSource_GetMissingDir(t *testing.T) {
 	src := NewDynamicDirExamSource(filepath.Join(t.TempDir(), "does-not-exist"))
 	if got := src.Get(); got != nil {
 		t.Fatalf("expected nil for missing dir, got %v", got)
+	}
+}
+
+func TestQuestion_MarshalXMLEmitsOnlyPopulatedSections(t *testing.T) {
+	// encoding/xml always emits the parent wrapper of a parent>child slice
+	// field, even when the slice is empty. The hand-rolled MarshalXML must
+	// omit empty optional sections (<exhibits>, <candidates>, <drops>, ...)
+	// instead of writing empty wrappers.
+	q := Question{
+		Id:          "1",
+		Type:        QuestionTypeSingleChoice,
+		Score:       1,
+		Description: QuestionDescription{Text: "stem"},
+		Options: Options{
+			{Id: "1", Content: "a"},
+			{Id: "2", Content: "b"},
+		},
+		CorrectAnswer: CorrectAnswer{
+			Options: Options{{Id: "1", Content: "a"}},
+		},
+	}
+
+	out, err := xml.Marshal(q)
+	if err != nil {
+		t.Fatalf("Marshal: unexpected error: %v", err)
+	}
+
+	const want = `<question id="1" type="single-choice" score="1">` +
+		`<description>stem</description>` +
+		`<options><option id="1">a</option><option id="2">b</option></options>` +
+		`<correctanswer><options><option id="1">a</option></options></correctanswer>` +
+		`</question>`
+	if string(out) != want {
+		t.Fatalf("marshaled XML mismatch:\n got: %s\nwant: %s", out, want)
+	}
+}
+
+func TestQuestion_MarshalXMLWithExhibits(t *testing.T) {
+	q := Question{
+		Id:          "2",
+		Type:        QuestionTypeMultipleChoice,
+		Score:       1,
+		Description: QuestionDescription{Text: "stem"},
+		Exhibits:    Exhibits{{Image: Image{Src: "assets/x.png"}}},
+		Options:     Options{{Id: "1", Content: "a"}},
+		CorrectAnswer: CorrectAnswer{
+			Options: Options{{Id: "1", Content: "a"}},
+		},
+	}
+
+	out, err := xml.Marshal(q)
+	if err != nil {
+		t.Fatalf("Marshal: unexpected error: %v", err)
+	}
+	if !strings.Contains(string(out), `<exhibits><exhibit><image src="assets/x.png"></image></exhibit></exhibits>`) {
+		t.Fatalf("exhibits missing from marshaled XML: %s", out)
+	}
+
+	// The marshaled document must round-trip through the loader's decode path.
+	var got Question
+	if err := xml.Unmarshal(out, &got); err != nil {
+		t.Fatalf("Unmarshal of marshaled question: unexpected error: %v", err)
+	}
+	if got.Id != q.Id || got.Type != q.Type || got.Score != q.Score {
+		t.Fatalf("round-trip mismatch: got %+v, want %+v", got, q)
+	}
+	if len(got.Exhibits) != 1 || got.Exhibits[0].Image.Src != "assets/x.png" {
+		t.Fatalf("round-trip lost exhibits: %+v", got.Exhibits)
+	}
+	if len(got.CorrectAnswer.Options) != 1 || got.CorrectAnswer.Options[0].Id != "1" {
+		t.Fatalf("round-trip lost correct answer: %+v", got.CorrectAnswer)
 	}
 }
