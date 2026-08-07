@@ -112,7 +112,7 @@
           </correctanswer>
         </question>
         <question id="8" type="single-choice" score="1">
-          <description>Refer to the exhibit. An administrator is troubleshooting a Linux-based BGP router in an experimental internetwork where asymmetric routing between upstream providers is common. tcpdump shows that ICMP echo requests sourced in the downstream AS enter the router through wg-peer and are forwarded out wg-up1, while the corresponding ICMP echo replies arrive on wg-up2 and are silently discarded instead of being forwarded toward the downstream AS. The FIB contains a valid route to the destination, IPv4 forwarding is enabled, and no packet-filter rule matches the traffic. Which action allows the ICMP replies to be forwarded to the downstream AS?</description>
+          <description>Refer to the exhibit. An administrator is troubleshooting a Linux-based BGP router in an experimental internetwork where asymmetric routing between upstream providers is common. tcpdump shows that ICMP echo requests sourced in the downstream AS enter the router through wg-peer and are forwarded out wg-up1, while the corresponding ICMP echo replies arrive on wg-up2 and are silently discarded instead of being forwarded toward the downstream AS. The FIB contains a valid route to the destination, IPv4 forwarding is enabled, and no packet-filter rule matches the traffic. Which action allows the ICMP replies to be forwarded to the downstream AS? (Choose one.)</description>
           <exhibits>
             <exhibit>
               <image src="assets/3b6f1d41-4b7f-412a-ac95-b00e1ac58eba.png" />
@@ -124,6 +124,27 @@
             <option id="3">Advertise all prefixes to both upstream providers with identical MED and AS-path length so that return paths become symmetric.</option>
             <option id="4">Set net.ipv4.conf.all.rp_filter and the per-interface rp_filter of every neighbor-facing interface to 0.</option>
             <option id="5">Raise the values of net.ipv4.icmp_msgs_per_sec and net.ipv4.icmp_msgs_burst.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="4"></option>
+            </options>
+          </correctanswer>
+        </question>
+        <question id="9" type="single-choice" score="1">
+          <description>Refer to the exhibit. An administrator must configure an eBGP session between two routers in a experimental overlay network. Both routers run BIRD 3.2.0 and are interconnected by a point-to-point tunnel link. The BGP protocol defined in BIRD configuration uses the IPv6 link-local addresses of the tunnel interfaces. To speed up the deployment, the administrator builds the configuration for the second router by copying a working BGP template from the first router and updating only the interface and address statements. After the BIRD daemon is reloaded, the administrator noticed that BIRD rejects it with the error shown in the exhibit. It is confirmed that the multihop option is not configured on either router, and both routers can ping each other's link-local address across the tunnel. Which action resolves the issue? (Choose one.)</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/9ea72dc2-48d1-4e1d-9f3c-ca387eee9bdd.jpg" />
+            </exhibit>
+          </exhibits>
+          <options>
+            <option id="1">BIRD 3.x enables multihop by default on eBGP sessions that traverse overlay tunnel interfaces, so they must downgrade to BIRD 2.x.</option>
+            <option id="2">The link-local neighbor addresses must be replaced with global unicast addresses.</option>
+            <option id="3">A direct (single-hop) BGP session cannot be established over a L3 point-to-point tunnel; the overlay must be rebuilt over a Layer 2 tunneling technology (such as VXLAN or L2TP) so that both routers share a common bridge domain.</option>
+            <option id="4">Go check if the AS numbers configured on both sides are identical.</option>
+            <option id="5">Force BIRD to establish a single-hop BGP session by adding &#96;direct;&#96; directive to the configuration.</option>
+            <option id="6">Enable the "extended nexthop" option in BIRD configuration.</option>
           </options>
           <correctanswer>
             <options>
