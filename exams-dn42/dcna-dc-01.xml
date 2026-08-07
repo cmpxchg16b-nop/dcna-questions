@@ -183,7 +183,7 @@
             </options>
           </correctanswer>
         </question>
-        <question id="11" type="single-choice" score="1">
+        <question id="12" type="single-choice" score="1">
           <description>An engineer is designing the internal BGP topology for a single autonomous system. Which of the following concerns must the engineer take into consideration? (Choose one.)</description>
           <options>
             <option id="1"> An iBGP speaker advertises routes learned from one iBGP peer to all remaining iBGP peers.</option>
