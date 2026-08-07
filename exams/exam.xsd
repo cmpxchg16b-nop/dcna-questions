@@ -260,6 +260,21 @@
       <xs:attribute name="score" type="xs:float" use="required"></xs:attribute>
     </xs:complexType>
   </xs:element>
+  <xs:element name="virtualcollection">
+    <xs:annotation>
+      <xs:documentation>The feature of virtual collection is not fully implemented yet. In fact, a virtual collection defines a sample size and the population to sample questions from, the use of virtual collection is to define a randomly picked questions list on-the-fly without hard-coding the question collection in the exam document. Virtual collection is specifically useful in an exam document that defines a certification-exam rather than one that defines a pratice-exam. And, when virtual collection is presented in the document, there will never be any real question collection be choosen, as the system will always try to use the virtual collection when present.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="samplesize" minOccurs="1" maxOccurs="1" type="xs:integer"></xs:element>
+        <xs:element name="collectionidx" minOccurs="1" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation>Reference a real question collection in the question set specified by the 0-based index, can be used by multiple times for reference multiple collections altogether.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
   <xs:element name="questioncollection">
     <xs:annotation>
       <xs:documentation xml:lang="en">A question collection is just a ordered list of questions</xs:documentation>
@@ -304,6 +319,7 @@
         <xs:element ref="description" minOccurs="1" maxOccurs="1" />
         <xs:element name="passingscore" minOccurs="0" maxOccurs="1" type="xs:float" />
         <xs:element name="examcategory" minOccurs="1" maxOccurs="1" type="ExamCategory" />
+        <xs:element ref="virtualcollection" minOccurs="0" maxOccurs="1"></xs:element>
         <xs:element ref="questionset" minOccurs="1" maxOccurs="1" />
       </xs:sequence>
       <xs:attribute name="id" type="xs:string" use="required">

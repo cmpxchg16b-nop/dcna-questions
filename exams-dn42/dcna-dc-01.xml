@@ -199,6 +199,23 @@
             </options>
           </correctanswer>
         </question>
+        <question id="13" type="single-choice" score="1">
+          <description>An engineer is joining the DN42 experimental network and must plan IPv4 addressing for the registering AS. The network is a homelab with three servers and one router. Which action is coherent with the discipline of the address management policy of the registry? (Choose one.)</description>
+          <options>
+            <option id="1">Request a /24 allocation to accommodate future growth and to simplify reverse DNS delegation.</option>
+            <option id="2">Register an inetnum object for a /26 or smaller prefix via a registry pull request, verifying that the parent block carries an open policy and has no overlap with the allocated blocks, and prefer IPv6 for peering wherever possible.</option>
+            <option id="3">Begin announcing an unused-looking prefix from 172.20.0.0/14 immediately, as per RFC1918, no formal reigstration is needed for using the reserved address space.</option>
+            <option id="4">Announce a publicly routable /24 into DN42 instead, since globally routable prefixes has higher precedence over the RFC1918 prefixes in DN42.</option>
+            <option id="5">Assign a dedicated DN42 IPv4 address to every physical interface, container, and VM to achieve the full utilization of the IPv4 address allocation.</option>
+            <option id="6">Request a /24 or larger block in a single application to mitigate address fragmentation and to reduce the administration overheads.</option>
+            <option id="7">Request additional IPv4 allocations in advance, just because a surging node count entitles the network to more space, regardless of demonstrated usage.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="2"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
