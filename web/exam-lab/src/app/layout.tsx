@@ -25,6 +25,26 @@ export const metadata: Metadata = {
   // value. With no SSR title, the client write sticks; the tab shows the
   // URL only until the app mounts.
   description: "A site for doing exam practices.",
+  icons: {
+    // Theme-aware favicons. logo-light.png is the black artwork (for light
+    // browser chrome), logo-dark.png the white artwork (for dark chrome).
+    // The tab strip tracks the OS scheme — not the in-app toggle — so
+    // prefers-color-scheme is the right switch here. The generated
+    // favicon.ico (black on white) remains as the fallback for browsers
+    // that ignore the media attribute.
+    icon: [
+      {
+        url: "/logo-light.png",
+        type: "image/png",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/logo-dark.png",
+        type: "image/png",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({
