@@ -21,6 +21,11 @@
       <xs:simpleContent>
         <xs:extension base="xs:string">
           <xs:attribute name="id" type="xs:string" use="required" />
+          <xs:attribute name="imgSrc" type="xs:string" use="optional">
+            <xs:annotation>
+              <xs:documentation>To be implemented, To model some pure image option.</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
         </xs:extension>
       </xs:simpleContent>
     </xs:complexType>
