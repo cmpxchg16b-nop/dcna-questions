@@ -36,7 +36,7 @@
           </correctanswer>
         </question>
         <question id="4" type="single-choice" score="1">
-          <description>Refer to the exhibit. An engineer is investigating a reachability issue in an experimental BGP overlay network. ICMPv6 echo requests from the local router to fdea:6e46:2f1c::1 time out, and traceroute dies several hops into the path. The engineer verifies that the iBGP session to i-bzip9 is established, that no ACLs are blocking ICMPv6, and the rp_filter kernel parameter is set to 0 for all interfaces. Which statement best explains why the pings fail?</description>
+          <description>Refer to the exhibit. An engineer is investigating a reachability issue in an experimental BGP overlay network. ICMPv6 echo requests from the local router to fdea:6e46:2f1c::1 time out, and traceroute dies several hops into the path. The engineer verifies that the iBGP session to i-bzip9 is established, that no ACLs are blocking ICMPv6, and the rp_filter kernel parameter is set to 0 for all interfaces. Which statement best explains why the pings fail? (Choose one.)</description>
           <exhibits>
             <exhibit>
               <image src="assets/83b8f88a-0cc4-439f-b838-dca4b015a376.png" />
@@ -68,7 +68,7 @@
           </correctanswer>
         </question>
         <question id="6" type="single-choice" score="1">
-          <description>Which protocol is used to dynamically assign IP addresses to hosts on a network? (Chooce one.)</description>
+          <description>Which protocol is used to dynamically assign IP addresses to hosts on a network? (Choose one.)</description>
           <options>
             <option id="1">DNS</option>
             <option id="2">DHCP</option>
