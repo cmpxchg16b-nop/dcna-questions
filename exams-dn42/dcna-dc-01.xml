@@ -122,7 +122,7 @@
             <option id="1">Set net.ipv4.conf.all.rp_filter and the per-interface rp_filter of every neighbor-facing interface to 1.</option>
             <option id="2">Add an iptables rule to the FORWARD chain that accepts ICMP echo-reply packets arriving on wg-up2.</option>
             <option id="3">Advertise all prefixes to both upstream providers with identical MED and AS-path length so that return paths become symmetric.</option>
-            <option id="4">Set net.ipv4.conf.all.rp_filter and the per-interface rp_filter of every neighbor-facing interface to 0 or 2.</option>
+            <option id="4">Set net.ipv4.conf.all.rp_filter and the per-interface rp_filter of every neighbor-facing interface to 0.</option>
             <option id="5">Raise the values of net.ipv4.icmp_msgs_per_sec and net.ipv4.icmp_msgs_burst.</option>
           </options>
           <correctanswer>
