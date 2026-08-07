@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:noNamespaceSchemaLocation="exam.xsd"
+  xsi:noNamespaceSchemaLocation="../exams/exam.xsd"
 >
-  <exam id="exam-2" shortname="DCPE" code="DC-02">
-    <title>DCNA Practice Exam</title>
-    <description>Practice exam for the DCNA certification.</description>
-    <passingscore>4.0</passingscore>
+  <exam id="exam-1" shortname="DCNA" code="DC-01">
+    <title>DN42 Certified Network Associate (Practice Exam)</title>
+    <description>Passing this exam helps you to pass the DCNA certification easier, it tests a candidate's knowledge and skills related to network fundamentals, routing and switching, IP connectivity, BGP configuration, connectivity troubleshooting, and automation and programmability.</description>
+    <passingscore>80</passingscore>
     <examcategory>practice-exam</examcategory>
     <questionset>
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
@@ -83,67 +83,35 @@
             </options>
           </correctanswer>
         </question>
+        <question id="7" type="multiple-choice" score="1">
+          <description>Refer to the exhibits. An engineer must configure BGP sessions with several neighbors across a newly deployed overlay network. The engineer has installed BIRD 2.x on a Linux router and has provisioned a single WireGuard interface named wg-dn42 to carry all neighbor adjacencies toward three different ASes in a private peering environment.
+            The underlay network is fully operational: all three remote endpoints answer ICMP echo requests from the router's public address, the listening UDP port 51820 is permitted by the firewall, and NTP is synchronized across all devices. The engineer also has verified that all the pubkeys are correct exchanged and AllowedIPs are configured with 10.127.0.0/16, 172.20.0.0/14, fd00::/8.
+            Which two configuration changes will allow all three BGP sessions to reach the Established state? (Choose two.)</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/b1889354-34e0-49cb-8a26-de4c86d0cd14.png" />
+            </exhibit>
+            <exhibit>
+              <image src="assets/666b88c7-53c5-4744-8965-5d2ec5228722.png" />
+            </exhibit>
+          </exhibits>
+          <options>
+            <option id="1">Reduce the BGP keepalive interval to 10 seconds and the hold timer to 30 seconds on all three neighbor statements.</option>
+            <option id="2">Configure a unique UDP listening port for each peer entry under the wg-dn42 interface, and permit the corresponding ports on the firewall.</option>
+            <option id="3">Migrate each neighbor onto its own dedicated WireGuard interface.</option>
+            <option id="4">Set PersistentKeepalive = 25 on each peer of the wg-dn42 interface.</option>
+            <option id="5">Add 224.0.0.5 and 224.0.0.6 to the AllowedIPs of each WireGuard peer.</option>
+            <option id="6">Assign at least one link-local or ULA address to each WireGuard tunnel interface.</option>
+            <option id="7">Upgrade the local BIRD installation from 2.x to 3.x to match the BIRD release version running on the remote peers.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="3" />
+              <option id="6" />
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
-  <!--
-    we write some example answers below, they are not the standard answer,
-    which is included in eact question object under the exam's hierachy
-     -->
-  <examanswer>
-    <answer questionId="1" questionType="single-choice">
-      <options>
-        <option id="1" />
-      </options>
-    </answer>
-    <answer questionId="2" questionType="multiple-choice">
-      <options>
-        <option id="1" />
-        <option id="2" />
-      </options>
-    </answer>
-    <answer questionId="3" questionType="drag-and-drop">
-      <connections>
-        <connect dst="1" src="2" />
-        <connect dst="2" src="1" />
-        <connect dst="3" src="3" />
-      </connections>
-    </answer>
-  </examanswer>
-  <!--
-    After a check-only or a effective answer submission,
-    user might get their scores report
-    This is just an example.
-    -->
-  <assessment>
-    <overallresult>pass</overallresult>
-    <scoreresult earnedScore="85.5" totalScore="100" />
-    <questionscore scoreEarned="1.0" questionId="1" />
-    <questionscore scoreEarned="1.0" questionId="2" />
-    <questionscore scoreEarned="1.0" questionId="3" />
-    <question id="1" type="single-choice" score="1">
-      <description>An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix? (Choose one.)</description>
-      <options>
-        <option
-          id="1"
-        >All iBGP and eBGP peers, because NO_ADVERTISE only prevents the prefix from being readvertised toward the originating AS</option>
-        <option id="2">All three iBGP peers only</option>
-        <option id="3">The eBGP peer in AS 65003 only</option>
-        <option
-          id="4"
-        >All iBGP and eBGP peers, but with the community attribute stripped from the updates</option>
-        <option
-          id="5"
-        >No BGP peers at all; the prefix remains in R2's local BGP table but is not advertised to any peer</option>
-      </options>
-      <correctanswer>
-        <options>
-          <!-- In some case, more that one option is correct, even it's a single-choice question. -->
-          <option
-            id="5"
-          >No BGP peers at all; the prefix remains in R2's local BGP table but is not advertised to any peer</option>
-        </options>
-      </correctanswer>
-    </question>
-  </assessment>
 </root>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:noNamespaceSchemaLocation="exam.xsd"
+  xsi:noNamespaceSchemaLocation="../exams/exam.xsd"
 >
   <exam id="certification-caro-b" shortname="CARO-B" code="B">
     <title>业余无线电台操作技术能力验证-B类考试题</title>

@@ -126,12 +126,13 @@ export default function QuestionCard({
         <Typography gutterBottom>
           {questionNumber}. {question.description.text}
         </Typography>
-        {question.exhibits?.map((exhibit) => (
+        {question.exhibits?.map((exhibit, idx) => (
           // maxHeight caps tall exhibits at a fraction of the viewport so
           // they don't push the answer options below the fold; with only max
-          // bounds set, the image scales down proportionally.
+          // bounds set, the image scales down proportionally. The key pairs
+          // the index with the src since two exhibits may share one image.
           <Box
-            key={exhibit.image.src}
+            key={`${idx}:${exhibit.image.src}`}
             component="img"
             src={resolveAssetSrc(exhibit.image.src)}
             alt={t("question.exhibitAlt")}
