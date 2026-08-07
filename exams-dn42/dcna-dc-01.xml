@@ -187,7 +187,7 @@
           <description>An engineer is designing the internal BGP topology for a single autonomous system. Which of the following concerns must the engineer take into consideration? (Choose one.)</description>
           <options>
             <option id="1"> An iBGP speaker advertises routes learned from one iBGP peer to all remaining iBGP peers.</option>
-            <option id="2"> An iBGP speaker does not advertise routes learned from one iBGP peer to any another iBGP peer.</option>
+            <option id="2"> An non-RR iBGP speaker does not advertise routes learned from one iBGP peer to any another iBGP peer.</option>
             <option id="3"> A route reflector reflects routes learned from a non-client peer to the other non-client peers.</option>
             <option id="4"> A route reflector always rewrites the next-hop attribute of reflected routes to its own loopback address.</option>
             <option id="5"> A route reflector always rewrites the next-hop attribute of reflected routes to the address assigned on the client-facing interface.</option>
