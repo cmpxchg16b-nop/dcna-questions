@@ -1,5 +1,7 @@
 # ExamServer
 
+[![build](https://github.com/cmpxchg16b-nop/dcna-questions/actions/workflows/build.yml/badge.svg)](https://github.com/cmpxchg16b-nop/dcna-questions/actions/workflows/build.yml)
+
 An exam practice site, built with simplicity and brevity in mind.
 
 It is a small, general-purpose practice site for many kinds of
