@@ -28,6 +28,7 @@ import { useCreateExamAssociation } from "@/hooks/useCreateExamAssociation";
 import { useDeleteExamAssociation } from "@/hooks/useDeleteExamAssociation";
 import UploadCard from "@/components/UploadCard";
 import { UserUploadSummary } from "@/api/types";
+import { useTranslation } from "react-i18next";
 
 type UserUploadsListDisplayProps = {
   generation: number;
@@ -64,6 +65,7 @@ function PendingUploadCard({
   onDismiss: (id: number) => void;
   onCancel: (id: number) => void;
 }) {
+  const { t } = useTranslation();
   const sent = pending.progress !== null && pending.progress >= 100;
   return (
     <ListItem disableGutters sx={{ mb: 1 }}>
@@ -76,7 +78,7 @@ function PendingUploadCard({
               </Typography>
               {pending.error ? (
                 <Typography variant="body2" color="error">
-                  Upload failed: {pending.error}
+                  {t("uploads.uploadFailed", { message: pending.error })}
                 </Typography>
               ) : (
                 <Box
@@ -102,9 +104,9 @@ function PendingUploadCard({
                     sx={{ whiteSpace: "nowrap" }}
                   >
                     {pending.progress === null
-                      ? "Uploading…"
+                      ? t("uploads.uploading")
                       : sent
-                        ? "Processing…"
+                        ? t("uploads.processing")
                         : `${pending.progress}%`}
                   </Typography>
                 </Box>
@@ -112,14 +114,14 @@ function PendingUploadCard({
             </Box>
             {pending.error ? (
               <IconButton
-                aria-label="Dismiss"
+                aria-label={t("uploads.dismiss")}
                 onClick={() => onDismiss(pending.id)}
               >
                 <CloseIcon />
               </IconButton>
             ) : (
               <IconButton
-                aria-label="Cancel upload"
+                aria-label={t("uploads.cancelUpload")}
                 onClick={() => onCancel(pending.id)}
               >
                 <CancelIcon />
@@ -142,6 +144,7 @@ export default function UserUploadsListDisplay({
   generation,
   onGenerationChange,
 }: UserUploadsListDisplayProps) {
+  const { t } = useTranslation();
   const { data: uploads, isPending } = useUploads(generation);
   const uploadFile = useUploadFile();
   const deleteUpload = useDeleteUpload();
@@ -278,12 +281,12 @@ export default function UserUploadsListDisplay({
   return (
     <Box sx={{ mt: 4 }}>
       <Typography variant="h4" component="h2" gutterBottom>
-        Uploads
+        {t("uploads.title")}
       </Typography>
       <Typography gutterBottom>
         {!isPending && uploads.length === 0
-          ? "No files uploaded yet"
-          : "Here are the files you have uploaded"}
+          ? t("uploads.empty")
+          : t("uploads.nonEmpty")}
       </Typography>
       {/* The hidden file input lives inside the button's label so clicking
           the button opens the file picker; resetting target.value lets the
@@ -296,7 +299,7 @@ export default function UserUploadsListDisplay({
         startIcon={<CloudUploadIcon />}
         sx={{ mb: 1 }}
       >
-        Upload
+        {t("uploads.upload")}
         <input
           type="file"
           hidden
@@ -350,28 +353,31 @@ export default function UserUploadsListDisplay({
         open={uploadToDelete !== null}
         onClose={() => setUploadToDelete(null)}
       >
-        <DialogTitle>Delete upload?</DialogTitle>
+        <DialogTitle>{t("uploads.deleteConfirmTitle")}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Delete {uploadToDelete?.filename}? This cannot be undone.
+            {t("uploads.deleteConfirmBody", {
+              filename: uploadToDelete?.filename ?? "…",
+            })}
           </DialogContentText>
           {uploadToDelete &&
             associationByUploadId.has(uploadToDelete.upload_id) && (
               <DialogContentText sx={{ mt: 1 }}>
-                This file is associated; its association (and the exams it
-                provides) will be removed first.
+                {t("uploads.deleteAssociatedNote")}
               </DialogContentText>
             )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setUploadToDelete(null)}>Cancel</Button>
+          <Button onClick={() => setUploadToDelete(null)}>
+            {t("common.cancel")}
+          </Button>
           <Button
             color="error"
             variant="contained"
             loading={deleteUpload.isPending || deleteExamAssociation.isPending}
             onClick={handleDeleteConfirm}
           >
-            Delete
+            {t("common.delete")}
           </Button>
         </DialogActions>
       </Dialog>
@@ -380,23 +386,24 @@ export default function UserUploadsListDisplay({
         open={uploadToCancel !== null}
         onClose={() => setUploadToCancelId(null)}
       >
-        <DialogTitle>Cancel upload?</DialogTitle>
+        <DialogTitle>{t("uploads.cancelConfirmTitle")}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Cancel uploading {uploadToCancel?.file.name}? The progress so far
-            will be lost.
+            {t("uploads.cancelConfirmBody", {
+              filename: uploadToCancel?.file.name ?? "…",
+            })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setUploadToCancelId(null)}>
-            Keep uploading
+            {t("uploads.keepUploading")}
           </Button>
           <Button
             color="error"
             variant="contained"
             onClick={handleCancelConfirm}
           >
-            Cancel upload
+            {t("uploads.cancelUpload")}
           </Button>
         </DialogActions>
       </Dialog>

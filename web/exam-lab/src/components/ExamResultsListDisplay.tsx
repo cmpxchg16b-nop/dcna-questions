@@ -16,6 +16,7 @@ import { useExamTrackings } from "@/hooks/useExamTrackings";
 import { useDeleteExamTracking } from "@/hooks/useDeleteExamTracking";
 import ExamReportCard from "@/components/ExamReportCard";
 import { ExamReport } from "@/api/types";
+import { useTranslation } from "react-i18next";
 
 type ExamResultsListDisplayProps = {
   generation: number;
@@ -28,6 +29,7 @@ type ExamResultsListDisplayProps = {
 export default function ExamResultsListDisplay({
   generation,
 }: ExamResultsListDisplayProps) {
+  const { t } = useTranslation();
   const { data: reports, isPending } = useExamTrackings(generation);
   const deleteTracking = useDeleteExamTracking();
   const [reportToDelete, setReportToDelete] = useState<ExamReport | null>(null);
@@ -35,12 +37,12 @@ export default function ExamResultsListDisplay({
   return (
     <Box sx={{ mt: 4 }}>
       <Typography variant="h4" component="h2" gutterBottom>
-        Trackings
+        {t("results.title")}
       </Typography>
       <Typography gutterBottom>
         {!isPending && reports.length === 0
-          ? "No exam reports yet"
-          : "Here are the exams that you have completed"}
+          ? t("results.empty")
+          : t("results.nonEmpty")}
       </Typography>
       {isPending ? (
         <Typography>…</Typography>
@@ -64,15 +66,18 @@ export default function ExamResultsListDisplay({
         open={reportToDelete !== null}
         onClose={() => setReportToDelete(null)}
       >
-        <DialogTitle>Delete exam report?</DialogTitle>
+        <DialogTitle>{t("results.deleteConfirmTitle")}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Delete the report for {reportToDelete?.title}? This cannot be
-            undone.
+            {t("results.deleteConfirmBody", {
+              title: reportToDelete?.title ?? "…",
+            })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReportToDelete(null)}>Cancel</Button>
+          <Button onClick={() => setReportToDelete(null)}>
+            {t("common.cancel")}
+          </Button>
           <Button
             color="error"
             variant="contained"
@@ -84,7 +89,7 @@ export default function ExamResultsListDisplay({
               });
             }}
           >
-            Delete
+            {t("common.delete")}
           </Button>
         </DialogActions>
       </Dialog>

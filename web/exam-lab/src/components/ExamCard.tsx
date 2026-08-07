@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import { ExamExcerpt } from "@/api/types";
 import ExamMetadataChips from "@/components/ExamMetadataChips";
+import { useTranslation } from "react-i18next";
 
 type ExamCardProps = {
   exam: ExamExcerpt;
@@ -23,6 +24,7 @@ type ExamCardProps = {
 // description, with a Take action reported via onTake so the parent can
 // collect exam options before creating the session.
 export default function ExamCard({ exam, onTake, loading }: ExamCardProps) {
+  const { t } = useTranslation();
   return (
     <ListItem disableGutters sx={{ mb: 1 }}>
       <Card sx={{ width: "100%" }}>
@@ -53,7 +55,7 @@ export default function ExamCard({ exam, onTake, loading }: ExamCardProps) {
               loading={loading}
               onClick={() => onTake(exam)}
             >
-              Take
+              {t("exam.take")}
             </Button>
           </Box>
         </CardContent>

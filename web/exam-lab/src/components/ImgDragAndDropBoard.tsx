@@ -11,6 +11,7 @@ import {
 } from "@/api/types";
 import { isConnectionAccepted } from "@/api/dragAndDrop";
 import { resolveAssetSrc } from "@/utils";
+import { useTranslation } from "react-i18next";
 
 type ImgDragAndDropBoardProps = {
   question: Question;
@@ -47,6 +48,7 @@ export default function ImgDragAndDropBoard({
   disabled = false,
   assessment = null,
 }: ImgDragAndDropBoardProps) {
+  const { t } = useTranslation();
   // picked is the candidate nodeId grabbed by click (as opposed to drag); it is
   // placed onto the next drop target the user clicks.
   const [picked, setPicked] = useState<string | null>(null);
@@ -138,7 +140,7 @@ export default function ImgDragAndDropBoard({
         key={id}
         component="img"
         src={resolveAssetSrc(candidate.imgDataSrc)}
-        alt={`Image snippet ${id}`}
+        alt={t("question.imageSnippet", { id })}
         role={disabled ? undefined : "button"}
         tabIndex={disabled ? undefined : 0}
         aria-pressed={isPicked}
@@ -197,7 +199,7 @@ export default function ImgDragAndDropBoard({
         key={drop.nodeId}
         role={disabled ? undefined : "button"}
         tabIndex={disabled ? undefined : 0}
-        aria-label={`Drop target ${drop.nodeId}`}
+        aria-label={t("question.dropTarget", { id: drop.nodeId })}
         onClick={() => onSlotClick(drop.nodeId)}
         onKeyDown={(e) => onSlotKeyDown(e, drop.nodeId)}
         onDragOver={(e) => {
@@ -248,7 +250,7 @@ export default function ImgDragAndDropBoard({
           <Box
             component="img"
             src={resolveAssetSrc(candidate.imgDataSrc)}
-            alt={`Placed snippet ${candidate.nodeId}`}
+            alt={t("question.placedSnippet", { id: candidate.nodeId })}
             draggable={!disabled}
             onDragStart={(e) => startDrag(e, candidate.nodeId)}
             sx={{
@@ -286,7 +288,7 @@ export default function ImgDragAndDropBoard({
           }}
         >
           <Typography variant="subtitle2" gutterBottom>
-            Image snippets
+            {t("question.imageSnippets")}
           </Typography>
           <Stack spacing={1}>{candidates.map(renderCandidate)}</Stack>
         </Paper>
@@ -301,7 +303,7 @@ export default function ImgDragAndDropBoard({
           <Box
             component="img"
             src={resolveAssetSrc(dropsArea.imgBackgroundUrl)}
-            alt="Drop area background"
+            alt={t("question.dropAreaBackground")}
             draggable={false}
             sx={{
               position: "absolute",
@@ -317,16 +319,21 @@ export default function ImgDragAndDropBoard({
       {assessment && solutions.length > 0 && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
-            Correct answer
+            {t("question.correctAnswer")}
           </Typography>
           {solutions.map((solution, i) => (
             <Box key={i} sx={{ mb: 1 }}>
               {(solutions.length > 1 ||
                 (solution.connectCombinations?.length ?? 0) > 0) && (
                 <Typography variant="caption" color="textSecondary">
-                  {solutions.length > 1 ? `Solution ${i + 1}: r` : "R"}
-                  equires {solution.requiredUniqueConnections} unique
-                  connections
+                  {solutions.length > 1
+                    ? t("question.solutionRequires", {
+                        n: i + 1,
+                        count: solution.requiredUniqueConnections,
+                      })
+                    : t("question.requiresConnections", {
+                        count: solution.requiredUniqueConnections,
+                      })}
                 </Typography>
               )}
               {solution.connects?.map((c, j) => {
@@ -373,7 +380,7 @@ export default function ImgDragAndDropBoard({
                     variant="caption"
                     color="textSecondary"
                   >
-                    (any pairing)
+                    {t("question.anyPairing")}
                   </Typography>
                 </Typography>
               ))}

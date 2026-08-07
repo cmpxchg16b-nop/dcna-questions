@@ -16,6 +16,7 @@ import {
 import LogoutIcon from "@mui/icons-material/Logout";
 import { useProfile } from "@/hooks/useProfile";
 import { useLogout } from "@/hooks/useLogout";
+import { useTranslation } from "react-i18next";
 
 // PROFILE_POLL_INTERVAL_MS is how often ProfileMenu re-fetches GET
 // /api/profile. Polling keeps the top bar in sync with the session: a login
@@ -43,6 +44,7 @@ function avatarHue(subjectId: string): number {
 // already there. It renders nothing while the profile is loading, so the bar
 // never flashes the wrong affordance.
 export default function ProfileMenu() {
+  const { t } = useTranslation();
   const { data, isPending, isError } = useProfile(PROFILE_POLL_INTERVAL_MS);
   const logout = useLogout();
   const router = useRouter();
@@ -73,7 +75,7 @@ export default function ProfileMenu() {
         size="small"
         sx={{ textTransform: "none", ml: 0.5 }}
       >
-        Login
+        {t("profile.login")}
       </Button>
     );
   }
@@ -97,7 +99,7 @@ export default function ProfileMenu() {
   return (
     <>
       <ButtonBase
-        aria-label={`Account: ${subjectId}`}
+        aria-label={t("profile.account", { subjectId })}
         aria-controls={open ? "profile-menu" : undefined}
         aria-haspopup="true"
         aria-expanded={open ? "true" : undefined}
@@ -159,7 +161,7 @@ export default function ProfileMenu() {
           <ListItemIcon>
             <LogoutIcon fontSize="small" />
           </ListItemIcon>
-          Log Out
+          {t("profile.logout")}
         </MenuItem>
       </Menu>
     </>

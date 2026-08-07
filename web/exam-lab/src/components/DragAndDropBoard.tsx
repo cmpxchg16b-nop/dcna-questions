@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Box, Chip, Paper, Stack, Typography } from "@mui/material";
 import { Assessment, Connect, DropTarget, Question } from "@/api/types";
 import { isConnectionAccepted } from "@/api/dragAndDrop";
+import { useTranslation } from "react-i18next";
 
 type DragAndDropBoardProps = {
   question: Question;
@@ -47,6 +48,7 @@ export default function DragAndDropBoard({
   disabled = false,
   assessment = null,
 }: DragAndDropBoardProps) {
+  const { t } = useTranslation();
   // picked is the candidate id grabbed by click (as opposed to drag); it is
   // placed onto the next slot the user clicks.
   const [picked, setPicked] = useState<string | null>(null);
@@ -132,7 +134,9 @@ export default function DragAndDropBoard({
     const section = dropSectionByDropId.get(id);
     const drop = section?.drops.find((d) => d.id === id);
     if (drop?.content) return drop.content;
-    return section?.label ? `${section.label} (slot ${id})` : `slot ${id}`;
+    return section?.label
+      ? t("question.labelSlot", { label: section.label, id })
+      : t("question.slot", { id });
   };
 
   const renderCandidate = (id: string) => {
@@ -175,7 +179,7 @@ export default function DragAndDropBoard({
         key={drop.id}
         role={disabled ? undefined : "button"}
         tabIndex={disabled ? undefined : 0}
-        aria-label={drop.content || `Drop slot ${drop.id}`}
+        aria-label={drop.content || t("question.dropSlot", { id: drop.id })}
         onClick={() => onSlotClick(drop.id)}
         onKeyDown={(e) => onSlotKeyDown(e, drop.id)}
         onDragOver={(e) => {
@@ -235,13 +239,17 @@ export default function DragAndDropBoard({
                 color={accepted ? "success" : "error"}
                 sx={{ ml: 1, fontWeight: 600 }}
               >
-                {accepted ? "Your answer — correct" : "Your answer — incorrect"}
+                {accepted
+                  ? t("question.yourAnswerCorrect")
+                  : t("question.yourAnswerIncorrect")}
               </Typography>
             )}
           </>
         ) : (
           <Typography variant="body2" color="textSecondary">
-            {picked ? `Place ${candidateLabel(picked)} here` : "Drop here"}
+            {picked
+              ? t("question.placeHere", { label: candidateLabel(picked) })
+              : t("question.dropHere")}
           </Typography>
         )}
       </Box>
@@ -271,7 +279,7 @@ export default function DragAndDropBoard({
           }}
         >
           <Typography variant="subtitle2" gutterBottom>
-            Candidates
+            {t("question.candidates")}
           </Typography>
           <Stack spacing={1}>
             {(question.candidates ?? []).map((c) => renderCandidate(c.id))}
@@ -292,16 +300,21 @@ export default function DragAndDropBoard({
       {assessment && solutions.length > 0 && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
-            Correct answer
+            {t("question.correctAnswer")}
           </Typography>
           {solutions.map((solution, i) => (
             <Box key={i} sx={{ mb: 1 }}>
               {(solutions.length > 1 ||
                 (solution.connectCombinations?.length ?? 0) > 0) && (
                 <Typography variant="caption" color="textSecondary">
-                  {solutions.length > 1 ? `Solution ${i + 1}: r` : "R"}
-                  equires {solution.requiredUniqueConnections} unique
-                  connections
+                  {solutions.length > 1
+                    ? t("question.solutionRequires", {
+                        n: i + 1,
+                        count: solution.requiredUniqueConnections,
+                      })
+                    : t("question.requiresConnections", {
+                        count: solution.requiredUniqueConnections,
+                      })}
                 </Typography>
               )}
               {solution.connects?.map((c, j) => (
@@ -323,7 +336,7 @@ export default function DragAndDropBoard({
                     variant="caption"
                     color="textSecondary"
                   >
-                    (any pairing)
+                    {t("question.anyPairing")}
                   </Typography>
                 </Typography>
               ))}

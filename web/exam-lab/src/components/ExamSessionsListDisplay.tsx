@@ -16,6 +16,7 @@ import { useExamSessions } from "@/hooks/useExamSessions";
 import { useEndExamSession } from "@/hooks/useEndExamSession";
 import ExamSessionCard from "@/components/ExamSessionCard";
 import { ExamSessionSummary } from "@/api/types";
+import { useTranslation } from "react-i18next";
 
 type ExamSessionsListDisplayProps = {
   generation: number;
@@ -29,6 +30,7 @@ type ExamSessionsListDisplayProps = {
 export default function ExamSessionsListDisplay({
   generation,
 }: ExamSessionsListDisplayProps) {
+  const { t } = useTranslation();
   const { data: sessions, isPending } = useExamSessions(generation);
   const endSession = useEndExamSession();
   const [sessionToEnd, setSessionToEnd] = useState<ExamSessionSummary | null>(
@@ -38,12 +40,12 @@ export default function ExamSessionsListDisplay({
   return (
     <Box sx={{ mt: 4 }}>
       <Typography variant="h4" component="h2" gutterBottom>
-        Exam Sessions
+        {t("sessions.title")}
       </Typography>
       <Typography gutterBottom>
         {!isPending && sessions.length === 0
-          ? "No ongoing exam sessions"
-          : "Here are the ongoing exam sessions"}
+          ? t("sessions.empty")
+          : t("sessions.nonEmpty")}
       </Typography>
       {isPending ? (
         <Typography>…</Typography>
@@ -65,15 +67,19 @@ export default function ExamSessionsListDisplay({
         open={sessionToEnd !== null}
         onClose={() => setSessionToEnd(null)}
       >
-        <DialogTitle>End exam session?</DialogTitle>
+        <DialogTitle>{t("sessions.endConfirmTitle")}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            End session {sessionToEnd?.exam_session_id} for{" "}
-            {sessionToEnd?.exam_excerpt.Title}? This cannot be undone.
+            {t("sessions.endConfirmBody", {
+              sessionId: sessionToEnd?.exam_session_id ?? "…",
+              examTitle: sessionToEnd?.exam_excerpt.Title ?? "…",
+            })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSessionToEnd(null)}>Cancel</Button>
+          <Button onClick={() => setSessionToEnd(null)}>
+            {t("common.cancel")}
+          </Button>
           <Button
             color="error"
             variant="contained"
@@ -85,7 +91,7 @@ export default function ExamSessionsListDisplay({
               });
             }}
           >
-            End Exam
+            {t("sessions.endExam")}
           </Button>
         </DialogActions>
       </Dialog>

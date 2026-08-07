@@ -13,6 +13,7 @@ import {
   ExamOptionRandomOptions,
   ExamOptionRandomQuestions,
 } from "@/api/types";
+import { useTranslation } from "react-i18next";
 
 type ExamDocumentsListDisplayProps = {
   generation: number;
@@ -27,6 +28,7 @@ type ExamDocumentsListDisplayProps = {
 export default function ExamDocumentsListDisplay({
   generation,
 }: ExamDocumentsListDisplayProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { data: exams, isPending } = useExamDocs(generation);
   const createSession = useCreateExamSession();
@@ -62,12 +64,12 @@ export default function ExamDocumentsListDisplay({
   return (
     <Box sx={{ mt: 4 }}>
       <Typography variant="h4" component="h2" gutterBottom>
-        Exams
+        {t("exams.title")}
       </Typography>
       <Typography gutterBottom>
         {!isPending && exams.length === 0
-          ? "No exam is found"
-          : "Here are the exams you can take"}
+          ? t("exams.empty")
+          : t("exams.nonEmpty")}
       </Typography>
       {isPending ? (
         <Typography>…</Typography>

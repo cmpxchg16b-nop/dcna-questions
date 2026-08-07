@@ -12,7 +12,9 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { formatDistanceToNow } from "date-fns";
-import { ExamCategoryLabels, ExamReport } from "@/api/types";
+import { ExamReport } from "@/api/types";
+import { useTranslation } from "react-i18next";
+import { dateFnsLocaleFor, localeTagFor } from "@/i18n";
 
 type ExamReportCardProps = {
   report: ExamReport;
@@ -47,7 +49,9 @@ export default function ExamReportCard({
   report,
   onDelete,
 }: ExamReportCardProps) {
+  const { t, i18n } = useTranslation();
   const { assessment } = report;
+  const finishedAt = new Date(report.finishedAt);
   const score = assessment.scoreResult;
   // overallResult is "pass" or "immediate" (any non-passing verdict), so it
   // renders as a Pass/Fail chip.
@@ -69,16 +73,19 @@ export default function ExamReportCard({
                   <Chip label={report.examCode} size="small" />
                 )}
                 <Chip
-                  label={ExamCategoryLabels[report.examCategory]}
+                  label={t(`exam.category.${report.examCategory}`)}
                   size="small"
                 />
               </Box>
               <Typography variant="body2" color="textSecondary">
-                Finished{" "}
-                <Tooltip title={new Date(report.finishedAt).toLocaleString()}>
+                {t("results.finished")}{" "}
+                <Tooltip
+                  title={finishedAt.toLocaleString(localeTagFor(i18n.language))}
+                >
                   <Box component="span">
-                    {formatDistanceToNow(new Date(report.finishedAt), {
+                    {formatDistanceToNow(finishedAt, {
                       addSuffix: true,
+                      locale: dateFnsLocaleFor(i18n.language),
                     })}
                   </Box>
                 </Tooltip>
@@ -86,7 +93,7 @@ export default function ExamReportCard({
             </Box>
             {assessment.overallResult && (
               <Chip
-                label={passed ? "Pass" : "Fail"}
+                label={passed ? t("results.pass") : t("results.fail")}
                 color={passed ? "success" : "error"}
               />
             )}
@@ -97,7 +104,7 @@ export default function ExamReportCard({
                 </Typography>
                 {report.passingScore != null && (
                   <Typography variant="body2" color="textSecondary">
-                    pass at {report.passingScore}
+                    {t("results.passingScore", { score: report.passingScore })}
                   </Typography>
                 )}
               </Box>
@@ -106,12 +113,12 @@ export default function ExamReportCard({
               variant="contained"
               color="error"
               sx={collapsibleButtonSx}
-              aria-label="Delete"
+              aria-label={t("common.delete")}
               startIcon={<DeleteIcon />}
               onClick={() => onDelete(report)}
             >
               <Box component="span" sx={labelSx}>
-                Delete
+                {t("common.delete")}
               </Box>
             </Button>
           </Box>

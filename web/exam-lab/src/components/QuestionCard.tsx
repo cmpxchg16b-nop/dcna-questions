@@ -17,6 +17,7 @@ import { isConnectionAnswerCorrect } from "@/api/dragAndDrop";
 import { resolveAssetSrc } from "@/utils";
 import DragAndDropBoard from "./DragAndDropBoard";
 import ImgDragAndDropBoard from "./ImgDragAndDropBoard";
+import { useTranslation } from "react-i18next";
 
 type QuestionCardProps = {
   question: Question;
@@ -55,6 +56,7 @@ export default function QuestionCard({
   disabled = false,
   assessment = null,
 }: QuestionCardProps) {
+  const { t } = useTranslation();
   const toggle = (optionId: string, checked: boolean) =>
     onSelectionChange(
       checked
@@ -111,9 +113,9 @@ export default function QuestionCard({
       >
         {isCorrectOption
           ? isMine
-            ? "Your answer — correct"
-            : "Correct answer"
-          : "Your answer — incorrect"}
+            ? t("question.yourAnswerCorrect")
+            : t("question.correctAnswer")
+          : t("question.yourAnswerIncorrect")}
       </Typography>
     );
   };
@@ -132,7 +134,7 @@ export default function QuestionCard({
             key={exhibit.image.src}
             component="img"
             src={resolveAssetSrc(exhibit.image.src)}
-            alt="Question exhibit"
+            alt={t("question.exhibitAlt")}
             sx={{
               display: "block",
               maxWidth: "100%",
@@ -143,9 +145,7 @@ export default function QuestionCard({
         ))}
         {assessment && isCorrect !== undefined && (
           <Alert severity={isCorrect ? "success" : "error"} sx={{ mb: 2 }}>
-            {isCorrect
-              ? "Correct!"
-              : "Incorrect — the correct answer is marked below."}
+            {isCorrect ? t("question.correct") : t("question.incorrect")}
           </Alert>
         )}
         {question.type === "single-choice" && (
@@ -213,8 +213,7 @@ export default function QuestionCard({
           question.type !== "multiple-choice" &&
           question.type !== "drag-and-drop" && (
             <Typography color="textSecondary">
-              Questions of type &quot;{question.type}&quot; are not supported
-              yet.
+              {t("question.unsupportedType", { type: question.type })}
             </Typography>
           )}
       </CardContent>

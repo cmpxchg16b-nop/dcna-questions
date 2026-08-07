@@ -22,6 +22,7 @@ import {
   ExamOptionSeekable,
   QuestionType,
 } from "@/api/types";
+import { useTranslation } from "react-i18next";
 
 type ExamOptionsDialogProps = {
   exam: ExamExcerpt | null;
@@ -37,7 +38,9 @@ export default function ExamOptionsDialog({
   onClose,
 }: ExamOptionsDialogProps) {
   return (
-    <Dialog open={exam !== null} onClose={onClose}>
+    // fullWidth keeps the dialog at the xs breakpoint width instead of
+    // shrinking to fit the (possibly short, e.g. CJK) checkbox labels.
+    <Dialog open={exam !== null} onClose={onClose} fullWidth maxWidth="xs">
       {/* The form holds the checkbox state; MUI unmounts the Dialog's children
         when it closes, so both checkboxes reset to unchecked on every open. */}
       {exam && <ExamOptionsForm exam={exam} onClose={onClose} />}
@@ -52,6 +55,7 @@ function ExamOptionsForm({
   exam: ExamExcerpt;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const createSession = useCreateExamSession();
   const [randomQuestions, setRandomQuestions] = useState(false);
@@ -59,8 +63,8 @@ function ExamOptionsForm({
   const [seekable, setSeekable] = useState(false);
   // Question types absent from CLIENT_SUPPORTED_QUESTION_TYPES cannot be
   // rendered by the client: they start unchecked and are disabled below.
-  const supported = (t: QuestionType) =>
-    CLIENT_SUPPORTED_QUESTION_TYPES.includes(t);
+  const supported = (qt: QuestionType) =>
+    CLIENT_SUPPORTED_QUESTION_TYPES.includes(qt);
   const [singleChoice, setSingleChoice] = useState(supported("single-choice"));
   const [multipleChoice, setMultipleChoice] = useState(
     supported("multiple-choice"),
@@ -96,7 +100,7 @@ function ExamOptionsForm({
                 onChange={(e) => setRandomQuestions(e.target.checked)}
               />
             }
-            label="Randomized questions order"
+            label={t("examOptions.randomQuestions")}
           />
           <FormControlLabel
             control={
@@ -105,7 +109,7 @@ function ExamOptionsForm({
                 onChange={(e) => setRandomOptions(e.target.checked)}
               />
             }
-            label="Randomized options order"
+            label={t("examOptions.randomOptions")}
           />
           <FormControlLabel
             control={
@@ -114,10 +118,12 @@ function ExamOptionsForm({
                 onChange={(e) => setSeekable(e.target.checked)}
               />
             }
-            label="Seekable (allow going back to previous questions)"
+            label={t("examOptions.seekable")}
           />
         </Box>
-        <DialogContentText sx={{ mt: 2 }}>Question types</DialogContentText>
+        <DialogContentText sx={{ mt: 2 }}>
+          {t("examOptions.questionTypes")}
+        </DialogContentText>
         <Box sx={{ display: "flex", flexDirection: "column" }}>
           <FormControlLabel
             control={
@@ -127,7 +133,7 @@ function ExamOptionsForm({
                 onChange={(e) => setSingleChoice(e.target.checked)}
               />
             }
-            label="Single-choice"
+            label={t("examOptions.singleChoice")}
           />
           <FormControlLabel
             control={
@@ -137,7 +143,7 @@ function ExamOptionsForm({
                 onChange={(e) => setMultipleChoice(e.target.checked)}
               />
             }
-            label="Multiple-choice"
+            label={t("examOptions.multipleChoice")}
           />
           <FormControlLabel
             control={
@@ -147,12 +153,12 @@ function ExamOptionsForm({
                 onChange={(e) => setDragAndDrop(e.target.checked)}
               />
             }
-            label="Drag-and-drop"
+            label={t("examOptions.dragAndDrop")}
           />
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t("common.cancel")}</Button>
         <Button
           variant="contained"
           loading={createSession.isPending}
@@ -173,7 +179,7 @@ function ExamOptionsForm({
             )
           }
         >
-          Take
+          {t("exam.take")}
         </Button>
       </DialogActions>
     </>

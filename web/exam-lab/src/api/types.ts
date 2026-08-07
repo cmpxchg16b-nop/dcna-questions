@@ -8,12 +8,8 @@
 // unproctored practice exam.
 export type ExamCategory = "certification-exam" | "practice-exam";
 
-// ExamCategoryLabels is the human-readable label for each ExamCategory,
-// for display wherever the raw wire value would be shown.
-export const ExamCategoryLabels: Record<ExamCategory, string> = {
-  "certification-exam": "Certification Exam",
-  "practice-exam": "Practice Exam",
-};
+// The human-readable label for each category lives in the i18n bundles
+// (src/i18n/locales) under "exam.category", keyed by the wire value.
 
 // ExamExcerpt mirrors the Go question.ExamExcerpt projection. Title and
 // Description are question.Plaintext, which is `type PlainText string`, so they

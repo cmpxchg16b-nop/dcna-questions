@@ -13,6 +13,8 @@ import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
 import { ExamSessionSummary } from "@/api/types";
 import ExamMetadataChips from "@/components/ExamMetadataChips";
+import { useTranslation } from "react-i18next";
+import { dateFnsLocaleFor, localeTagFor } from "@/i18n";
 
 type ExamSessionCardProps = {
   session: ExamSessionSummary;
@@ -27,8 +29,10 @@ export default function ExamSessionCard({
   session,
   onEnd,
 }: ExamSessionCardProps) {
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const excerpt = session.exam_excerpt;
+  const startedAt = new Date(session.started_at);
 
   // The exam session page fetches the session by id (including its current
   // question index and exam metadata) from the server, so the Resume link only
@@ -47,11 +51,14 @@ export default function ExamSessionCard({
               </Typography>
               <ExamMetadataChips exam={excerpt} />
               <Typography variant="body2" color="textSecondary">
-                Started{" "}
-                <Tooltip title={new Date(session.started_at).toLocaleString()}>
+                {t("sessions.started")}{" "}
+                <Tooltip
+                  title={startedAt.toLocaleString(localeTagFor(i18n.language))}
+                >
                   <Box component="span">
-                    {formatDistanceToNow(new Date(session.started_at), {
+                    {formatDistanceToNow(startedAt, {
                       addSuffix: true,
+                      locale: dateFnsLocaleFor(i18n.language),
                     })}
                   </Box>
                 </Tooltip>
@@ -62,7 +69,7 @@ export default function ExamSessionCard({
               sx={{ whiteSpace: "nowrap" }}
               onClick={() => router.push(`/examsession?${resumeParams}`)}
             >
-              Resume
+              {t("sessions.resume")}
             </Button>
             <Button
               variant="contained"
@@ -70,7 +77,7 @@ export default function ExamSessionCard({
               sx={{ whiteSpace: "nowrap" }}
               onClick={() => onEnd(session)}
             >
-              End Exam
+              {t("session.end")}
             </Button>
           </Box>
         </CardContent>

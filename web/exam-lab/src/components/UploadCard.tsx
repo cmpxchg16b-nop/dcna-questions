@@ -16,6 +16,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import DownloadIcon from "@mui/icons-material/Download";
 import { formatDistanceToNow } from "date-fns";
 import { UserUploadSummary } from "@/api/types";
+import { useTranslation } from "react-i18next";
+import { dateFnsLocaleFor, localeTagFor } from "@/i18n";
 
 type UploadCardProps = {
   upload: UserUploadSummary;
@@ -78,6 +80,8 @@ export default function UploadCard({
   associateBusy,
   onAssociateChange,
 }: UploadCardProps) {
+  const { t, i18n } = useTranslation();
+  const uploadedAt = new Date(upload.last_modified_at);
   return (
     <ListItem disableGutters sx={{ mb: 1 }}>
       <Card sx={{ width: "100%" }}>
@@ -98,13 +102,14 @@ export default function UploadCard({
                 <Chip label={formatBytes(upload.size_bytes)} size="small" />
               </Box>
               <Typography variant="body2" color="textSecondary">
-                Uploaded{" "}
+                {t("uploads.uploaded")}{" "}
                 <Tooltip
-                  title={new Date(upload.last_modified_at).toLocaleString()}
+                  title={uploadedAt.toLocaleString(localeTagFor(i18n.language))}
                 >
                   <Box component="span">
-                    {formatDistanceToNow(new Date(upload.last_modified_at), {
+                    {formatDistanceToNow(uploadedAt, {
                       addSuffix: true,
+                      locale: dateFnsLocaleFor(i18n.language),
                     })}
                   </Box>
                 </Tooltip>
@@ -137,31 +142,31 @@ export default function UploadCard({
                       }
                     />
                   }
-                  label="Associate"
+                  label={t("uploads.associate")}
                 />
               )}
             </Box>
             <Button
               variant="contained"
               sx={collapsibleButtonSx}
-              aria-label="Download"
+              aria-label={t("uploads.download")}
               href={`/api/useruploads/${encodeURIComponent(upload.upload_id)}`}
               startIcon={<DownloadIcon />}
             >
               <Box component="span" sx={labelSx}>
-                Download
+                {t("uploads.download")}
               </Box>
             </Button>
             <Button
               variant="contained"
               color="error"
               sx={collapsibleButtonSx}
-              aria-label="Delete"
+              aria-label={t("common.delete")}
               startIcon={<DeleteIcon />}
               onClick={() => onDelete(upload)}
             >
               <Box component="span" sx={labelSx}>
-                Delete
+                {t("common.delete")}
               </Box>
             </Button>
           </Box>

@@ -20,8 +20,10 @@ import { useMyAnswer } from "@/hooks/useMyAnswer";
 import { useSubmitAnswer } from "@/hooks/useSubmitAnswer";
 import QuestionCard from "@/components/QuestionCard";
 import { Assessment, Connect, ExamOptionSeekable } from "@/api/types";
+import { useTranslation } from "react-i18next";
 
 export default function Page() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -114,7 +116,7 @@ export default function Page() {
   if (!examSessionId) {
     return (
       <Box sx={{ mt: 4 }}>
-        <Typography color="error">Missing exam_session_id.</Typography>
+        <Typography color="error">{t("session.missingId")}</Typography>
       </Box>
     );
   }
@@ -131,7 +133,7 @@ export default function Page() {
     return (
       <Box sx={{ mt: 4 }}>
         <Typography color="error">
-          Failed to load exam session {examSessionId}.
+          {t("session.loadFailed", { sessionId: examSessionId })}
         </Typography>
       </Box>
     );
@@ -258,7 +260,7 @@ export default function Page() {
           loading={navigate.isPending}
           onClick={startExam}
         >
-          Start Exam
+          {t("session.start")}
         </Button>
       );
     }
@@ -268,7 +270,7 @@ export default function Page() {
         // Confirming whether the current question was already answered.
         return (
           <Button variant="contained" loading disabled>
-            Skip
+            {t("session.skip")}
           </Button>
         );
       }
@@ -282,7 +284,7 @@ export default function Page() {
             loading={submitAnswer.isPending}
             onClick={submitThenConfirmEnd}
           >
-            End Exam
+            {t("session.end")}
           </Button>
         ) : (
           <Button
@@ -290,7 +292,7 @@ export default function Page() {
             loading={submitAnswer.isPending || navigate.isPending}
             onClick={submitThenGoNext}
           >
-            Next
+            {t("session.next")}
           </Button>
         );
       }
@@ -301,7 +303,7 @@ export default function Page() {
             loading={submitAnswer.isPending}
             onClick={checkAnswer}
           >
-            Check
+            {t("session.check")}
           </Button>
         );
       }
@@ -314,7 +316,7 @@ export default function Page() {
           color="error"
           onClick={() => setConfirmEndOpen(true)}
         >
-          End Exam
+          {t("session.end")}
         </Button>
       ) : (
         <Button
@@ -322,7 +324,7 @@ export default function Page() {
           loading={navigate.isPending}
           onClick={() => goToQuestion(currentQuestionIndex + 1)}
         >
-          Skip
+          {t("session.skip")}
         </Button>
       );
     }
@@ -335,7 +337,7 @@ export default function Page() {
           loading={submitAnswer.isPending}
           onClick={endExam}
         >
-          End Exam
+          {t("session.end")}
         </Button>
       );
     }
@@ -346,7 +348,7 @@ export default function Page() {
         loading={submitAnswer.isPending || navigate.isPending}
         onClick={submitThenGoNext}
       >
-        Next
+        {t("session.next")}
       </Button>
     );
   };
@@ -358,17 +360,14 @@ export default function Page() {
           {excerpt.Title}
         </Typography>
         <Typography gutterBottom variant="body2" color="textSecondary">
-          {excerpt.ShortName} · {excerpt.Code} · {numQuestions}{" "}
-          {numQuestions === 1 ? "question" : "questions"}
+          {excerpt.ShortName} · {excerpt.Code} ·{" "}
+          {t("exam.questionCount", { count: numQuestions })}
         </Typography>
       </Box>
 
       <Box sx={{ mt: 4 }}>
         {!started ? (
-          <Typography>
-            Welcome! After you are prepared, click the &quot;Start Exam&quot;
-            Button to start exam.
-          </Typography>
+          <Typography>{t("session.welcome")}</Typography>
         ) : (
           effectiveQuestion && (
             <Fragment>
@@ -398,7 +397,7 @@ export default function Page() {
         {/* End Exam replaces Next in the same flex slot on the last question,
             so it occupies exactly the same position. */}
         <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2 }}>
-          <Tooltip title={seekable ? "" : "This exam session is not seekable"}>
+          <Tooltip title={seekable ? "" : t("session.notSeekable")}>
             {/* MUI Tooltips don't fire on disabled buttons, hence the span. */}
             <span>
               <Button
@@ -408,7 +407,7 @@ export default function Page() {
                 }
                 onClick={() => goToQuestion(currentQuestionIndex - 1)}
               >
-                Previous
+                {t("session.previous")}
               </Button>
             </span>
           </Tooltip>
@@ -417,15 +416,14 @@ export default function Page() {
       </Box>
 
       <Dialog open={confirmEndOpen} onClose={() => setConfirmEndOpen(false)}>
-        <DialogTitle>End exam?</DialogTitle>
+        <DialogTitle>{t("session.endConfirmTitle")}</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            Are you sure you want to end the exam? Your answers will be
-            submitted for grading. This cannot be undone.
-          </DialogContentText>
+          <DialogContentText>{t("session.endConfirmBody")}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmEndOpen(false)}>Cancel</Button>
+          <Button onClick={() => setConfirmEndOpen(false)}>
+            {t("common.cancel")}
+          </Button>
           <Button
             color="error"
             variant="contained"
@@ -436,7 +434,7 @@ export default function Page() {
               });
             }}
           >
-            End Exam
+            {t("session.end")}
           </Button>
         </DialogActions>
       </Dialog>
