@@ -6,7 +6,7 @@
   <exam id="exam-1" shortname="DCNA" code="DC-01">
     <title>DN42 Certified Network Associate (Practice Exam)</title>
     <description>Passing this exam helps you to pass the DCNA certification easier, it tests a candidate's knowledge and skills related to network fundamentals, routing and switching, IP connectivity, BGP configuration, connectivity troubleshooting, and automation and programmability.</description>
-    <passingscore>4</passingscore>
+    <passingscore>6</passingscore>
     <examcategory>practice-exam</examcategory>
     <questionset>
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
@@ -165,6 +165,37 @@
           <correctanswer>
             <options>
               <option id="3"></option>
+            </options>
+          </correctanswer>
+        </question>
+        <question id="11" type="single-choice" score="1">
+          <description>An engineer is designing BGP for an new enterprise-owned internetwork. The design includes eBGP sessions to two upstream service providers and an iBGP full mesh between the internal routers, with some iBGP peers separated by multiple routed hops. Which requirement must the engineer consider in the design? (Choose one.)</description>
+          <options>
+            <option id="1">The BGP router ID must be unique across all BGP autonomous systems.</option>
+            <option id="2">The BGP router ID must match an IPv4 address assigned to a loopback interface.</option>
+            <option id="3">The BGP router ID must match an IPv4 address assigned to a physical interface.</option>
+            <option id="4">The BGP router ID must not match any IPv4 address assigned to a physical interface or loopback interface.</option>
+            <option id="5">eBGP sessions may be established between non-directly connected routers.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="5"></option>
+            </options>
+          </correctanswer>
+        </question>
+        <question id="11" type="single-choice" score="1">
+          <description>An engineer is designing the internal BGP topology for a single autonomous system. Which of the following concerns must the engineer take into consideration? (Choose one.)</description>
+          <options>
+            <option id="1"> An iBGP speaker advertises routes learned from one iBGP peer to all remaining iBGP peers.</option>
+            <option id="2"> An iBGP speaker does not advertise routes learned from one iBGP peer to any another iBGP peer.</option>
+            <option id="3"> A route reflector reflects routes learned from a non-client peer to the other non-client peers.</option>
+            <option id="4"> A route reflector always rewrites the next-hop attribute of reflected routes to its own loopback address.</option>
+            <option id="5"> A route reflector always rewrites the next-hop attribute of reflected routes to the address assigned on the client-facing interface.</option>
+            <option id="6"> All route reflector must be fully meshed with every other route collector.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="2"></option>
             </options>
           </correctanswer>
         </question>
