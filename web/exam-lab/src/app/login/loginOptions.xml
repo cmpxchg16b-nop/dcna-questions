@@ -40,6 +40,11 @@
     loginURL="/api/login/oidc/kioubit/start"
   />
   <loginOption
+    kind="hexp"
+    name="hexp"
+    displayName="HExp"
+    loginURL="/api/login/oidc/hexp/start" />
+  <loginOption
     kind="visitor"
     name="visitor"
     displayName=""

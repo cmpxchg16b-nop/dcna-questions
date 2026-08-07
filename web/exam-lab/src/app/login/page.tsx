@@ -14,6 +14,8 @@ import MicrosoftIcon from "@mui/icons-material/Microsoft";
 import kioubitLoginSVGDark from "./kioubit-login-dark.svg";
 import kioubitLoginSVGLight from "./kioubit-login-light.svg";
 import iedonLoginSVG from "./iedon-login.svg";
+import hexpAuthJpeg from "./hexpauth.jpeg";
+import hexpAuthDarkPng from "./hexpauth-dark.png";
 import loginOptionsXml from "./loginOptions.xml";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -89,6 +91,34 @@ function KioubitLoginIcon() {
   }
 }
 
+function HexpLoginIcon() {
+  const prefersDarkMode: boolean = useMediaQuery(
+    "(prefers-color-scheme: dark)",
+  );
+  const colorScheme = useColorScheme();
+  const color: "light" | "dark" =
+    colorScheme.mode === "dark"
+      ? "dark"
+      : colorScheme.mode === "light"
+        ? "light"
+        : colorScheme.mode === "system"
+          ? prefersDarkMode
+            ? "dark"
+            : "light"
+          : "dark";
+
+  // The HExperiment Network logo is wide rather than square, so height is
+  // fixed and width scales to preserve its aspect ratio. The dark variant
+  // (hexpauth-dark.png) has a transparent background instead of white.
+  return (
+    <Image
+      alt={"HExpAuth"}
+      src={color === "dark" ? hexpAuthDarkPng : hexpAuthJpeg}
+      style={{ height: defaultIconLen, width: "auto" }}
+    />
+  );
+}
+
 // loginIconGenerators maps a login option name to the generator of its
 // button icon.
 const loginIconGenerators: Record<string, () => ReactNode> = {
@@ -104,6 +134,7 @@ const loginIconGenerators: Record<string, () => ReactNode> = {
     />
   ),
   kioubit: () => <KioubitLoginIcon />,
+  hexp: () => <HexpLoginIcon />,
   visitor: () => <PersonOutlineIcon />,
 };
 

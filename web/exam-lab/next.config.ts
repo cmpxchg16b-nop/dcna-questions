@@ -15,6 +15,7 @@ const nextConfig = (phase: string): NextConfig => {
         },
       },
     },
+    images: { unoptimized: true },
   };
 
   // Dev-only proxy: forward /api/* to the Go server so the frontend's relative
