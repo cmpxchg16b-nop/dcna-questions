@@ -152,6 +152,22 @@
             </options>
           </correctanswer>
         </question>
+        <question id="10" type="single-choice" score="1">
+          <description>An engineer is designing a new multi-area OSPF deployment for an enterprise network. The planned topology consists of a backbone area and several non-backbone areas, and one remote area can reach the backbone only by transiting another non-backbone area. Which requirement must the engineer consider in the design? (Choose one.)</description>
+          <options>
+            <option id="1">The OSPF router ID must match an IPv4 address assigned to a physical interface.</option>
+            <option id="2">The OSPF router ID must match an IPv4 address assigned to a loopback interface.</option>
+            <option id="3">The OSPF router ID must be unique throughout the OSPF routing domain.</option>
+            <option id="4">The OSPF router ID must be unique only within each area the router belongs to.</option>
+            <option id="5">Every OSPF area must connect to the backbone area through a direct Ethernet link.</option>
+            <option id="6">An ABR maintains a single link-state database shared by all areas it connects.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="3"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
