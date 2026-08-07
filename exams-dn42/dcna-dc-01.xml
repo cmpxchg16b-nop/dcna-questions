@@ -216,6 +216,29 @@
             </options>
           </correctanswer>
         </question>
+        <question id="14" type="single-choice" score="1">
+          <description>Refer to the exhibit. An engineer must configure RFC 2317 classless in-addr.arpa reverse DNS for the 172.20.143.16/28 allocation in DN42. The CNAME records in the parent zone is already in position and can be correctly resolved. A few addresses failed to resolve their PTR records at nearly all public recursors. Which action must the engineer take to restore resolution for the affected address? (Choose one.)</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/f6b04107-46a6-468e-80d1-2b3819920a3f.jpg" />
+            </exhibit>
+            <exhibit>
+              <image src="assets/d457ba04-0fc5-492a-9d56-e4162aeaa960.jpg" />
+            </exhibit>
+          </exhibits>
+          <options>
+            <option id="1">Change the owner name of the second record to 18.16/28.143.20.172.in-addr.arpa. so that every PTR record resides inside the delegated subzone.</option>
+            <option id="2">Change the owner name of the first record to 17.143.20.172.in-addr.arpa. so that both records follow the parent-zone naming convention.</option>
+            <option id="3">Request a full /24 allocation from the registry, because classless delegation cannot carry PTR records for individual addresses.</option>
+            <option id="4">Abandon reverse DNS for this allocation, because RFC 1918 address space cannot be delegated within in-addr.arpa.</option>
+            <option id="5">Establish a lot more full-table BGP peerings so that more recursive resolvers can reach the authoritative nameserver.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="1"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
