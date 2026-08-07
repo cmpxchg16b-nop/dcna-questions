@@ -6,7 +6,7 @@
   <exam id="exam-1" shortname="DCNA" code="DC-01">
     <title>DN42 Certified Network Associate (Practice Exam)</title>
     <description>Passing this exam helps you to pass the DCNA certification easier, it tests a candidate's knowledge and skills related to network fundamentals, routing and switching, IP connectivity, BGP configuration, connectivity troubleshooting, and automation and programmability.</description>
-    <passingscore>80</passingscore>
+    <passingscore>4</passingscore>
     <examcategory>practice-exam</examcategory>
     <questionset>
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
@@ -108,6 +108,26 @@
             <options>
               <option id="3" />
               <option id="6" />
+            </options>
+          </correctanswer>
+        </question>
+        <question id="8" type="single-choice" score="1">
+          <description>Refer to the exhibit. An administrator is troubleshooting a Linux-based BGP router in an experimental internetwork where asymmetric routing between upstream providers is common. tcpdump shows that ICMP echo requests sourced in the downstream AS enter the router through wg-peer and are forwarded out wg-up1, while the corresponding ICMP echo replies arrive on wg-up2 and are silently discarded instead of being forwarded toward the downstream AS. The FIB contains a valid route to the destination, IPv4 forwarding is enabled, and no packet-filter rule matches the traffic. Which action allows the ICMP replies to be forwarded to the downstream AS?</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/3b6f1d41-4b7f-412a-ac95-b00e1ac58eba.png" />
+            </exhibit>
+          </exhibits>
+          <options>
+            <option id="1">Set net.ipv4.conf.all.rp_filter and the per-interface rp_filter of every neighbor-facing interface to 1.</option>
+            <option id="2">Add an iptables rule to the FORWARD chain that accepts ICMP echo-reply packets arriving on wg-up2.</option>
+            <option id="3">Advertise all prefixes to both upstream providers with identical MED and AS-path length so that return paths become symmetric.</option>
+            <option id="4">Set net.ipv4.conf.all.rp_filter and the per-interface rp_filter of every neighbor-facing interface to 0 or 2.</option>
+            <option id="5">Raise the values of net.ipv4.icmp_msgs_per_sec and net.ipv4.icmp_msgs_burst.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="4"></option>
             </options>
           </correctanswer>
         </question>
