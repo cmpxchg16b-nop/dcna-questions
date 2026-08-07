@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { UserUploadListResponse, UserUploads } from "@/api/types";
 
 // fetchUploads calls GET /api/useruploads, which returns the caller's uploads
@@ -17,9 +17,12 @@ async function fetchUploads(): Promise<UserUploads> {
 // query and refetches the list — the mechanism by which the parent page lets
 // one section refresh another (prefix-based invalidations such as
 // invalidateQueries({queryKey: ["useruploads"]}) still match). `data` is
-// always a defined array (empty while the first request is pending), and
-// `isPending` is true during the initial fetch so callers can show a loading
-// placeholder.
+// still match). `data` is always a defined array (empty while the first
+// request is pending). `isPending` is true only for the very first fetch: on
+// generation bumps keepPreviousData serves the previous list while the new
+// query fetches, so callers keep rendering the list instead of collapsing to
+// the loading placeholder (which would shrink the page and yank the scroll
+// position).
 export function useUploads(generation: number): {
   data: UserUploads;
   isPending: boolean;
@@ -27,6 +30,7 @@ export function useUploads(generation: number): {
   const { data = [], isPending } = useQuery({
     queryKey: ["useruploads", generation],
     queryFn: fetchUploads,
+    placeholderData: keepPreviousData,
   });
   return { data, isPending };
 }
