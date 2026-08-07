@@ -8,3 +8,5 @@ bin/server
 .env
 .env.local
 oidcLoginOptions.xml
+getquestion.js
+getquestions1.js
