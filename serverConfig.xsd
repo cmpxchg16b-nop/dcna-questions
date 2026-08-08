@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!-- Schema for serverConfig.xml, the global server configuration document.
      The XML instance references this schema via
      xsi:noNamespaceSchemaLocation="serverConfig.xsd". -->
@@ -9,8 +9,12 @@
   <xsd:element name="serverConfig">
     <xsd:complexType>
       <xsd:sequence>
-        <xsd:element name="oidcLoginOptions" type="oidcLoginOptionsType"
-                     minOccurs="0"/>
+        <xsd:element
+          name="oidcLoginOptions"
+          type="oidcLoginOptionsType"
+          minOccurs="0"
+        />
+        <xsd:element name="smtpServer" type="smtpServerType" minOccurs="0" />
       </xsd:sequence>
     </xsd:complexType>
   </xsd:element>
@@ -19,8 +23,12 @@
        more oidcLoginOption entries. -->
   <xsd:complexType name="oidcLoginOptionsType">
     <xsd:sequence>
-      <xsd:element name="oidcLoginOption" type="oidcLoginOptionType"
-                   minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element
+        name="oidcLoginOption"
+        type="oidcLoginOptionType"
+        minOccurs="0"
+        maxOccurs="unbounded"
+      />
     </xsd:sequence>
   </xsd:complexType>
 
@@ -38,14 +46,44 @@
        Attributes without defaults are required:
          * issuerURL, clientId, clientSecret, redirectURL -->
   <xsd:complexType name="oidcLoginOptionType">
-    <xsd:attribute name="issuerURL" type="xsd:string" use="required"/>
-    <xsd:attribute name="clientId" type="xsd:string" use="required"/>
-    <xsd:attribute name="clientSecret" type="xsd:string" use="required"/>
-    <xsd:attribute name="redirectURL" type="xsd:string" use="required"/>
-    <xsd:attribute name="providerName" type="xsd:string" use="optional"/>
-    <xsd:attribute name="scope" type="xsd:string" use="optional"/>
-    <xsd:attribute name="sessionLifespan" type="xsd:string" use="optional"/>
-    <xsd:attribute name="loginSuccessRedirectURL" type="xsd:string" use="optional"/>
+    <xsd:attribute name="issuerURL" type="xsd:string" use="required" />
+    <xsd:attribute name="clientId" type="xsd:string" use="required" />
+    <xsd:attribute name="clientSecret" type="xsd:string" use="required" />
+    <xsd:attribute name="redirectURL" type="xsd:string" use="required" />
+    <xsd:attribute name="providerName" type="xsd:string" use="optional" />
+    <xsd:attribute name="scope" type="xsd:string" use="optional" />
+    <xsd:attribute name="sessionLifespan" type="xsd:string" use="optional" />
+    <xsd:attribute
+      name="loginSuccessRedirectURL"
+      type="xsd:string"
+      use="optional"
+    />
+  </xsd:complexType>
+
+  <!-- The outbound SMTP service used to deliver notification messages,
+       consumed by EmailBasedMsgSvc in pkg/models/msgnotify.
+
+       Attributes:
+         * host, port          required; the SMTP server to connect to
+         * username, password  optional; when username is omitted the server
+                               is used without authentication
+         * startTLS            optional boolean (default false); connect in
+                               plaintext, then upgrade via a mandatory
+                               STARTTLS command
+         * tls                 optional boolean (default false); implicit TLS
+                               from the first byte ("smtps", typically
+                               port 465)
+
+       startTLS and tls are mutually exclusive; when both are false the
+       connection is plaintext. The mutual exclusion is enforced by the Go
+       wiring (XSD 1.0 cannot express it for attributes). -->
+  <xsd:complexType name="smtpServerType">
+    <xsd:attribute name="host" type="xsd:string" use="required" />
+    <xsd:attribute name="port" type="xsd:int" use="required" />
+    <xsd:attribute name="username" type="xsd:string" use="optional" />
+    <xsd:attribute name="password" type="xsd:string" use="optional" />
+    <xsd:attribute name="startTLS" type="xsd:boolean" use="optional" />
+    <xsd:attribute name="tls" type="xsd:boolean" use="optional" />
   </xsd:complexType>
 
 </xsd:schema>

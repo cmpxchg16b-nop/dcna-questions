@@ -23,7 +23,9 @@ import (
 	pkgmodelsuserupload "dcna-questions/pkg/models/userupload"
 	pkgsession "dcna-questions/pkg/session"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"context"
@@ -68,6 +70,18 @@ type CLI struct {
 func (cli *CLI) Run() error {
 	ctx := context.Background()
 
+	// The global server configuration document is loaded once here; its
+	// sections are consumed by the wiring below (generic OIDC login
+	// providers, the outbound SMTP sender).
+	var serverCfg *pkgmodelsserverconfig.ServerConfigXML
+	if cli.ConfigXML != "" {
+		cfg, err := pkgmodelsserverconfig.LoadServerConfig(cli.ConfigXML)
+		if err != nil {
+			return err
+		}
+		serverCfg = cfg
+	}
+
 	var sources []pkgmodelsquestion.ExamSource
 
 	sm := pkgsession.NewOnMemorySessionManager()
@@ -106,6 +120,19 @@ func (cli *CLI) Run() error {
 	// pipeline works end-to-end before an SMTP service is configured.
 	msgRouter := pkgmodelsmsgnotify.CatchAllServiceMsgRouter{}
 	msgHub := pkgmodelsmsgnotify.NewServiceMessageHub(msgRouter, cli.SysadminEmail)
+
+	// The outbound SMTP sender described by the <smtpServer/> section of the
+	// server configuration document. Constructing it here validates the SMTP
+	// settings at startup; it is not connected to the message router yet, so
+	// the catch-all router above still sinks every message.
+	if serverCfg != nil && serverCfg.SMTPServer != nil {
+		smtpSender, err := newEmailBasedMsgSvc(serverCfg.SMTPServer)
+		if err != nil {
+			return err
+		}
+		_ = smtpSender
+	}
+
 	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer([]pkgmodelsmsgnotify.MsgNotifySvc{msgHub})
 	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer, []pkgmodelsmsgnotify.MsgNotifySvc{msgHub})
 	go examServer.Run(context.Background())
@@ -191,16 +218,12 @@ func (cli *CLI) Run() error {
 	}
 
 	// Generic OIDC providers loaded from the <oidcLoginOptions/> section of
-	// the server configuration XML document referenced by --config-xml. Each
+	// the server configuration document (loaded above). Each
 	// <oidcLoginOption/> with a non-empty issuerURL registers a
 	// GenericOIDCLoginHandler at /api/login/oidc/{providerName}[/...].
 	// Entries with an empty issuerURL are skipped so the shipped sample file
 	// can be used as-is.
-	if cli.ConfigXML != "" {
-		serverCfg, err := pkgmodelsserverconfig.LoadServerConfig(cli.ConfigXML)
-		if err != nil {
-			return err
-		}
+	if serverCfg != nil {
 		nonceIssuer := &pkgauth.StaticKeyNonceIssuer{
 			NonceLifespan:  cli.NonceLifespan,
 			SecretProvider: keyProvider,
@@ -315,6 +338,26 @@ func main() {
 	ctx := kong.Parse(&cli)
 	err := ctx.Run()
 	ctx.FatalIfErrorf(err)
+}
+
+// newEmailBasedMsgSvc builds the outbound SMTP message sender described by
+// the <smtpServer/> section of the server configuration document.
+func newEmailBasedMsgSvc(cfg *pkgmodelsserverconfig.SMTPServerXML) (*pkgmodelsmsgnotify.EmailBasedMsgSvc, error) {
+	encryption := pkgmodelsmsgnotify.SMTPEncryptionNone
+	switch {
+	case cfg.StartTLS && cfg.TLS:
+		return nil, errors.New("smtpServer: startTLS and tls are mutually exclusive")
+	case cfg.StartTLS:
+		encryption = pkgmodelsmsgnotify.SMTPEncryptionStartTLS
+	case cfg.TLS:
+		encryption = pkgmodelsmsgnotify.SMTPEncryptionTLS
+	}
+	return pkgmodelsmsgnotify.NewEmailBasedMsgSvc(pkgmodelsmsgnotify.EmailBasedMsgSvcInitOption{
+		ServerAddr: net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
+		Encryption: encryption,
+		Username:   cfg.Username,
+		Password:   cfg.Password,
+	})
 }
 
 func getJWTSecFromSomewhere(envVar string, filePath string) ([]byte, error) {

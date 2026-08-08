@@ -16,6 +16,8 @@ import (
 type ServerConfigXML struct {
 	XMLName          xml.Name            `xml:"serverConfig"`
 	OIDCLoginOptions OIDCLoginOptionsXML `xml:"oidcLoginOptions"`
+	// SMTPServer is nil when the document has no <smtpServer/> section.
+	SMTPServer *SMTPServerXML `xml:"smtpServer"`
 }
 
 // OIDCLoginOptionsXML mirrors the <oidcLoginOptions/> section of
@@ -36,6 +38,23 @@ type OIDCLoginOptionXML struct {
 	Scope                   string `xml:"scope,attr"`
 	SessionLifespan         string `xml:"sessionLifespan,attr"`
 	LoginSuccessRedirectURL string `xml:"loginSuccessRedirectURL,attr"`
+}
+
+// SMTPServerXML mirrors the <smtpServer/> section of serverConfig.xml: the
+// outbound SMTP service used to deliver notification messages. It maps onto
+// EmailBasedMsgSvcInitOption in pkg/models/msgnotify.
+//
+// StartTLS and TLS select the transport security and are mutually exclusive
+// (enforced by the wiring, not the schema); when both are false the
+// connection is plaintext. When Username is empty the server is used without
+// authentication.
+type SMTPServerXML struct {
+	Host     string `xml:"host,attr"`
+	Port     int    `xml:"port,attr"`
+	Username string `xml:"username,attr"`
+	Password string `xml:"password,attr"`
+	StartTLS bool   `xml:"startTLS,attr"`
+	TLS      bool   `xml:"tls,attr"`
 }
 
 // LoadServerConfig parses the global server configuration XML document.

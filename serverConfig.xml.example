@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!-- Global server configuration, validated against serverConfig.xsd (project
      root).
 
@@ -25,4 +25,17 @@
       loginSuccessRedirectURL="/"
     />
   </oidcLoginOptions>
+
+  <!-- Outbound SMTP service for notification delivery (optional; consumed by
+       the EmailBasedMsgSvc in pkg/models/msgnotify). startTLS and tls are
+       mutually exclusive; omit both for plaintext, and omit username to skip
+       authentication.
+  <smtpServer
+    host="smtp.example.net"
+    port="587"
+    username="noreply@example.net"
+    password=""
+    startTLS="true"
+  />
+  -->
 </serverConfig>
