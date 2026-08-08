@@ -17,7 +17,8 @@ type ServerConfigXML struct {
 	XMLName          xml.Name            `xml:"serverConfig"`
 	OIDCLoginOptions OIDCLoginOptionsXML `xml:"oidcLoginOptions"`
 	// SMTPServer is nil when the document has no <smtpServer/> section.
-	SMTPServer *SMTPServerXML `xml:"smtpServer"`
+	SMTPServer   *SMTPServerXML  `xml:"smtpServer"`
+	LoginOptions LoginOptionsXML `xml:"loginOptions"`
 }
 
 // OIDCLoginOptionsXML mirrors the <oidcLoginOptions/> section of
@@ -55,6 +56,23 @@ type SMTPServerXML struct {
 	Password string `xml:"password,attr"`
 	StartTLS bool   `xml:"startTLS,attr"`
 	TLS      bool   `xml:"tls,attr"`
+}
+
+// LoginOptionsXML mirrors the <loginOptions/> section of serverConfig.xml:
+// the login page's configurable IdP list, served to the frontend as JSON by
+// the login options API handler (pkg/api/loginoptions).
+type LoginOptionsXML struct {
+	Options []LoginOptionXML `xml:"loginOption"`
+}
+
+// LoginOptionXML mirrors a single <loginOption/> entry of the
+// <loginOptions/> section of serverConfig.xml.
+type LoginOptionXML struct {
+	Kind        string `xml:"kind,attr"`
+	Name        string `xml:"name,attr"`
+	DisplayName string `xml:"displayName,attr"`
+	Label       string `xml:"label,attr"`
+	LoginURL    string `xml:"loginURL,attr"`
 }
 
 // LoadServerConfig parses the global server configuration XML document.

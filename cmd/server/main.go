@@ -9,6 +9,7 @@ import (
 	pkgapiloginoauth2github "dcna-questions/pkg/api/login/oauth2/github"
 	pkgapiloginoidcgeneral "dcna-questions/pkg/api/login/oidc/general"
 	pkgapiloginvisitor "dcna-questions/pkg/api/login/visitor"
+	pkgapiloginoptions "dcna-questions/pkg/api/loginoptions"
 	pkgapilogout "dcna-questions/pkg/api/logout"
 	pkgapiprofile "dcna-questions/pkg/api/profile"
 	pkgapiuseruploads "dcna-questions/pkg/api/useruploads"
@@ -189,6 +190,25 @@ func (cli *CLI) Run() error {
 	)
 
 	muxHandlerDyn.Handle("/api/login/visitor", visitorLoginHandler)
+
+	// The login options endpoint serves the <loginOptions/> section of the
+	// server configuration document to the login page. It is registered
+	// unconditionally (an empty list when unconfigured) so the frontend can
+	// always rely on it; /api/login/ is on the JWT whitelist below, so
+	// logged-out visitors can reach it.
+	var loginOptions []pkgapiloginoptions.LoginOption
+	if serverCfg != nil {
+		for _, opt := range serverCfg.LoginOptions.Options {
+			loginOptions = append(loginOptions, pkgapiloginoptions.LoginOption{
+				Kind:        opt.Kind,
+				Name:        opt.Name,
+				DisplayName: opt.DisplayName,
+				Label:       opt.Label,
+				LoginURL:    opt.LoginURL,
+			})
+		}
+	}
+	muxHandlerDyn.Handle("/api/login/loginoptions", pkgapiloginoptions.NewLoginOptionsHandler(loginOptions))
 
 	// Github OAuth login. The handler is only wired up when a client id is
 	// configured, since the OAuth flow requires app credentials and a redirect

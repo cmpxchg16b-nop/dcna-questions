@@ -38,4 +38,23 @@
     startTLS="true"
   />
   -->
+
+  <!-- The login page's configurable IdP list (optional), served to the
+       frontend as JSON by GET /api/login/loginoptions. Options with an empty
+       loginURL are hidden by the login page. -->
+  <loginOptions>
+    <loginOption
+      kind="github"
+      name="github"
+      displayName="Github"
+      loginURL="/api/login/oauth2/github/start"
+    />
+    <loginOption
+      kind="visitor"
+      name="visitor"
+      displayName=""
+      label="Sign in as Visitor"
+      loginURL="/api/login/visitor"
+    />
+  </loginOptions>
 </serverConfig>

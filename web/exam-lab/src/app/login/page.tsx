@@ -5,6 +5,7 @@ import {
   DialogContent,
   Box,
   Button,
+  CircularProgress,
   SvgIcon,
   useColorScheme,
   useMediaQuery,
@@ -16,9 +17,9 @@ import kioubitLoginSVGLight from "./kioubit-login-light.svg";
 import iedonLoginSVG from "./iedon-login.svg";
 import hexpAuthJpeg from "./hexpauth.jpeg";
 import hexpAuthDarkPng from "./hexpauth-dark.png";
-import loginOptionsXml from "./loginOptions.xml";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useLoginOptions } from "@/hooks/useLoginOptions";
 import { Fragment, ReactNode } from "react";
 
 const defaultIconLen = 20;
@@ -144,27 +145,12 @@ function getLoginIcon(name: string): () => ReactNode {
   return loginIconGenerators[name] ?? loginIconGenerators.visitor;
 }
 
-interface LoginOption {
-  // kind identifies the IdP type and selects the login icon (see
-  // getLoginIcon); name is this option's unique key. Multiple IdPs of the
-  // same kind can coexist under different names and display names (e.g.
-  // "entra-public" and "entra-corporation", both with kind "entra").
-  kind: string;
-  name: string;
-  displayName: string;
-  label?: string;
-  loginURL: string;
-}
-
-// Login options come from loginOptions.xml (same directory; schema in
-// loginOption.xsd), parsed at build time by xml-loader: each <loginOption>'s
-// attributes land under `$` and map straight onto LoginOption.
-const loginOptions: LoginOption[] = (
-  loginOptionsXml.loginOptions.loginOption ?? []
-).map((entry) => entry.$);
-
 export default function LoginPage() {
   const router = useRouter();
+  // Login options are served by the server from its configuration document
+  // (GET /api/login/loginoptions), so deployments can change the IdP list
+  // without a frontend rebuild.
+  const { data: loginOptions, isPending, isError } = useLoginOptions();
 
   const handleLogin = (loginURL: string) => {
     if (loginURL) {
@@ -177,7 +163,9 @@ export default function LoginPage() {
     }
   };
 
-  const activeLoginOptions = loginOptions.filter((option) => !!option.loginURL);
+  const activeLoginOptions = (loginOptions ?? []).filter(
+    (option) => !!option.loginURL,
+  );
 
   return (
     <Dialog
@@ -197,7 +185,27 @@ export default function LoginPage() {
             alignItems: "stretch",
           }}
         >
-          {activeLoginOptions.length > 0 ? (
+          {isPending ? (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CircularProgress size={28} />
+            </Box>
+          ) : isError ? (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              Failed to load login options.
+            </Box>
+          ) : activeLoginOptions.length > 0 ? (
             activeLoginOptions.map((option) => (
               <Fragment key={option.name}>
                 <Button

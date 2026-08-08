@@ -15,6 +15,11 @@
           minOccurs="0"
         />
         <xsd:element name="smtpServer" type="smtpServerType" minOccurs="0" />
+        <xsd:element
+          name="loginOptions"
+          type="loginOptionsType"
+          minOccurs="0"
+        />
       </xsd:sequence>
     </xsd:complexType>
   </xsd:element>
@@ -84,6 +89,33 @@
     <xsd:attribute name="password" type="xsd:string" use="optional" />
     <xsd:attribute name="startTLS" type="xsd:boolean" use="optional" />
     <xsd:attribute name="tls" type="xsd:boolean" use="optional" />
+  </xsd:complexType>
+
+  <!-- The login page's configurable IdP list; holds zero or more loginOption
+       entries. Served to the frontend as JSON by the login options API
+       handler (pkg/api/loginoptions, GET /api/login/loginoptions). -->
+  <xsd:complexType name="loginOptionsType">
+    <xsd:sequence>
+      <xsd:element
+        name="loginOption"
+        type="loginOptionType"
+        minOccurs="0"
+        maxOccurs="unbounded"
+      />
+    </xsd:sequence>
+  </xsd:complexType>
+
+  <!-- A single login option. kind identifies the IdP type and selects the
+       login icon on the frontend; name is the option's unique key. Several
+       options may share a kind under different names (e.g. "entra-public"
+       and "entra-corporation", both with kind "entra"). Options with an
+       empty loginURL are hidden by the login page. -->
+  <xsd:complexType name="loginOptionType">
+    <xsd:attribute name="kind" type="xsd:string" use="required" />
+    <xsd:attribute name="name" type="xsd:string" use="required" />
+    <xsd:attribute name="displayName" type="xsd:string" use="required" />
+    <xsd:attribute name="loginURL" type="xsd:string" use="required" />
+    <xsd:attribute name="label" type="xsd:string" use="optional" />
   </xsd:complexType>
 
 </xsd:schema>
