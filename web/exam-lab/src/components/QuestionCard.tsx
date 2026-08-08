@@ -135,7 +135,7 @@ export default function QuestionCard({
           sx={{
             display: "block",
             maxWidth: "100%",
-            maxHeight: "30vh",
+            maxHeight: "40vh",
             my: 0.5,
           }}
         />
