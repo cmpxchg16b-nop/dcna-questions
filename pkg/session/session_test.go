@@ -2,8 +2,10 @@ package session_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,22 +164,56 @@ func TestWithSessionIdCopiesOnlyPresentValues(t *testing.T) {
 	}
 }
 
-// TestWithSessionIdPanicsOnWrongValueType pins a sharp edge: the middleware
-// uses unchecked type assertions, so a mistyped context value (e.g. the
-// subject id stored as an int) panics rather than being skipped.
-func TestWithSessionIdPanicsOnWrongValueType(t *testing.T) {
-	sm := session.NewOnMemorySessionManager()
-	h := session.WithSessionId(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}), sm)
+// TestWithSessionIdRejectsMistypedContextValues verifies that a context value
+// of the wrong type (a misconfigured upstream middleware) produces a 500 in
+// the project's standard error shape instead of panicking, and that the
+// downstream handler is never called with a partially populated session.
+func TestWithSessionIdRejectsMistypedContextValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     pkgutils.CtxKey
+		value   any
+		wantMsg string
+	}{
+		{name: "session id", key: pkgutils.CtxKeySessionId, value: 42, wantMsg: `"session_id" has unexpected type int`},
+		{name: "subject id", key: pkgutils.CtxKeySubjectId, value: 42, wantMsg: `"subject_id" has unexpected type int`},
+		{name: "username", key: pkgutils.CtxKeyUsername, value: 42, wantMsg: `"username" has unexpected type int`},
+		{name: "email", key: pkgutils.CtxKeyEmail, value: 42, wantMsg: `"email" has unexpected type int`},
+		{name: "ttl secs", key: pkgutils.CtxKeySessionTTLSecs, value: "tomorrow", wantMsg: `"session_ttl_secs" has unexpected type string`},
+	}
 
-	r := httptest.NewRequest(http.MethodGet, "/bad", nil)
-	ctx := context.WithValue(r.Context(), pkgutils.CtxKeySubjectId, 42)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sm := session.NewOnMemorySessionManager()
 
-	defer func() {
-		if recover() == nil {
-			t.Error("expected a panic from the unchecked type assertion, got none")
-		}
-	}()
-	h.ServeHTTP(httptest.NewRecorder(), r.WithContext(ctx))
+			downstreamCalled := false
+			h := session.WithSessionId(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				downstreamCalled = true
+			}), sm)
+
+			r := httptest.NewRequest(http.MethodGet, "/bad", nil)
+			ctx := context.WithValue(r.Context(), tc.key, tc.value)
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, r.WithContext(ctx))
+
+			if downstreamCalled {
+				t.Error("downstream handler was called despite the mistyped context value")
+			}
+			if rr.Code != http.StatusInternalServerError {
+				t.Fatalf("status = %d, want %d (body %q)", rr.Code, http.StatusInternalServerError, rr.Body.String())
+			}
+			if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+				t.Errorf("Content-Type = %q, want it to contain application/json", ct)
+			}
+			var body pkgutils.ErrorResponse
+			if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+				t.Fatalf("response body is not valid JSON: %v (body %q)", err, rr.Body.String())
+			}
+			if !strings.Contains(body.Error, tc.wantMsg) {
+				t.Errorf("error = %q, want it to contain %q", body.Error, tc.wantMsg)
+			}
+		})
+	}
 }
 
 // TestWithSessionIdForwardsTheRequest verifies the wrapped handler receives

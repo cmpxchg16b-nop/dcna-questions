@@ -2,9 +2,12 @@ package session
 
 import (
 	"context"
-	pkgutils "dcna-questions/pkg/utils"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
+
+	pkgutils "dcna-questions/pkg/utils"
 )
 
 
@@ -56,30 +59,60 @@ func (m *OnMemorySessionManager) WithSession(ctx context.Context, sess *Session)
 // it is expected that the request is flowed through the jwt middleware before it hits this.
 func WithSessionId(h http.Handler, sm *OnMemorySessionManager) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var sess Session
-
-		ctx := r.Context()
-
-		if jwtIdAny := ctx.Value(pkgutils.CtxKeySessionId); jwtIdAny != nil {
-			sess.id = jwtIdAny.(string)
+		sess, err := sessionFromContext(r.Context())
+		if err != nil {
+			// A mistyped context value means the upstream middleware chain is
+			// misconfigured. Fail closed with a 500 rather than run downstream
+			// handlers with a partially populated session (e.g. an empty
+			// subject id scoping operations to a non-existent user).
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(pkgutils.ErrorResponse{Error: err.Error()})
+			return
 		}
 
-		if subjectIdAny := ctx.Value(pkgutils.CtxKeySubjectId); subjectIdAny != nil {
-			sess.subjectId = subjectIdAny.(string)
-		}
-
-		if usernameAny := ctx.Value(pkgutils.CtxKeyUsername); usernameAny != nil {
-			sess.username = usernameAny.(string)
-		}
-
-		if emailAny := ctx.Value(pkgutils.CtxKeyEmail); emailAny != nil {
-			sess.email = emailAny.(string)
-		}
-
-		if expAny := ctx.Value(pkgutils.CtxKeySessionTTLSecs); expAny != nil {
-			sess.expiresAtSec = expAny.(int64)
-		}
-
-		h.ServeHTTP(w, r.WithContext(sm.WithSession(ctx, &sess)))
+		h.ServeHTTP(w, r.WithContext(sm.WithSession(r.Context(), sess)))
 	})
+}
+
+// sessionFromContext builds a Session from the values the JWT middleware left
+// in ctx. Absent values leave the corresponding field zero. A present value of
+// an unexpected type indicates a misconfigured upstream chain and is returned
+// as an error instead of panicking.
+func sessionFromContext(ctx context.Context) (*Session, error) {
+	var sess Session
+	var err error
+
+	if sess.id, err = typedContextValue[string](ctx, pkgutils.CtxKeySessionId); err != nil {
+		return nil, err
+	}
+	if sess.subjectId, err = typedContextValue[string](ctx, pkgutils.CtxKeySubjectId); err != nil {
+		return nil, err
+	}
+	if sess.username, err = typedContextValue[string](ctx, pkgutils.CtxKeyUsername); err != nil {
+		return nil, err
+	}
+	if sess.email, err = typedContextValue[string](ctx, pkgutils.CtxKeyEmail); err != nil {
+		return nil, err
+	}
+	if sess.expiresAtSec, err = typedContextValue[int64](ctx, pkgutils.CtxKeySessionTTLSecs); err != nil {
+		return nil, err
+	}
+	return &sess, nil
+}
+
+// typedContextValue reads the value stored under key, expecting type T. An
+// absent key yields the zero value. A present value of another type is an
+// error naming the offending key.
+func typedContextValue[T any](ctx context.Context, key pkgutils.CtxKey) (T, error) {
+	var zero T
+	v := ctx.Value(key)
+	if v == nil {
+		return zero, nil
+	}
+	typed, ok := v.(T)
+	if !ok {
+		return zero, fmt.Errorf("session: context value %q has unexpected type %T", key, v)
+	}
+	return typed, nil
 }
