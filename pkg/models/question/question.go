@@ -315,6 +315,7 @@ type Exam struct {
 	Title             PlainText          `xml:"title" json:"title"`
 	Description       PlainText          `xml:"description" json:"description"`
 	PassingScore      *float32           `xml:"passingscore" json:"passingScore,omitempty"`
+	TotalExamScore    *float32           `xml:"totalExamScore" json:"totalExamScore,omitempty"`
 	ExamCategory      ExamCategory       `xml:"examcategory" json:"examCategory"`
 	VirtualCollection *VirtualCollection `xml:"virtualcollection" json:"virtualCollection,omitempty"`
 	QuestionSet       QuestionSet        `xml:"questionset" json:"questionSet"`
@@ -424,9 +425,12 @@ type ExamDocumentExcerpt struct {
 	TotalScores  float32
 }
 
-// ExamExcerptFrom builds an ExamExcerpt from an Exam. NumQuestions is the
-// number of questions in the first question collection and TotalScores is the
-// sum of their scores; both are zero when the exam has no question collections.
+// ExamExcerptFrom builds an ExamExcerpt from an Exam. When the exam defines a
+// virtual collection, NumQuestions is the collection's sample size and
+// TotalScores is the exam's TotalExamScore (zero when the document does not
+// carry one). Otherwise NumQuestions is the number of questions in the first
+// question collection and TotalScores is the sum of their scores; both are
+// zero when the exam has no question collections.
 func ExamExcerptFrom(e *Exam) ExamDocumentExcerpt {
 	excerpt := ExamDocumentExcerpt{
 		Id:           e.Id,
@@ -435,6 +439,13 @@ func ExamExcerptFrom(e *Exam) ExamDocumentExcerpt {
 		Title:        e.Title,
 		Description:  e.Description,
 		ExamCategory: e.ExamCategory,
+	}
+	if e.VirtualCollection != nil {
+		excerpt.NumQuestions = e.VirtualCollection.SampleSize
+		if e.TotalExamScore != nil {
+			excerpt.TotalScores = *e.TotalExamScore
+		}
+		return excerpt
 	}
 	if len(e.QuestionSet.QuestionCollections) == 0 {
 		return excerpt
@@ -526,6 +537,9 @@ func (e *Exam) validate() error {
 	}
 	if !e.ExamCategory.Valid() {
 		return fmt.Errorf("exam %q: unknown exam category %q", e.Id, e.ExamCategory)
+	}
+	if e.TotalExamScore != nil && e.ExamCategory != ExamCategoryCertification {
+		return fmt.Errorf("exam %q: a total exam score is only allowed in a certification exam", e.Id)
 	}
 	for _, qc := range e.QuestionSet.QuestionCollections {
 		for _, q := range qc.Questions {

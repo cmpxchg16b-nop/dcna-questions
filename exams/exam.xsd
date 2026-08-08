@@ -416,6 +416,17 @@
           type="xs:float"
         />
         <xs:element
+          name="totalExamScore"
+          minOccurs="0"
+          maxOccurs="1"
+          type="xs:float"
+        >
+          <xs:annotation>
+            <xs:documentation
+            >The total score of the exam: the maximum score a candidate can earn across all the questions served in an exam session. A total exam score is only needed in a certification-exam document, where a virtual collection samples questions on the fly and the total therefore cannot be derived from any single question collection; the exam loader rejects it in a practice exam.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element
           name="examcategory"
           minOccurs="1"
           maxOccurs="1"

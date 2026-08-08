@@ -496,3 +496,110 @@ func TestExamLoader_LoadRejectsInvalidVirtualCollection(t *testing.T) {
 		})
 	}
 }
+
+func TestExamLoader_LoadTotalExamScore(t *testing.T) {
+const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id="1" shortname="X" code="1">
+  <title>t</title><description>d</description>
+  <passingscore>70</passingscore>
+  <totalExamScore>120</totalExamScore>
+  <examcategory>certification-exam</examcategory>
+  <virtualcollection><samplesize>1</samplesize><collectionidx>0</collectionidx></virtualcollection>
+  <questionset>
+    <questioncollection>
+      <question id="1" type="single-choice"><description>a</description></question>
+    </questioncollection>
+  </questionset>
+</exam>
+</root>`
+
+exam, err := NewFileExamLoader().Load([]byte(xml))
+if err != nil {
+	t.Fatalf("Load: unexpected error: %v", err)
+}
+if exam.TotalExamScore == nil || *exam.TotalExamScore != 120 {
+	t.Fatalf("TotalExamScore = %v, want 120", exam.TotalExamScore)
+}
+}
+
+func TestExamLoader_LoadRejectsTotalExamScoreInPracticeExam(t *testing.T) {
+const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id="1" shortname="X" code="1">
+  <title>t</title><description>d</description>
+  <totalExamScore>120</totalExamScore>
+  <examcategory>practice-exam</examcategory>
+  <questionset><questioncollection></questioncollection></questionset>
+</exam>
+</root>`
+
+_, err := NewFileExamLoader().Load([]byte(xml))
+if err == nil || !strings.Contains(err.Error(), "only allowed in a certification exam") {
+	t.Fatalf("Load: error = %v, want one containing %q", err, "only allowed in a certification exam")
+}
+}
+
+func TestExamExcerptFrom(t *testing.T) {
+total := float32(120)
+coll := QuestionCollection{Questions: []Question{
+	{Id: "q1", Type: QuestionTypeSingleChoice, Score: 1},
+	{Id: "q2", Type: QuestionTypeSingleChoice, Score: 2},
+}}
+for _, tc := range []struct {
+	name      string
+	exam      *Exam
+	wantNum   int
+	wantTotal float32
+}{
+	{
+		name: "virtual collection reports sample size and total exam score",
+		exam: &Exam{
+			Id:                "1",
+			ExamCategory:      ExamCategoryCertification,
+			TotalExamScore:    &total,
+			VirtualCollection: &VirtualCollection{SampleSize: 5, CollectionIdx: []int{0}},
+			QuestionSet:       QuestionSet{QuestionCollections: []QuestionCollection{coll}},
+		},
+		wantNum:   5,
+		wantTotal: 120,
+	},
+	{
+		name: "virtual collection without total exam score scores zero",
+		exam: &Exam{
+			Id:                "1",
+			ExamCategory:      ExamCategoryCertification,
+			VirtualCollection: &VirtualCollection{SampleSize: 5, CollectionIdx: []int{0}},
+			QuestionSet:       QuestionSet{QuestionCollections: []QuestionCollection{coll}},
+		},
+		wantNum:   5,
+		wantTotal: 0,
+	},
+	{
+		name: "no virtual collection sums the first collection",
+		exam: &Exam{
+			Id:           "1",
+			ExamCategory: ExamCategoryPractice,
+			QuestionSet:  QuestionSet{QuestionCollections: []QuestionCollection{coll}},
+		},
+		wantNum:   2,
+		wantTotal: 3,
+	},
+	{
+		name: "no question collections reports zeros",
+		exam: &Exam{
+			Id:           "1",
+			ExamCategory: ExamCategoryPractice,
+		},
+		wantNum:   0,
+		wantTotal: 0,
+	},
+} {
+	t.Run(tc.name, func(t *testing.T) {
+		excerpt := ExamExcerptFrom(tc.exam)
+		if excerpt.NumQuestions != tc.wantNum || excerpt.TotalScores != tc.wantTotal {
+			t.Fatalf("excerpt = %+v, want NumQuestions %d and TotalScores %g", excerpt, tc.wantNum, tc.wantTotal)
+		}
+	})
+}
+}
