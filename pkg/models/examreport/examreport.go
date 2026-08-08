@@ -15,6 +15,7 @@ import (
 	htmltemplate "html/template"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	texttemplate "text/template"
 	"time"
@@ -452,7 +453,9 @@ func examCompletionMessage(userid string, report ExamReport) (text, html string)
 		AttachmentName: "exam-report-" + report.Id + ".xml",
 	}
 	if report.Assessment.OverallResult != nil {
-		n.OverallResult = string(*report.Assessment.OverallResult)
+		// The enum values ("pass", "immediate") read better shouted in a
+		// human-facing message body.
+		n.OverallResult = strings.ToUpper(string(*report.Assessment.OverallResult))
 	}
 	if report.Assessment.ScoreResult != nil {
 		n.Score = fmt.Sprintf("%g/%g", report.Assessment.ScoreResult.EarnedScore, report.Assessment.ScoreResult.TotalScore)
