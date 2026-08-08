@@ -354,3 +354,51 @@ func TestQuestion_MarshalXMLWithExhibits(t *testing.T) {
 		t.Fatalf("round-trip lost correct answer: %+v", got.CorrectAnswer)
 	}
 }
+
+func TestQuestion_OptionImgSrcRoundTrip(t *testing.T) {
+	// The option element's optional imgSrc attribute models a pure-image
+	// option; it must survive both the decode path and Question.MarshalXML,
+	// and text-only options must not gain an empty imgSrc attribute.
+	const examXML = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id="1" shortname="X" code="1">
+  <title>t</title><description>d</description>
+  <examcategory>certification-exam</examcategory>
+  <questionset>
+    <questioncollection>
+      <question id="1" type="single-choice">
+        <description>pick the right topology</description>
+        <options>
+          <option id="1" imgSrc="assets/opt-a.png"></option>
+          <option id="2">text only</option>
+        </options>
+        <correctanswer><options><option id="1" imgSrc="assets/opt-a.png"></option></options></correctanswer>
+      </question>
+    </questioncollection>
+  </questionset>
+</exam>
+</root>`
+
+	exam, err := NewFileExamLoader().Load([]byte(examXML))
+	if err != nil {
+		t.Fatalf("Load: unexpected error: %v", err)
+	}
+	q := exam.QuestionSet.QuestionCollections[0].Questions[0]
+	if len(q.Options) != 2 || q.Options[0].ImgSrc != "assets/opt-a.png" || q.Options[1].ImgSrc != "" {
+		t.Fatalf("imgSrc not decoded: %+v", q.Options)
+	}
+	if len(q.CorrectAnswer.Options) != 1 || q.CorrectAnswer.Options[0].ImgSrc != "assets/opt-a.png" {
+		t.Fatalf("imgSrc lost from correct answer: %+v", q.CorrectAnswer.Options)
+	}
+
+	out, err := xml.Marshal(q)
+	if err != nil {
+		t.Fatalf("Marshal: unexpected error: %v", err)
+	}
+	if !strings.Contains(string(out), `<option id="1" imgSrc="assets/opt-a.png"></option>`) {
+		t.Fatalf("imgSrc missing from marshaled XML: %s", out)
+	}
+	if strings.Contains(string(out), `<option id="2" imgSrc=`) {
+		t.Fatalf("empty imgSrc emitted for text-only option: %s", out)
+	}
+}

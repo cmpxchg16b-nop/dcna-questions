@@ -156,6 +156,9 @@ export type ExamSessions = ExamSessionSummary[];
 export type QuestionOption = {
   id: string;
   content: string;
+  // imgSrc optionally references an image rendered as the option's content,
+  // modeling a pure-image option (content may then be empty).
+  imgSrc?: string;
 };
 
 // DragCandidate mirrors the Go question.Candidate struct {"id", "content"}: a

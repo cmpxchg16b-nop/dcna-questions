@@ -34,8 +34,12 @@ func (t QuestionType) Valid() bool {
 // PlainText is a text node in the question document.
 type PlainText string
 
+// Option is a choice of a single-choice or multiple-choice question. ImgSrc
+// optionally references an image rendered as the option's content, modeling a
+// pure-image option (Content may then be empty).
 type Option struct {
 	Id      string    `xml:"id,attr" json:"id"`
+	ImgSrc  string    `xml:"imgSrc,attr,omitempty" json:"imgSrc,omitempty"`
 	Content PlainText `xml:",chardata" json:"content"`
 }
 

@@ -11,7 +11,7 @@ import (
 func TestWebFS(t *testing.T) {
 	fsys := WebFS()
 
-	for _, name := range []string{"index.html", "404.html", "favicon.ico"} {
+	for _, name := range []string{"index.html", "404.html", "logo-dark.png", "logo-light.png"} {
 		if !fileExists(fsys, name) {
 			t.Errorf("expected %q in embedded FS", name)
 		}
@@ -41,7 +41,8 @@ func TestHandler(t *testing.T) {
 
 	check("/", http.StatusOK)
 	check("/index.html", http.StatusOK)
-	check("/favicon.ico", http.StatusOK)
+	check("/logo-dark.png", http.StatusOK)
+	check("/logo-light.png", http.StatusOK)
 	check("/this-page-does-not-exist", http.StatusNotFound)
 
 	// Next.js emits per-route RSC payload files into <route>/ alongside

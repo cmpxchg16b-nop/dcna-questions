@@ -86,6 +86,7 @@
   },
   "question": {
     "exhibitAlt": "题目图示",
+    "optionImageAlt": "选项图片",
     "correct": "回答正确！",
     "incorrect": "回答错误——正确答案已在下方标出。",
     "yourAnswerCorrect": "你的答案——正确",

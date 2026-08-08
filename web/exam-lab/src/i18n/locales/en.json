@@ -87,6 +87,7 @@
   },
   "question": {
     "exhibitAlt": "Question exhibit",
+    "optionImageAlt": "Answer option image",
     "correct": "Correct!",
     "incorrect": "Incorrect — the correct answer is marked below.",
     "yourAnswerCorrect": "Your answer — correct",

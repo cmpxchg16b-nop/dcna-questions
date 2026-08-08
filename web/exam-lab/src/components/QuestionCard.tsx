@@ -12,7 +12,7 @@ import {
   RadioGroup,
   Typography,
 } from "@mui/material";
-import { Assessment, Connect, Question } from "@/api/types";
+import { Assessment, Connect, Question, QuestionOption } from "@/api/types";
 import { isConnectionAnswerCorrect } from "@/api/dragAndDrop";
 import { resolveAssetSrc } from "@/utils";
 import DragAndDropBoard from "./DragAndDropBoard";
@@ -120,6 +120,30 @@ export default function QuestionCard({
     );
   };
 
+  // optionLabel renders an option's content and, when imgSrc is set, the
+  // option's image (pure-image options carry no text). The image follows the
+  // same max-bounds pattern as the exhibits above so a large option image
+  // doesn't shove the remaining choices below the fold.
+  const optionLabel = (option: QuestionOption) => (
+    <>
+      {option.content}
+      {option.imgSrc && (
+        <Box
+          component="img"
+          src={resolveAssetSrc(option.imgSrc)}
+          alt={option.content || t("question.optionImageAlt")}
+          sx={{
+            display: "block",
+            maxWidth: "100%",
+            maxHeight: "30vh",
+            my: 0.5,
+          }}
+        />
+      )}
+      {optionMarker(option.id)}
+    </>
+  );
+
   return (
     <Card>
       <CardContent>
@@ -159,12 +183,7 @@ export default function QuestionCard({
                 key={option.id}
                 value={option.id}
                 control={<Radio />}
-                label={
-                  <>
-                    {option.content}
-                    {optionMarker(option.id)}
-                  </>
-                }
+                label={optionLabel(option)}
                 disabled={disabled}
               />
             ))}
@@ -181,12 +200,7 @@ export default function QuestionCard({
                     onChange={(e) => toggle(option.id, e.target.checked)}
                   />
                 }
-                label={
-                  <>
-                    {option.content}
-                    {optionMarker(option.id)}
-                  </>
-                }
+                label={optionLabel(option)}
                 disabled={disabled}
               />
             ))}
