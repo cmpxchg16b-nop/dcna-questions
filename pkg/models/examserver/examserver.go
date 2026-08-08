@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"sync"
 	"time"
 
+	"dcna-questions/pkg/models/msgnotify"
 	pkgmodelquestions "dcna-questions/pkg/models/question"
 
 	"dcna-questions/pkg/models/examreport"
@@ -131,20 +133,89 @@ type OnMemoryExamServer struct {
 	// examTrackingServer persists finished exam reports. It is safe to call
 	// from any goroutine.
 	examTrackingServer examreport.ExamTrackingServer
+
+	// notifiers are the messaging notification services that are asked to
+	// deliver a notification when an exam session starts. It may be empty.
+	notifiers []msgnotify.MsgNotifySvc
 }
 
 // NewOnMemoryExamServer constructs an in-memory exam server. The exam options,
 // question bank, and RNG are all supplied per exam via StartNewExamSession, not held by
 // the server. examTrackingServer is the sink to which finished exam reports are
-// persisted.
-func NewOnMemoryExamServer(examTrackingServer examreport.ExamTrackingServer) *OnMemoryExamServer {
+// persisted. notifiers is the list of messaging notification services notified
+// when an exam session starts; it may be nil or empty, in which case no
+// notifications are sent.
+func NewOnMemoryExamServer(examTrackingServer examreport.ExamTrackingServer, notifiers []msgnotify.MsgNotifySvc) *OnMemoryExamServer {
 	return &OnMemoryExamServer{
 		sessionsStore:      make(map[ExamSessionId]*OnMemoryExamSession),
 		userSessions:       make(map[string]map[ExamSessionId]struct{}),
 		serviceChan:        make(chan func()),
 		done:               make(chan struct{}),
 		examTrackingServer: examTrackingServer,
+		notifiers:          notifiers,
 	}
+}
+
+// notificationSender is the reply-to address the OnMemoryExamServer uses for
+// the notifications it sends.
+var notificationSender = msgnotify.AddrId{
+	AddressFamily: msgnotify.MsgNotifyAddrFamilyService,
+	Address:       msgnotify.WellKnownAddrServiceOnMemoryExamSessionServer,
+}
+
+// notificationRecipient is the address notifications are addressed to. The
+// exam session server does not know — and never cares — who the final
+// recipient is: its job is only to hand the message to the next hop, the
+// notifiers that claim the address (AreYou == true).
+var notificationRecipient = msgnotify.AddrId{
+	AddressFamily: msgnotify.MsgNotifyAddrFamilyService,
+	Address:       "",
+}
+
+// notifySessionStarted spams a session-started notification through every
+// notifier that accepts both the sender and the recipient address families
+// and claims the recipient address when probed with AreYou. Delivery is
+// best-effort: Send errors are logged and never fail the session operation.
+func (srv *OnMemoryExamServer) notifySessionStarted(ctx context.Context, userId string, sessionId ExamSessionId, exam *pkgmodelquestions.Exam) {
+	sender := notificationSender
+	sender.Tags = msgnotify.AssociationsList{
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyMsgSource, msgnotify.WellKnownLabelValueExamSessionServer),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerSubjectId, userId),
+	}
+
+	msg := msgnotify.Msg{
+		Id:      uuid.NewString(),
+		Created: time.Now().UnixMilli(),
+		Title:   "Exam session started",
+		Level:   msgnotify.MessageLevelCommon,
+		Text:    fmt.Sprintf("User %s started exam session %s for exam %s.", userId, sessionId, exam.Id),
+	}
+	for _, svc := range srv.notifiers {
+		if !acceptsAddrFamily(svc.GetAcceptedSenderAddressFamilies(), sender.AddressFamily) {
+			continue
+		}
+		if !acceptsAddrFamily(svc.GetAcceptedRecipientAddressFamilies(), notificationRecipient.AddressFamily) {
+			continue
+		}
+		// Confirm with the service that it is the recipient before emitting.
+		if !svc.AreYou(notificationRecipient) {
+			continue
+		}
+		if err := svc.Send(ctx, sender, notificationRecipient, msg); err != nil {
+			slog.WarnContext(ctx, "examserver: notification delivery failed",
+				"messageId", msg.Id, "to", notificationRecipient, "error", err)
+		}
+	}
+}
+
+// acceptsAddrFamily reports whether family is present in families.
+func acceptsAddrFamily(families []msgnotify.MsgNotifyAddrFamily, family msgnotify.MsgNotifyAddrFamily) bool {
+	for _, f := range families {
+		if f == family {
+			return true
+		}
+	}
+	return false
 }
 
 // Run is the actor loop. Run it in its own goroutine; it returns when ctx is
@@ -224,6 +295,11 @@ func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pk
 	}
 	select {
 	case r := <-resp:
+		if r.err == nil {
+			// Spam the session-started notification outside the actor
+			// goroutine, so delivery never blocks session dispatch.
+			srv.notifySessionStarted(ctx, userId, r.examId, exam)
+		}
 		return r.examId, r.err
 	case <-ctx.Done():
 		return "", ctx.Err()

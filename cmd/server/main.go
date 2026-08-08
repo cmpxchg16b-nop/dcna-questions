@@ -16,6 +16,7 @@ import (
 	pkgcookie "dcna-questions/pkg/cookie"
 	pkgmodelsexamreport "dcna-questions/pkg/models/examreport"
 	pkgmodelsexamserver "dcna-questions/pkg/models/examserver"
+	pkgmodelsmsgnotify "dcna-questions/pkg/models/msgnotify"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
 	pkgmodelsuserexamdocsfsbasedassociation "dcna-questions/pkg/models/userexamdocs/fsbasedassociation"
 	pkgmodelsuserupload "dcna-questions/pkg/models/userupload"
@@ -59,6 +60,7 @@ type CLI struct {
 	GithubLoginSuccessRedirectURL string        `name:"github-login-success-redirect-url" help:"URL to redirect to after a successful Github login." env:"GITHUB_LOGIN_SUCCESS_REDIRECT_URL"`
 	GithubSessionLifespan         time.Duration `name:"github-session-lifespan" help:"Lifespan of the session JWT issued after a Github login." default:"168h"`
 	NonceLifespan                 time.Duration `name:"nonce-lifespan" help:"Lifespan of the OAuth nonce." default:"10m"`
+	SysadminEmail                 string        `name:"sysadmin-email" help:"Email address of the system administrator, used as the fallback notification destination." env:"SYSADMIN_EMAIL"`
 }
 
 func (cli *CLI) Run() error {
@@ -95,8 +97,15 @@ func (cli *CLI) Run() error {
 	// finished-session reports) and the /api/examtrackings handler (which reads
 	// them back), so a report written on session end is immediately visible to
 	// the caller.
-	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer()
-	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer)
+	// Notifications emitted by the tracking server are handed to the service
+	// message hub. The catch-all router stands in for a real outbound SMTP
+	// service for now: every route terminates in a sink that logs messages
+	// instead of delivering them to real recipients, so the notification
+	// pipeline works end-to-end before an SMTP service is configured.
+	msgRouter := pkgmodelsmsgnotify.CatchAllServiceMsgRouter{}
+	msgHub := pkgmodelsmsgnotify.NewServiceMessageHub(msgRouter, cli.SysadminEmail)
+	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer([]pkgmodelsmsgnotify.MsgNotifySvc{msgHub})
+	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer, []pkgmodelsmsgnotify.MsgNotifySvc{msgHub})
 	go examServer.Run(context.Background())
 	defer examServer.Shutdown()
 

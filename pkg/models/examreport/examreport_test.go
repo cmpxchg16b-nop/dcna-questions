@@ -1,15 +1,19 @@
 package examreport
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"log/slog"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"dcna-questions/pkg/models/msgnotify"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
 )
 
@@ -163,7 +167,7 @@ func TestReportKey(t *testing.T) {
 }
 
 func TestPutAndGet_SingleUser(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer()
+	srv := NewOnMemoryExamTrackingServer(nil)
 	ctx := context.Background()
 
 	// Unknown user returns nil, nil.
@@ -206,7 +210,7 @@ func TestPutAndGet_SingleUser(t *testing.T) {
 }
 
 func TestPutAndGet_MultipleUsersAreIsolated(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer()
+	srv := NewOnMemoryExamTrackingServer(nil)
 	ctx := context.Background()
 
 	_ = srv.Put(ctx, "alice", mustReport(t, "a1"))
@@ -233,7 +237,7 @@ func TestPutAndGet_MultipleUsersAreIsolated(t *testing.T) {
 // goroutines and then verifies every report was retained with a unique index.
 // Under -race this also exercises the CAS loop's memory safety.
 func TestPut_ConcurrentSameUserNoLoss(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer()
+	srv := NewOnMemoryExamTrackingServer(nil)
 	ctx := context.Background()
 
 	const goroutines = 64
@@ -284,7 +288,7 @@ func TestPut_ConcurrentSameUserNoLoss(t *testing.T) {
 // observe fewer than the in-flight count, but must never observe more than the
 // committed count and must never panic.
 func TestPutGet_ConcurrentMixed(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer()
+	srv := NewOnMemoryExamTrackingServer(nil)
 	ctx := context.Background()
 
 	const puts = 200
@@ -335,7 +339,7 @@ func TestPutGet_ConcurrentMixed(t *testing.T) {
 }
 
 func TestDeleteExamTracking_Basic(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer()
+	srv := NewOnMemoryExamTrackingServer(nil)
 	ctx := context.Background()
 
 	// Deleting from a user with no reports is a not-found.
@@ -392,7 +396,7 @@ func TestDeleteExamTracking_Basic(t *testing.T) {
 // nil delete must correspond to a report that disappears, and Gets must never
 // panic or observe an absurd count.
 func TestDeleteExamTracking_ConcurrentWithPut(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer()
+	srv := NewOnMemoryExamTrackingServer(nil)
 	ctx := context.Background()
 	userid := "racer-delete"
 
@@ -461,3 +465,221 @@ func TestDeleteExamTracking_ConcurrentWithPut(t *testing.T) {
 // Compile-time assertion that the in-memory implementation satisfies the
 // interface.
 var _ ExamTrackingServer = (*OnMemoryExamTrackingServer)(nil)
+
+// sentMessage records one Send invocation of a fakeNotifier.
+type sentMessage struct {
+	replyTo msgnotify.AddrId
+	to      msgnotify.AddrId
+	msg     msgnotify.Msg
+}
+
+// fakeNotifier is a MsgNotifySvc that records the messages it is asked to
+// send. The accepted sender/recipient address families and the AreYou answer
+// are configurable so tests can exercise the negotiation.
+type fakeNotifier struct {
+	senderFamilies    []msgnotify.MsgNotifyAddrFamily
+	recipientFamilies []msgnotify.MsgNotifyAddrFamily
+	areYou            bool
+	sendErr           error
+
+	mu   sync.Mutex
+	sent []sentMessage
+}
+
+func (f *fakeNotifier) AreYou(addrId msgnotify.AddrId) bool { return f.areYou }
+
+func (f *fakeNotifier) GetAcceptedSenderAddressFamilies() []msgnotify.MsgNotifyAddrFamily {
+	return f.senderFamilies
+}
+
+func (f *fakeNotifier) GetAcceptedRecipientAddressFamilies() []msgnotify.MsgNotifyAddrFamily {
+	return f.recipientFamilies
+}
+
+func (f *fakeNotifier) Send(ctx context.Context, replyTo msgnotify.AddrId, to msgnotify.AddrId, msg msgnotify.Msg) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, sentMessage{replyTo: replyTo, to: to, msg: msg})
+	return f.sendErr
+}
+
+func (f *fakeNotifier) sentMessages() []sentMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]sentMessage(nil), f.sent...)
+}
+
+func TestPut_SendsNotification(t *testing.T) {
+	notifier := &fakeNotifier{
+		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		areYou:            true,
+	}
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	ctx := context.Background()
+
+	report := mustReport(t, "r1")
+	pass := pkgmodelsquestion.OverallResultPass
+	report.Assessment.OverallResult = &pass
+	if err := srv.Put(ctx, "alice", report); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	sent := notifier.sentMessages()
+	if len(sent) != 1 {
+		t.Fatalf("sent %d messages, want 1", len(sent))
+	}
+	got := sent[0]
+	if got.to.AddressFamily != msgnotify.MsgNotifyAddrFamilyService || got.to.Address != "" {
+		t.Errorf("recipient = %+v, want the opaque service address (service, \"\")", got.to)
+	}
+	if got.replyTo.AddressFamily != msgnotify.MsgNotifyAddrFamilyService {
+		t.Errorf("replyTo family = %q, want %q", got.replyTo.AddressFamily, msgnotify.MsgNotifyAddrFamilyService)
+	}
+
+	tags := got.replyTo.Tags
+	if v := tags.GetByLabelKey(msgnotify.WellKnownLabelKeyMsgSource); !reflect.DeepEqual(v, []string{msgnotify.WellKnownLabelValueExamReportServer}) {
+		t.Errorf("tag %s = %v, want [%s]", msgnotify.WellKnownLabelKeyMsgSource, v, msgnotify.WellKnownLabelValueExamReportServer)
+	}
+	if v := tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamTakerSubjectId); !reflect.DeepEqual(v, []string{"alice"}) {
+		t.Errorf("tag %s = %v, want [alice]", msgnotify.WellKnownLabelKeyExamTakerSubjectId, v)
+	}
+	if v := tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamOverallResult); !reflect.DeepEqual(v, []string{"pass"}) {
+		t.Errorf("tag %s = %v, want [pass]", msgnotify.WellKnownLabelKeyExamOverallResult, v)
+	}
+	// The remaining exam taker labels are present with empty values.
+	for _, key := range []string{
+		msgnotify.WellKnownLabelKeyExamTakerExmail,
+		msgnotify.WellKnownLabelKeyExamTakerUsername,
+		msgnotify.WellKnownLabelKeyExamTakerFirstName,
+		msgnotify.WellKnownLabelKeyExamTakerLastName,
+	} {
+		if v := tags.GetByLabelKey(key); !reflect.DeepEqual(v, []string{""}) {
+			t.Errorf("tag %s = %v, want [\"\"]", key, v)
+		}
+	}
+	if got.msg.Level != msgnotify.MessageLevelCommon {
+		t.Errorf("level = %d, want MessageLevelCommon", got.msg.Level)
+	}
+	if got.msg.Id == "" {
+		t.Error("message id is empty, want a globally unique id")
+	}
+	if got.msg.Created <= 0 {
+		t.Errorf("created = %d, want a positive millisecond timestamp", got.msg.Created)
+	}
+	for _, want := range []string{"alice", "sess-r1", "r1"} {
+		if !strings.Contains(got.msg.Text, want) {
+			t.Errorf("text = %q, want it to mention %q", got.msg.Text, want)
+		}
+	}
+}
+
+func TestDeleteExamTracking_SendsNotification(t *testing.T) {
+	notifier := &fakeNotifier{
+		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		areYou:            true,
+	}
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	ctx := context.Background()
+
+	_ = srv.Put(ctx, "alice", mustReport(t, "r1"))
+	if err := srv.DeleteExamTracking(ctx, "alice", "r1"); err != nil {
+		t.Fatalf("DeleteExamTracking: %v", err)
+	}
+
+	sent := notifier.sentMessages()
+	if len(sent) != 2 {
+		t.Fatalf("sent %d messages, want 2 (put + delete)", len(sent))
+	}
+	got := sent[1]
+	if got.msg.Level != msgnotify.MessageLevelImportant {
+		t.Errorf("level = %d, want MessageLevelImportant", got.msg.Level)
+	}
+	// mustReport has no overall result, so the tag value must be empty.
+	if v := got.replyTo.Tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamOverallResult); !reflect.DeepEqual(v, []string{""}) {
+		t.Errorf("tag %s = %v, want [\"\"] for a report without overall result", msgnotify.WellKnownLabelKeyExamOverallResult, v)
+	}
+	for _, want := range []string{"alice", "r1"} {
+		if !strings.Contains(got.msg.Text, want) {
+			t.Errorf("text = %q, want it to mention %q", got.msg.Text, want)
+		}
+	}
+}
+
+func TestNotify_SkipsNotifiersWithIncompatibleFamilies(t *testing.T) {
+	// This notifier accepts neither the service sender family nor the console
+	// recipient family, so it must never be asked to send anything.
+	notifier := &fakeNotifier{
+		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyEmail},
+		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyEmail},
+		areYou:            true,
+	}
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	ctx := context.Background()
+
+	_ = srv.Put(ctx, "alice", mustReport(t, "r1"))
+	_ = srv.DeleteExamTracking(ctx, "alice", "r1")
+
+	if sent := notifier.sentMessages(); len(sent) != 0 {
+		t.Errorf("sent %d messages, want 0 for an incompatible notifier", len(sent))
+	}
+}
+
+func TestDeleteExamTracking_NotFoundSendsNoNotification(t *testing.T) {
+	notifier := &fakeNotifier{
+		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		areYou:            true,
+	}
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	ctx := context.Background()
+
+	if err := srv.DeleteExamTracking(ctx, "alice", "nope"); !errors.Is(err, ErrExamTrackingNotFound) {
+		t.Fatalf("DeleteExamTracking = %v, want ErrExamTrackingNotFound", err)
+	}
+	if sent := notifier.sentMessages(); len(sent) != 0 {
+		t.Errorf("sent %d messages, want 0 for a failed delete", len(sent))
+	}
+}
+
+func TestNotify_NotifierErrorIsLoggedNotPropagated(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	notifier := &fakeNotifier{
+		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		areYou:            true,
+		sendErr:           errors.New("delivery exploded"),
+	}
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+
+	// Put must succeed even though the notifier failed.
+	if err := srv.Put(context.Background(), "alice", mustReport(t, "r1")); err != nil {
+		t.Fatalf("Put = %v, want nil: notification errors must not fail tracking", err)
+	}
+	if out := buf.String(); !strings.Contains(out, "notification delivery failed") || !strings.Contains(out, "delivery exploded") {
+		t.Errorf("log output = %q, want it to mention the delivery failure and the error", out)
+	}
+}
+
+func TestNotify_SkipsNotifierThatDoesNotClaimRecipient(t *testing.T) {
+	// The families all match, but the notifier answers no to the AreYou probe
+	// for the recipient address, so it must be skipped.
+	notifier := &fakeNotifier{
+		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		areYou:            false,
+	}
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	ctx := context.Background()
+
+	_ = srv.Put(ctx, "alice", mustReport(t, "r1"))
+
+	if sent := notifier.sentMessages(); len(sent) != 0 {
+		t.Errorf("sent %d messages, want 0 for a notifier that does not claim the recipient", len(sent))
+	}
+}

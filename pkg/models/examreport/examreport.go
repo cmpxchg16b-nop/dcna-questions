@@ -10,10 +10,16 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
+	"fmt"
+	"log/slog"
 	"strconv"
 	"sync"
+	"time"
 
+	"dcna-questions/pkg/models/msgnotify"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
+
+	"github.com/google/uuid"
 )
 
 // ErrExamTrackingNotFound is returned by DeleteExamTracking when the user has
@@ -129,11 +135,95 @@ type OnMemoryExamTrackingServer struct {
 	reports sync.Map
 	// counts maps userid to int64, the number of reports for that user.
 	counts sync.Map
+
+	// notifiers are the messaging notification services that are asked to
+	// deliver a notification when an exam report is stored or deleted. It may
+	// be empty.
+	notifiers []msgnotify.MsgNotifySvc
 }
 
 // NewOnMemoryExamTrackingServer returns a ready-to-use OnMemoryExamTrackingServer.
-func NewOnMemoryExamTrackingServer() *OnMemoryExamTrackingServer {
-	return &OnMemoryExamTrackingServer{}
+// notifiers is the list of messaging notification services notified when an
+// exam report is stored (Put) or deleted (DeleteExamTracking); it may be nil
+// or empty, in which case no notifications are sent.
+func NewOnMemoryExamTrackingServer(notifiers []msgnotify.MsgNotifySvc) *OnMemoryExamTrackingServer {
+	return &OnMemoryExamTrackingServer{notifiers: notifiers}
+}
+
+// notificationSender is the reply-to address the OnMemoryExamTrackingServer
+// uses for the notifications it sends.
+var notificationSender = msgnotify.AddrId{
+	AddressFamily: msgnotify.MsgNotifyAddrFamilyService,
+	Address:       msgnotify.WellKnownAddrServiceOnMemoryExamTrackingServer,
+}
+
+// notificationRecipient is the address notifications are addressed to. The
+// tracking server does not know — and never cares — who the final recipient
+// is: its job is only to hand the message to the next hop, the notifiers that
+// claim the address (AreYou == true); the lifelong fate of the message is the
+// next hop's concern.
+var notificationRecipient = msgnotify.AddrId{
+	AddressFamily: msgnotify.MsgNotifyAddrFamilyService,
+	Address:       "",
+}
+
+// notify delivers a notification through every notifier that accepts both the
+// sender and the recipient address families and claims the recipient address
+// when probed with AreYou, so unsupported services are skipped before Send is
+// attempted. Delivery is best-effort: Send errors are logged and never fail
+// the tracking operation.
+func (s *OnMemoryExamTrackingServer) notify(ctx context.Context, userid string, report ExamReport, title string, level msgnotify.MessageLevel, text string) {
+	// The sender carries the message tags: the message source, the exam
+	// taker's subject id, the overall result of the exam assessment, and the
+	// remaining exam taker labels with empty values.
+	overallResult := ""
+	if report.Assessment.OverallResult != nil {
+		overallResult = string(*report.Assessment.OverallResult)
+	}
+	sender := notificationSender
+	sender.Tags = msgnotify.AssociationsList{
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyMsgSource, msgnotify.WellKnownLabelValueExamReportServer),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerSubjectId, userid),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamOverallResult, overallResult),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerExmail, ""),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerUsername, ""),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerFirstName, ""),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerLastName, ""),
+	}
+
+	msg := msgnotify.Msg{
+		Id:      uuid.NewString(),
+		Created: time.Now().UnixMilli(),
+		Title:   title,
+		Level:   level,
+		Text:    text,
+	}
+	for _, svc := range s.notifiers {
+		if !acceptsAddrFamily(svc.GetAcceptedSenderAddressFamilies(), sender.AddressFamily) {
+			continue
+		}
+		if !acceptsAddrFamily(svc.GetAcceptedRecipientAddressFamilies(), notificationRecipient.AddressFamily) {
+			continue
+		}
+		// Confirm with the service that it is the recipient before emitting.
+		if !svc.AreYou(notificationRecipient) {
+			continue
+		}
+		if err := svc.Send(ctx, sender, notificationRecipient, msg); err != nil {
+			slog.WarnContext(ctx, "examreport: notification delivery failed",
+				"messageId", msg.Id, "to", notificationRecipient, "error", err)
+		}
+	}
+}
+
+// acceptsAddrFamily reports whether family is present in families.
+func acceptsAddrFamily(families []msgnotify.MsgNotifyAddrFamily, family msgnotify.MsgNotifyAddrFamily) bool {
+	for _, f := range families {
+		if f == family {
+			return true
+		}
+	}
+	return false
 }
 
 // Put stores examReport under userid. It is safe for concurrent use: Put claims
@@ -148,6 +238,8 @@ func (s *OnMemoryExamTrackingServer) Put(ctx context.Context, userid string, exa
 		if s.counts.CompareAndSwap(userid, idx, idx+1) {
 			// idx is now ours: safe to store the report at this index.
 			s.reports.Store(reportKey(userid, idx), examReport)
+			s.notify(ctx, userid, examReport, "Exam session completed", msgnotify.MessageLevelCommon,
+				fmt.Sprintf("User %s completed exam session %s; exam report %s recorded.", userid, examReport.ExamSessionId, examReport.Id))
 			return nil
 		}
 	}
@@ -196,10 +288,18 @@ func (s *OnMemoryExamTrackingServer) DeleteExamTracking(ctx context.Context, use
 	n := v.(int64)
 	for i := int64(0); i < n; i++ {
 		key := reportKey(userid, i)
-		if rv, ok := s.reports.Load(key); ok && rv.(ExamReport).Id == examReportId {
-			s.reports.Delete(key)
-			return nil
+		rv, ok := s.reports.Load(key)
+		if !ok {
+			continue
 		}
+		report := rv.(ExamReport)
+		if report.Id != examReportId {
+			continue
+		}
+		s.reports.Delete(key)
+		s.notify(ctx, userid, report, "Exam report deleted", msgnotify.MessageLevelImportant,
+			fmt.Sprintf("User %s deleted exam report %s.", userid, examReportId))
+		return nil
 	}
 	return ErrExamTrackingNotFound
 }

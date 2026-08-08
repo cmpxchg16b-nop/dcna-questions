@@ -46,8 +46,8 @@ func TestE2E_PracticeExam(t *testing.T) {
 		}),
 	})
 
-	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer()
-	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer)
+	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer(nil)
+	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer, nil)
 	go examServer.Run(context.Background())
 	t.Cleanup(examServer.Shutdown)
 

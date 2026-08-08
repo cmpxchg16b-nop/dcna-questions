@@ -152,8 +152,8 @@ func TestE2E_VisitorVFSPracticeExam(t *testing.T) {
 		associationManager,
 	})
 
-	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer()
-	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer)
+	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer(nil)
+	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer, nil)
 	go examServer.Run(ctx)
 	t.Cleanup(examServer.Shutdown)
 

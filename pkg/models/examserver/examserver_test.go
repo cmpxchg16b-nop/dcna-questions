@@ -3,12 +3,93 @@ package examserver
 import (
 	"context"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
+	"dcna-questions/pkg/models/msgnotify"
 	pkgmodelquestions "dcna-questions/pkg/models/question"
 
 	"dcna-questions/pkg/models/examreport"
 )
+
+// recordingNotifier is a MsgNotifySvc that records the messages it is asked
+// to send. It claims any address and accepts only the service address family,
+// like a service message hub would.
+type recordingNotifier struct {
+	sent []recordedNotification
+}
+
+type recordedNotification struct {
+	replyTo msgnotify.AddrId
+	to      msgnotify.AddrId
+	msg     msgnotify.Msg
+}
+
+func (r *recordingNotifier) AreYou(addrId msgnotify.AddrId) bool { return true }
+
+func (r *recordingNotifier) GetAcceptedSenderAddressFamilies() []msgnotify.MsgNotifyAddrFamily {
+	return []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService}
+}
+
+func (r *recordingNotifier) GetAcceptedRecipientAddressFamilies() []msgnotify.MsgNotifyAddrFamily {
+	return []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService}
+}
+
+func (r *recordingNotifier) Send(ctx context.Context, replyTo msgnotify.AddrId, to msgnotify.AddrId, msg msgnotify.Msg) error {
+	r.sent = append(r.sent, recordedNotification{replyTo: replyTo, to: to, msg: msg})
+	return nil
+}
+
+func TestStartNewExamSession_SendsNotification(t *testing.T) {
+	exam, err := pkgmodelquestions.NewFileExamLoader().LoadFile(filepath.Join("..", "..", "..", "exam1.xml"))
+	if err != nil {
+		t.Fatalf("load exam: %v", err)
+	}
+
+	notifier := &recordingNotifier{}
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), []msgnotify.MsgNotifySvc{notifier})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	// A failed session start must not notify.
+	if _, err := srv.StartNewExamSession(ctx, nil, "user-1", 0, nil); err != errEmptyExam {
+		t.Fatalf("expected errEmptyExam for nil exam, got %v", err)
+	}
+	if len(notifier.sent) != 0 {
+		t.Fatalf("sent %d messages for a failed session start, want 0", len(notifier.sent))
+	}
+
+	sessionId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+
+	if len(notifier.sent) != 1 {
+		t.Fatalf("sent %d messages, want 1", len(notifier.sent))
+	}
+	got := notifier.sent[0]
+	if got.replyTo.AddressFamily != msgnotify.MsgNotifyAddrFamilyService ||
+		got.replyTo.Address != msgnotify.WellKnownAddrServiceOnMemoryExamSessionServer {
+		t.Errorf("sender = %+v, want the on-memory exam session server service address", got.replyTo)
+	}
+	if v := got.replyTo.Tags.GetByLabelKey(msgnotify.WellKnownLabelKeyMsgSource); !reflect.DeepEqual(v, []string{msgnotify.WellKnownLabelValueExamSessionServer}) {
+		t.Errorf("tag %s = %v, want [%s]", msgnotify.WellKnownLabelKeyMsgSource, v, msgnotify.WellKnownLabelValueExamSessionServer)
+	}
+	if v := got.replyTo.Tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamTakerSubjectId); !reflect.DeepEqual(v, []string{"user-1"}) {
+		t.Errorf("tag %s = %v, want [user-1]", msgnotify.WellKnownLabelKeyExamTakerSubjectId, v)
+	}
+	if got.to.AddressFamily != msgnotify.MsgNotifyAddrFamilyService || got.to.Address != "" {
+		t.Errorf("recipient = %+v, want the opaque service address (service, \"\")", got.to)
+	}
+	for _, want := range []string{"user-1", string(sessionId), exam.Id} {
+		if !strings.Contains(got.msg.Text, want) {
+			t.Errorf("text = %q, want it to mention %q", got.msg.Text, want)
+		}
+	}
+}
 
 // TestStartNewExamSession_WalksAllQuestions loads the real exam1.xml and confirms that
 // a fresh session presents every question in its question collection, in order.
@@ -18,7 +99,7 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 		t.Fatalf("load exam: %v", err)
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -61,7 +142,7 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 
 // TestStartNewExamSession_EmptyExam verifies that an exam with no questions is rejected.
 func TestStartNewExamSession_EmptyExam(t *testing.T) {
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -94,7 +175,7 @@ func TestStartNewExamSession_CertificationRejectsSeekable(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -126,7 +207,7 @@ func TestStartNewExamSession_PracticeAllowsSeekable(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -166,7 +247,7 @@ func TestStartNewExamSession_RandomCollPicksOneCollection(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -223,7 +304,7 @@ func TestStartNewExamSession_FlattensCollectionsByDefault(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -273,7 +354,7 @@ func TestGetExamSessionById_CurrentQuestionIndex(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -361,7 +442,7 @@ func TestGetNextQuestion_StripsCorrectAnswer(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -436,7 +517,7 @@ func TestOwnershipEnforcement(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -480,7 +561,7 @@ func TestStartNewExamSession_AcceptQuestionTypes(t *testing.T) {
 		t.Fatalf("load exam: %v", err)
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -589,7 +670,7 @@ func TestStartNewExamSession_VirtualCollectionSamples(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -654,7 +735,7 @@ func TestStartNewExamSession_VirtualCollectionForcesRandomOptionOrder(t *testing
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -708,7 +789,7 @@ func TestStartNewExamSession_PracticeIgnoresVirtualCollection(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)

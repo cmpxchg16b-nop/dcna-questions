@@ -41,8 +41,8 @@ func TestE2E_VisitorPracticeAndCertification(t *testing.T) {
 		}),
 	})
 
-	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer()
-	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer)
+	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer(nil)
+	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go examServer.Run(ctx)

@@ -377,7 +377,7 @@ func TestExamTrackingsHandler(t *testing.T) {
 // OnMemoryExamTrackingServer rather than a fake, so it exercises the actual
 // store the handler is wired to in main.go.
 func TestExamTrackingsHandler_EndToEnd(t *testing.T) {
-	ts := examreport.NewOnMemoryExamTrackingServer()
+	ts := examreport.NewOnMemoryExamTrackingServer(nil)
 	sm := session.NewOnMemorySessionManager()
 	subjectID := "subject-endtoend"
 
