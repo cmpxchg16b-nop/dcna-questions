@@ -20,6 +20,19 @@ type ServiceMessageRouter interface {
 	GetNextHop(replyToAddr, toAddr AddrId) MsgNotifySvc
 }
 
+// MsgRoute binds a destination address family to the MsgNotifySvc that
+// delivers messages for it. A nil NextHop is a black hole: it is returned
+// as-is, and the hub treats it exactly like an absent route, dropping the
+// message.
+type MsgRoute struct {
+	// DstAddrFamily is the destination address family this route matches.
+	DstAddrFamily MsgNotifyAddrFamily
+
+	// NextHop is the MsgNotifySvc that delivers messages whose destination
+	// address family matches DstAddrFamily.
+	NextHop MsgNotifySvc
+}
+
 // ServiceMessageHub is a MsgNotifySvc that forwards messages to other
 // MsgNotifySvc implementations selected by a ServiceMessageRouter. Being a
 // MsgNotifySvc itself, a ServiceMessageHub is accepted anywhere a MsgNotifySvc

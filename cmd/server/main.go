@@ -115,24 +115,36 @@ func (cli *CLI) Run() error {
 	// them back), so a report written on session end is immediately visible to
 	// the caller.
 	// Notifications emitted by the tracking server are handed to the service
-	// message hub. The catch-all router stands in for a real outbound SMTP
-	// service for now: every route terminates in a sink that logs messages
-	// instead of delivering them to real recipients, so the notification
-	// pipeline works end-to-end before an SMTP service is configured.
-	msgRouter := pkgmodelsmsgnotify.CatchAllServiceMsgRouter{}
-	msgHub := pkgmodelsmsgnotify.NewServiceMessageHub(msgRouter, cli.SysadminEmail)
+	// message hub, whose router selects the next hop by destination address
+	// family: console destinations are written to the console sink, and email
+	// destinations go to the outbound SMTP sender when one is configured.
+	// Destinations with no route (e.g. email without an SMTP sender) are
+	// dropped by the hub with a log line.
+	msgRoutes := []pkgmodelsmsgnotify.MsgRoute{
+		{
+			DstAddrFamily: pkgmodelsmsgnotify.MsgNotifyAddrFamilyConsole,
+			NextHop:       pkgmodelsmsgnotify.SimpleConsoleMessagingService{},
+		},
+	}
 
 	// The outbound SMTP sender described by the <smtpServer/> section of the
-	// server configuration document. Constructing it here validates the SMTP
-	// settings at startup; it is not connected to the message router yet, so
-	// the catch-all router above still sinks every message.
+	// server configuration document. Constructing it here also validates the
+	// SMTP settings at startup.
 	if serverCfg != nil && serverCfg.SMTPServer != nil {
 		smtpSender, err := newEmailBasedMsgSvc(serverCfg.SMTPServer)
 		if err != nil {
 			return err
 		}
-		_ = smtpSender
+		msgRoutes = append(msgRoutes, pkgmodelsmsgnotify.MsgRoute{
+			DstAddrFamily: pkgmodelsmsgnotify.MsgNotifyAddrFamilyEmail,
+			NextHop:       smtpSender,
+		})
+		logger.Info("registered SMTP message sink for email destinations",
+			"server", serverCfg.SMTPServer.Host, "port", serverCfg.SMTPServer.Port)
 	}
+
+	msgRouter := pkgmodelsmsgnotify.NewOnMemoryMsgRouter(msgRoutes)
+	msgHub := pkgmodelsmsgnotify.NewServiceMessageHub(msgRouter, cli.SysadminEmail)
 
 	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer([]pkgmodelsmsgnotify.MsgNotifySvc{msgHub})
 	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer, []pkgmodelsmsgnotify.MsgNotifySvc{msgHub})

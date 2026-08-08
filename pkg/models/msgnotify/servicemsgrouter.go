@@ -3,8 +3,40 @@ package msgnotify
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync/atomic"
 )
+
+// OnMemoryMsgRouter is a ServiceMessageRouter that chooses the next hop of a
+// message solely from the address family of the destination address: the
+// first route whose DstAddrFamily matches wins.
+//
+// The routes are fixed at construction and never mutated afterwards, so
+// concurrent GetNextHop calls are safe without locking.
+type OnMemoryMsgRouter struct {
+	routes []MsgRoute
+}
+
+var _ ServiceMessageRouter = (*OnMemoryMsgRouter)(nil)
+
+// NewOnMemoryMsgRouter returns an OnMemoryMsgRouter consulting routes in
+// order: the first route whose DstAddrFamily matches the destination address
+// family of a message becomes its next hop. The slice is cloned, so later
+// mutation of the caller's slice does not affect the router.
+func NewOnMemoryMsgRouter(routes []MsgRoute) *OnMemoryMsgRouter {
+	return &OnMemoryMsgRouter{routes: slices.Clone(routes)}
+}
+
+// GetNextHop returns the NextHop of the first route matching the destination
+// address family, or nil when no route matches.
+func (r *OnMemoryMsgRouter) GetNextHop(replyToAddr, toAddr AddrId) MsgNotifySvc {
+	for _, route := range r.routes {
+		if route.DstAddrFamily == toAddr.AddressFamily {
+			return route.NextHop
+		}
+	}
+	return nil
+}
 
 // CatchAllServiceMsgRouter is a ServiceMessageRouter that answers every query
 // with a brand new CatchAllServiceMsgSink.
