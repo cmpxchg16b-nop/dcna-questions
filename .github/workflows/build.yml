@@ -56,6 +56,66 @@ jobs:
           path: web/exam-lab/out
           retention-days: 1
 
+  # Run the whole test suite (unit + e2e) with coverage, then publish the
+  # total coverage as a shields.io endpoint badge: a small JSON committed to
+  # .github/badges/coverage.json on main, which the README badge points at.
+  test:
+    name: Tests & coverage badge
+    needs: build-web
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the updated coverage badge
+    env:
+      # A full Go >= 1.25 install, not an auto-switched toolchain: with a
+      # switched toolchain "go test -cover" fails with 'no such tool
+      # "covdata"' (golang/go#75031).
+      GO_VERSION: "1.25"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download web export
+        uses: actions/download-artifact@v4
+        with:
+          name: web-out
+          path: web/exam-lab/out
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run tests with coverage
+        run: go test ./... -coverpkg=./... -coverprofile=coverage.out -timeout 10m
+
+      - name: Generate coverage badge JSON
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ { sub(/%/, "", $3); print $3 }')
+          color=$(awk -v t="$total" 'BEGIN {
+            if (t >= 80) print "brightgreen";
+            else if (t >= 60) print "green";
+            else if (t >= 40) print "yellow";
+            else if (t >= 20) print "orange";
+            else print "red";
+          }')
+          mkdir -p .github/badges
+          printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$total" "$color" > .github/badges/coverage.json
+          cat .github/badges/coverage.json
+
+      # Pushes made with GITHUB_TOKEN do not trigger new workflow runs, so
+      # this cannot loop. If a human push to main wins the race, this push
+      # fails and the badge is simply updated by that push's own run instead.
+      - name: Commit coverage badge if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/badges/coverage.json
+          if git diff --cached --quiet; then
+            echo "coverage unchanged; badge already up to date"
+          else
+            git commit -m "docs: update coverage badge [skip ci]"
+            git push origin HEAD:main
+          fi
+
   # Cross-compile the single-binary executable for every target platform.
   # Binaries are uploaded as downloadable artifacts per platform.
   build-binary:
