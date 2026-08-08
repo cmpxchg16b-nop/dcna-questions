@@ -38,9 +38,9 @@ export default function ExamOptionsDialog({
   onClose,
 }: ExamOptionsDialogProps) {
   return (
-    // fullWidth keeps the dialog at the xs breakpoint width instead of
+    // fullWidth keeps the dialog at the sm breakpoint width instead of
     // shrinking to fit the (possibly short, e.g. CJK) checkbox labels.
-    <Dialog open={exam !== null} onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog open={exam !== null} onClose={onClose} fullWidth maxWidth="sm">
       {/* The form holds the checkbox state; MUI unmounts the Dialog's children
         when it closes, so both checkboxes reset to unchecked on every open. */}
       {exam && <ExamOptionsForm exam={exam} onClose={onClose} />}

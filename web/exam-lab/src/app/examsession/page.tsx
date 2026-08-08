@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -43,6 +44,10 @@ export default function Page() {
   const submitAnswer = useSubmitAnswer(examSessionId ?? "");
 
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
+  // gotoOpen/gotoValue drive the "Goto" dialog: gotoValue is the raw text of
+  // the question-number field (a string so partial input is not clobbered).
+  const [gotoOpen, setGotoOpen] = useState(false);
+  const [gotoValue, setGotoValue] = useState("");
 
   // position is the question fetched by this page view's latest navigation
   // (Start/Previous/Next). It is null until this page view has navigated, in
@@ -142,20 +147,37 @@ export default function Page() {
   const excerpt = session.exam_excerpt;
 
   const goToQuestion = (nextIndex: number) => {
+    if (nextIndex < 0 || nextIndex >= numQuestions) {
+      // out of range
+      console.error(`Unsupported index: ${nextIndex}`);
+      return;
+    }
     if (nextIndex === currentQuestionIndex + 1) {
       // go next: read through the cursor tracked by the navigation hook.
       navigate.mutate({ index: nextIndex, seek: false });
-    } else if (nextIndex === currentQuestionIndex - 1) {
-      // go previous: reposition the cursor to the previous index (requires a
-      // seekable session), then read the question there.
-      navigate.mutate({ index: nextIndex, seek: true });
     } else {
-      // unsupported
-      console.error(`Unsupported index: ${nextIndex}`);
+      // Any other move (Previous, or an arbitrary Goto jump) repositions the
+      // cursor to the target index (requires a seekable session), then reads
+      // the question there.
+      navigate.mutate({ index: nextIndex, seek: true });
     }
   };
 
   const startExam = () => goToQuestion(0);
+
+  // The Goto dialog asks for a 1-based question number; gotoNumber/gotoValid
+  // are its parsed value and range check against the exam's question count.
+  const gotoNumber = Number(gotoValue);
+  const gotoValid =
+    gotoValue.trim() !== "" &&
+    Number.isInteger(gotoNumber) &&
+    gotoNumber >= 1 &&
+    gotoNumber <= numQuestions;
+  const confirmGoto = () => {
+    if (!gotoValid) return;
+    setGotoOpen(false);
+    goToQuestion(gotoNumber - 1);
+  };
 
   const setSelection = (sel: string[]) =>
     setQuestionState({
@@ -397,23 +419,91 @@ export default function Page() {
         {/* End Exam replaces Next in the same flex slot on the last question,
             so it occupies exactly the same position. */}
         <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2 }}>
-          <Tooltip title={seekable ? "" : t("session.notSeekable")}>
-            {/* MUI Tooltips don't fire on disabled buttons, hence the span. */}
-            <span>
-              <Button
-                variant="contained"
-                disabled={
-                  currentQuestionIndex <= 0 || !seekable || navigate.isPending
-                }
-                onClick={() => goToQuestion(currentQuestionIndex - 1)}
-              >
-                {t("session.previous")}
-              </Button>
-            </span>
-          </Tooltip>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Tooltip title={seekable ? "" : t("session.notSeekable")}>
+              {/* MUI Tooltips don't fire on disabled buttons, hence the span. */}
+              <span>
+                <Button
+                  variant="contained"
+                  disabled={
+                    currentQuestionIndex <= 0 || !seekable || navigate.isPending
+                  }
+                  onClick={() => goToQuestion(currentQuestionIndex - 1)}
+                >
+                  {t("session.previous")}
+                </Button>
+              </span>
+            </Tooltip>
+            {/* Goto repositions the cursor just like Previous, so it has the
+                same seekability requirement. It is also disabled on the
+                welcome page: there is nothing to jump between until the exam
+                has started. */}
+            <Tooltip title={seekable ? "" : t("session.notSeekable")}>
+              <span>
+                <Button
+                  variant="contained"
+                  disabled={!started || !seekable || navigate.isPending}
+                  onClick={() => {
+                    // Prefill with the current question number (1-based).
+                    setGotoValue(String(Math.max(currentQuestionIndex + 1, 1)));
+                    setGotoOpen(true);
+                  }}
+                >
+                  {t("session.goto")}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
           {primaryButton()}
         </Box>
       </Box>
+
+      {/* Jump-to-question dialog: a 1-based question number, clamped to the
+          exam's question count. Enter confirms, Escape dismisses. fullWidth
+          keeps the dialog at the xs breakpoint width instead of shrinking to
+          fit the number field. */}
+      <Dialog
+        open={gotoOpen}
+        onClose={() => setGotoOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>{t("session.gotoTitle")}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            type="number"
+            margin="dense"
+            label={t("session.gotoLabel", { count: numQuestions })}
+            value={gotoValue}
+            onChange={(e) => setGotoValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirmGoto();
+            }}
+            error={gotoValue.trim() !== "" && !gotoValid}
+            helperText={
+              gotoValue.trim() !== "" && !gotoValid
+                ? t("session.gotoInvalid", { count: numQuestions })
+                : " "
+            }
+            slotProps={{ htmlInput: { min: 1, max: numQuestions, step: 1 } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGotoOpen(false)}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!gotoValid}
+            loading={navigate.isPending}
+            onClick={confirmGoto}
+          >
+            {t("session.goto")}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={confirmEndOpen} onClose={() => setConfirmEndOpen(false)}>
         <DialogTitle>{t("session.endConfirmTitle")}</DialogTitle>
