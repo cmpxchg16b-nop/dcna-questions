@@ -204,9 +204,11 @@ func (s *EmailBasedMsgSvc) connect(ctx context.Context) (*smtp.Client, error) {
 }
 
 // buildEmail renders msg as an RFC 822 message with the given envelope
-// addresses. When msg carries no attachments it is a simple text/plain
-// message; otherwise it is multipart/mixed with the plaintext body as the
-// first part followed by one base64-encoded part per attachment.
+// addresses. The body is text/plain, or — when the message carries HTML — a
+// multipart/alternative of the plaintext and HTML bodies, the plaintext part
+// first so HTML-incapable clients can fall back to it. With attachments the
+// whole body becomes the first part of a multipart/mixed, followed by one
+// base64-encoded part per attachment.
 func buildEmail(from, to string, msg Msg) ([]byte, error) {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "From: %s\r\n", from)
@@ -217,10 +219,25 @@ func buildEmail(from, to string, msg Msg) ([]byte, error) {
 	b.WriteString("MIME-Version: 1.0\r\n")
 
 	if len(msg.Attachments) == 0 {
-		b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+		if msg.HTML == "" {
+			b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+			b.WriteString("\r\n")
+			b.WriteString(msg.Text)
+			b.WriteString("\r\n")
+			return b.Bytes(), nil
+		}
+		aw := multipart.NewWriter(&b)
+		fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=%q\r\n", aw.Boundary())
 		b.WriteString("\r\n")
-		b.WriteString(msg.Text)
-		b.WriteString("\r\n")
+		if err := writeTextPart(aw, msg.Text); err != nil {
+			return nil, err
+		}
+		if err := writeHTMLPart(aw, msg.HTML); err != nil {
+			return nil, err
+		}
+		if err := aw.Close(); err != nil {
+			return nil, err
+		}
 		return b.Bytes(), nil
 	}
 
@@ -228,13 +245,7 @@ func buildEmail(from, to string, msg Msg) ([]byte, error) {
 	fmt.Fprintf(&b, "Content-Type: multipart/mixed; boundary=%q\r\n", mw.Boundary())
 	b.WriteString("\r\n")
 
-	textHeader := textproto.MIMEHeader{}
-	textHeader.Set("Content-Type", "text/plain; charset=UTF-8")
-	pw, err := mw.CreatePart(textHeader)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := pw.Write([]byte(msg.Text)); err != nil {
+	if err := writeBodyPart(mw, msg); err != nil {
 		return nil, err
 	}
 
@@ -263,4 +274,58 @@ func buildEmail(from, to string, msg Msg) ([]byte, error) {
 		return nil, err
 	}
 	return b.Bytes(), nil
+}
+
+// writeTextPart writes a text/plain part carrying text.
+func writeTextPart(mw *multipart.Writer, text string) error {
+	h := textproto.MIMEHeader{}
+	h.Set("Content-Type", "text/plain; charset=UTF-8")
+	pw, err := mw.CreatePart(h)
+	if err != nil {
+		return err
+	}
+	_, err = pw.Write([]byte(text))
+	return err
+}
+
+// writeHTMLPart writes a text/html part carrying htmlBody.
+func writeHTMLPart(mw *multipart.Writer, htmlBody string) error {
+	h := textproto.MIMEHeader{}
+	h.Set("Content-Type", "text/html; charset=UTF-8")
+	pw, err := mw.CreatePart(h)
+	if err != nil {
+		return err
+	}
+	_, err = pw.Write([]byte(htmlBody))
+	return err
+}
+
+// writeBodyPart writes the message body as the next part of mw: a single
+// text/plain part, or a nested multipart/alternative of the plaintext and
+// HTML bodies when the message carries HTML.
+func writeBodyPart(mw *multipart.Writer, msg Msg) error {
+	if msg.HTML == "" {
+		return writeTextPart(mw, msg.Text)
+	}
+	// The nested alternative is rendered into a buffer first so that its
+	// boundary is known when the part header is written.
+	var nested bytes.Buffer
+	aw := multipart.NewWriter(&nested)
+	if err := writeTextPart(aw, msg.Text); err != nil {
+		return err
+	}
+	if err := writeHTMLPart(aw, msg.HTML); err != nil {
+		return err
+	}
+	if err := aw.Close(); err != nil {
+		return err
+	}
+	h := textproto.MIMEHeader{}
+	h.Set("Content-Type", fmt.Sprintf("multipart/alternative; boundary=%q", aw.Boundary()))
+	pw, err := mw.CreatePart(h)
+	if err != nil {
+		return err
+	}
+	_, err = pw.Write(nested.Bytes())
+	return err
 }

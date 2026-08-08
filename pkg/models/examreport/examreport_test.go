@@ -547,6 +547,10 @@ func TestPut_SendsNotification(t *testing.T) {
 	if v := tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamOverallResult); !reflect.DeepEqual(v, []string{"pass"}) {
 		t.Errorf("tag %s = %v, want [pass]", msgnotify.WellKnownLabelKeyExamOverallResult, v)
 	}
+	// A Put notification is labeled as an exam-completion event.
+	if v := tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamEvent); !reflect.DeepEqual(v, []string{msgnotify.WellKnownLabelValueExamCompleted}) {
+		t.Errorf("tag %s = %v, want [%s]", msgnotify.WellKnownLabelKeyExamEvent, v, msgnotify.WellKnownLabelValueExamCompleted)
+	}
 	// The mailing consent handed to Put is carried on the message.
 	if v := tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamReportMailConsent); !reflect.DeepEqual(v, []string{"true"}) {
 		t.Errorf("tag %s = %v, want [true]", msgnotify.WellKnownLabelKeyExamReportMailConsent, v)
@@ -613,6 +617,122 @@ func TestPut_NotificationLiftsExamTakerProfile(t *testing.T) {
 	}
 }
 
+func TestPut_NotificationGreetsExamTakerByName(t *testing.T) {
+	newNotifier := func() *fakeNotifier {
+		return &fakeNotifier{
+			senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+			recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+			areYou:            true,
+		}
+	}
+
+	t.Run("username from the report when available", func(t *testing.T) {
+		notifier := newNotifier()
+		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+
+		report := mustReport(t, "r1")
+		report.ExamTaker.Persons = []Person{{Name: "alice", Fistname: "Alice", Lastname: "Smith", Email: "alice@example.com"}}
+		if err := srv.Put(context.Background(), "bob", report, false); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+
+		sent := notifier.sentMessages()
+		if len(sent) != 1 {
+			t.Fatalf("sent %d messages, want 1", len(sent))
+		}
+		if !strings.Contains(sent[0].msg.Text, "Hello alice,") {
+			t.Errorf("text = %q, want it to greet the username from the report", sent[0].msg.Text)
+		}
+		if strings.Contains(sent[0].msg.Text, "Hello bob,") {
+			t.Errorf("text = %q, want it not to greet the raw subject id", sent[0].msg.Text)
+		}
+		if !strings.Contains(sent[0].msg.HTML, "Hello alice,") {
+			t.Errorf("html = %q, want it to greet the username from the report", sent[0].msg.HTML)
+		}
+	})
+
+	t.Run("falls back to the subject id for an anonymous taker", func(t *testing.T) {
+		notifier := newNotifier()
+		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+
+		if err := srv.Put(context.Background(), "bob", mustReport(t, "r1"), false); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+
+		sent := notifier.sentMessages()
+		if len(sent) != 1 {
+			t.Fatalf("sent %d messages, want 1", len(sent))
+		}
+		if !strings.Contains(sent[0].msg.Text, "Hello bob,") {
+			t.Errorf("text = %q, want it to greet the subject id as a fallback", sent[0].msg.Text)
+		}
+	})
+
+	t.Run("report fields are escaped in the HTML body", func(t *testing.T) {
+		notifier := newNotifier()
+		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+
+		report := mustReport(t, "r1")
+		report.ExamTaker.Persons = []Person{{Name: "alice<script>"}}
+		if err := srv.Put(context.Background(), "bob", report, false); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+
+		sent := notifier.sentMessages()
+		if len(sent) != 1 {
+			t.Fatalf("sent %d messages, want 1", len(sent))
+		}
+		if strings.Contains(sent[0].msg.HTML, "alice<script>") {
+			t.Errorf("html contains an unescaped report field: %q", sent[0].msg.HTML)
+		}
+		if !strings.Contains(sent[0].msg.HTML, "alice&lt;script&gt;") {
+			t.Errorf("html = %q, want the report fields HTML-escaped", sent[0].msg.HTML)
+		}
+	})
+}
+
+// TestPut_NotificationAttachesSerializedReport confirms that the completion
+// notification carries the serialized exam report as an XML attachment.
+func TestPut_NotificationAttachesSerializedReport(t *testing.T) {
+	notifier := &fakeNotifier{
+		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		areYou:            true,
+	}
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+
+	if err := srv.Put(context.Background(), "alice", mustReport(t, "r1"), false); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	sent := notifier.sentMessages()
+	if len(sent) != 1 {
+		t.Fatalf("sent %d messages, want 1", len(sent))
+	}
+	attachments := sent[0].msg.Attachments
+	if len(attachments) != 1 {
+		t.Fatalf("message carries %d attachments, want 1", len(attachments))
+	}
+	att := attachments[0]
+	if att.MIMEType != "application/xml" {
+		t.Errorf("attachment MIME type = %q, want application/xml", att.MIMEType)
+	}
+	if att.Filename != "exam-report-r1.xml" {
+		t.Errorf("attachment filename = %q, want exam-report-r1.xml", att.Filename)
+	}
+	if att.Size != len(att.Content) {
+		t.Errorf("attachment size = %d, want %d (the content length)", att.Size, len(att.Content))
+	}
+
+	var roundTripped ExamReport
+	if err := xml.Unmarshal(att.Content, &roundTripped); err != nil {
+		t.Fatalf("attachment content is not a serialized ExamReport: %v", err)
+	}
+	if roundTripped.Id != "r1" || roundTripped.ExamSessionId != "sess-r1" {
+		t.Errorf("round-tripped report = %+v, want id r1 and session sess-r1", roundTripped)
+	}
+}
+
 func TestDeleteExamTracking_SendsNotification(t *testing.T) {
 	notifier := &fakeNotifier{
 		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
@@ -638,6 +758,10 @@ func TestDeleteExamTracking_SendsNotification(t *testing.T) {
 	// mustReport has no overall result, so the tag value must be empty.
 	if v := got.replyTo.Tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamOverallResult); !reflect.DeepEqual(v, []string{""}) {
 		t.Errorf("tag %s = %v, want [\"\"] for a report without overall result", msgnotify.WellKnownLabelKeyExamOverallResult, v)
+	}
+	// A delete notification is labeled as a report-deleted event.
+	if v := got.replyTo.Tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamEvent); !reflect.DeepEqual(v, []string{msgnotify.WellKnownLabelValueExamReportDeleted}) {
+		t.Errorf("tag %s = %v, want [%s]", msgnotify.WellKnownLabelKeyExamEvent, v, msgnotify.WellKnownLabelValueExamReportDeleted)
 	}
 	for _, want := range []string{"alice", "r1"} {
 		if !strings.Contains(got.msg.Text, want) {

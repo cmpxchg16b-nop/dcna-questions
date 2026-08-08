@@ -18,6 +18,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/mail"
+	"net/textproto"
 	"strings"
 	"sync"
 	"testing"
@@ -384,6 +385,170 @@ func TestEmailBasedMsgSvc_Send_WithAttachments(t *testing.T) {
 	}
 	if _, err := mr.NextPart(); err != io.EOF {
 		t.Errorf("extra parts after attachments, NextPart = %v, want io.EOF", err)
+	}
+}
+
+// sendAndCapture delivers msg through an EmailBasedMsgSvc pointed at a
+// recording test server and returns the parsed captured message.
+func sendAndCapture(t *testing.T, msg Msg) *mail.Message {
+	t.Helper()
+	backend := &recordingBackend{}
+	addr := startTestSMTPServer(t, backend)
+
+	svc, err := NewEmailBasedMsgSvc(EmailBasedMsgSvcInitOption{ServerAddr: addr})
+	if err != nil {
+		t.Fatalf("NewEmailBasedMsgSvc: %v", err)
+	}
+	replyTo := AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: fakeSender}
+	to := AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: fakeRecipient}
+	if err := svc.Send(context.Background(), replyTo, to, msg); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	got := backend.captured()
+	if len(got) != 1 {
+		t.Fatalf("server captured %d messages, want 1", len(got))
+	}
+	parsed, err := mail.ReadMessage(bytes.NewReader(got[0].data))
+	if err != nil {
+		t.Fatalf("parsing captured message: %v", err)
+	}
+	return parsed
+}
+
+// mimePart is a fully read MIME part: headers plus the raw (still
+// transfer-encoded) body. Bodies must be captured eagerly: multipart.Part
+// streams over the underlying reader, so a part's body is gone once the
+// next part is started.
+type mimePart struct {
+	header   textproto.MIMEHeader
+	filename string
+	body     []byte
+}
+
+// readMultipart returns all parts of a multipart body in order.
+func readMultipart(t *testing.T, body io.Reader, contentType string) []mimePart {
+	t.Helper()
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("parsing Content-Type %q: %v", contentType, err)
+	}
+	if !strings.HasPrefix(mediaType, "multipart/") {
+		t.Fatalf("Content-Type = %q, want a multipart media type", mediaType)
+	}
+	mr := multipart.NewReader(body, params["boundary"])
+	var parts []mimePart
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			return parts
+		}
+		if err != nil {
+			t.Fatalf("reading part %d: %v", len(parts), err)
+		}
+		raw, err := io.ReadAll(part)
+		if err != nil {
+			t.Fatalf("reading part %d body: %v", len(parts), err)
+		}
+		parts = append(parts, mimePart{header: part.Header, filename: part.FileName(), body: raw})
+	}
+}
+
+func TestEmailBasedMsgSvc_Send_HTML(t *testing.T) {
+	msg := Msg{
+		Id:      "msg-html-1",
+		Created: 1735689600000,
+		Title:   "Exam session completed",
+		Level:   MessageLevelCommon,
+		Text:    "Congratulations, you finished the exam.",
+		HTML:    "<html><body><h1>Congratulations</h1><p>you finished the exam.</p></body></html>",
+	}
+	parsed := sendAndCapture(t, msg)
+
+	mediaType, _, err := mime.ParseMediaType(parsed.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parsing Content-Type: %v", err)
+	}
+	if mediaType != "multipart/alternative" {
+		t.Fatalf("Content-Type = %q, want multipart/alternative", mediaType)
+	}
+
+	parts := readMultipart(t, parsed.Body, parsed.Header.Get("Content-Type"))
+	if len(parts) != 2 {
+		t.Fatalf("got %d parts, want 2 (text then html)", len(parts))
+	}
+	// The plaintext part comes first so HTML-incapable clients can fall back.
+	if ct := parts[0].header.Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("part 0 Content-Type = %q, want text/plain", ct)
+	}
+	if body := string(parts[0].body); body != msg.Text {
+		t.Errorf("text part = %q, want %q", body, msg.Text)
+	}
+	if ct := parts[1].header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("part 1 Content-Type = %q, want text/html", ct)
+	}
+	if body := string(parts[1].body); body != msg.HTML {
+		t.Errorf("html part = %q, want %q", body, msg.HTML)
+	}
+}
+
+func TestEmailBasedMsgSvc_Send_HTMLWithAttachment(t *testing.T) {
+	reportXML := []byte("<?xml version=\"1.0\"?><examreport id=\"r1\"></examreport>")
+	msg := Msg{
+		Id:      "msg-html-att-1",
+		Created: 1735689600000,
+		Title:   "Your exam report",
+		Level:   MessageLevelCommon,
+		Text:    "Your report is attached.",
+		HTML:    "<html><body><p>Your report is <strong>attached</strong>.</p></body></html>",
+		Attachments: []BlobAttachment{
+			{Id: "a1", Content: reportXML, MIMEType: "application/xml", Size: len(reportXML), Filename: "exam-report-r1.xml"},
+		},
+	}
+	parsed := sendAndCapture(t, msg)
+
+	mediaType, _, err := mime.ParseMediaType(parsed.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parsing Content-Type: %v", err)
+	}
+	if mediaType != "multipart/mixed" {
+		t.Fatalf("Content-Type = %q, want multipart/mixed", mediaType)
+	}
+
+	parts := readMultipart(t, parsed.Body, parsed.Header.Get("Content-Type"))
+	if len(parts) != 2 {
+		t.Fatalf("got %d parts, want 2 (body then attachment)", len(parts))
+	}
+
+	// The body part is a nested multipart/alternative of text and html.
+	bodyParts := readMultipart(t, bytes.NewReader(parts[0].body), parts[0].header.Get("Content-Type"))
+	if len(bodyParts) != 2 {
+		t.Fatalf("body part has %d sub-parts, want 2 (text then html)", len(bodyParts))
+	}
+	if ct := bodyParts[0].header.Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("body sub-part 0 Content-Type = %q, want text/plain", ct)
+	}
+	if body := string(bodyParts[0].body); body != msg.Text {
+		t.Errorf("text sub-part = %q, want %q", body, msg.Text)
+	}
+	if ct := bodyParts[1].header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("body sub-part 1 Content-Type = %q, want text/html", ct)
+	}
+	if body := string(bodyParts[1].body); body != msg.HTML {
+		t.Errorf("html sub-part = %q, want %q", body, msg.HTML)
+	}
+
+	// The attachment follows, base64-encoded as before.
+	attachment := parts[1]
+	if attachment.filename != "exam-report-r1.xml" {
+		t.Errorf("attachment filename = %q, want exam-report-r1.xml", attachment.filename)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(string(attachment.body))
+	if err != nil {
+		t.Fatalf("decoding attachment: %v", err)
+	}
+	if !bytes.Equal(decoded, reportXML) {
+		t.Errorf("attachment content does not round-trip: got %q", decoded)
 	}
 }
 

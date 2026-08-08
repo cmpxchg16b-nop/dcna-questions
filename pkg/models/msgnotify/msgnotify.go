@@ -102,6 +102,11 @@ const (
 	// to the exam report being emailed to the exam taker's email address. Its
 	// value is a strconv.FormatBool boolean.
 	WellKnownLabelKeyExamReportMailConsent = "examreport_mail_consent"
+
+	// WellKnownLabelKeyExamEvent labels the exam lifecycle event a
+	// notification reports; its value is one of the WellKnownLabelValueExam*
+	// constants.
+	WellKnownLabelKeyExamEvent = "exam_event"
 )
 
 // Well-known label values, for use with MakeLabelKey.
@@ -113,6 +118,14 @@ const (
 	// WellKnownLabelValueExamSessionServer labels a message as originating
 	// from the exam session server.
 	WellKnownLabelValueExamSessionServer = "exam_session_server"
+
+	// WellKnownLabelValueExamCompleted labels a notification as reporting a
+	// completed exam session: an exam report was recorded.
+	WellKnownLabelValueExamCompleted = "exam_completed"
+
+	// WellKnownLabelValueExamReportDeleted labels a notification as reporting
+	// the deletion of an exam report.
+	WellKnownLabelValueExamReportDeleted = "exam_report_deleted"
 )
 
 // AddrId identifies a messaging endpoint (sender or recipient).
@@ -163,6 +176,12 @@ type Msg struct {
 
 	// Text is the plaintext content of the message.
 	Text string
+
+	// HTML is the optional rich-text (HTML) content of the message. When set,
+	// services capable of rendering HTML (such as the email service) deliver
+	// it alongside Text, which remains the plain-text fallback for clients
+	// that do not render HTML.
+	HTML string
 
 	// Attachments are the binary attachments carried by the message. It is
 	// up to each MsgNotifySvc implementation whether attachments are

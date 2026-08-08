@@ -84,19 +84,25 @@ func TestNewOnMemoryMsgRouter_CopiesTheRoutesSlice(t *testing.T) {
 	}
 }
 
-// examSessionServerSender returns a service-family sender address labeled as
-// the exam session server, so the hub rewrites the destination to the
-// sysadmin email address.
-func examSessionServerSender() AddrId {
+// examCompletionSender returns a service-family sender address labeled as an
+// exam-completion notification from the exam report server with explicit
+// mailing consent, so the hub re-destines the message to the exam taker's
+// email address.
+func examCompletionSender() AddrId {
 	return AddrId{
 		AddressFamily: MsgNotifyAddrFamilyService,
-		Address:       "exam-session",
-		Tags:          AssociationsList{MakeLabelKey(WellKnownLabelKeyMsgSource, WellKnownLabelValueExamSessionServer)},
+		Address:       "exam-tracker",
+		Tags: AssociationsList{
+			MakeLabelKey(WellKnownLabelKeyMsgSource, WellKnownLabelValueExamReportServer),
+			MakeLabelKey(WellKnownLabelKeyExamEvent, WellKnownLabelValueExamCompleted),
+			MakeLabelKey(WellKnownLabelKeyExamTakerExmail, "taker@example.com"),
+			MakeLabelKey(WellKnownLabelKeyExamReportMailConsent, "true"),
+		},
 	}
 }
 
 // TestOnMemoryMsgRouter_WithServiceMessageHub wires the router behind a real
-// hub: an exam-session-server message is re-destined to the sysadmin email
+// hub: an exam-completion message is re-destined to the exam taker's email
 // address and lands on the email route's next hop.
 func TestOnMemoryMsgRouter_WithServiceMessageHub(t *testing.T) {
 	emailSvc := &recordingSvc{}
@@ -104,14 +110,19 @@ func TestOnMemoryMsgRouter_WithServiceMessageHub(t *testing.T) {
 		{DstAddrFamily: MsgNotifyAddrFamilyEmail, NextHop: emailSvc},
 	}), "admin@example.com")
 
-	if err := hub.Send(context.Background(), examSessionServerSender(), AddrId{}, hubTestMsg("m1")); err != nil {
+	if err := hub.Send(context.Background(), examCompletionSender(), AddrId{}, hubTestMsg("m1")); err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
 	if len(emailSvc.sent) != 1 {
 		t.Fatalf("email svc got %d messages, want 1", len(emailSvc.sent))
 	}
-	if got := emailSvc.sent[0].to; got.AddressFamily != MsgNotifyAddrFamilyEmail || got.Address != "admin@example.com" {
-		t.Errorf("delivered to %v, want email:admin@example.com", got)
+	if got := emailSvc.sent[0].to; got.AddressFamily != MsgNotifyAddrFamilyEmail || got.Address != "taker@example.com" {
+		t.Errorf("delivered to %v, want email:taker@example.com", got)
+	}
+	// The sender is derived too: the next hop receives the sysadmin email
+	// address as From, not the service-family exam report server address.
+	if got := emailSvc.sent[0].replyTo; got.AddressFamily != MsgNotifyAddrFamilyEmail || got.Address != "admin@example.com" {
+		t.Errorf("delivered from %v, want email:admin@example.com", got)
 	}
 }
 
@@ -124,11 +135,43 @@ func TestOnMemoryMsgRouter_WithServiceMessageHub_NoMatchingRoute(t *testing.T) {
 		{DstAddrFamily: MsgNotifyAddrFamilyConsole, NextHop: consoleSvc},
 	}), "admin@example.com")
 
-	if err := hub.Send(context.Background(), examSessionServerSender(), AddrId{}, hubTestMsg("m2")); err != nil {
+	if err := hub.Send(context.Background(), examCompletionSender(), AddrId{}, hubTestMsg("m2")); err != nil {
 		t.Fatalf("Send = %v, want nil (a missing route is a drop, not an error)", err)
 	}
 	if len(consoleSvc.sent) != 0 {
 		t.Errorf("console svc got %d messages, want 0 (no route for the email destination)", len(consoleSvc.sent))
+	}
+}
+
+// TestOnMemoryMsgRouter_WithServiceMessageHub_ConsoleFallback verifies the
+// non-consent path end to end: a completion message without mailing consent
+// is derived to the console destination and lands on the console route's
+// next hop.
+func TestOnMemoryMsgRouter_WithServiceMessageHub_ConsoleFallback(t *testing.T) {
+	consoleSvc := &recordingSvc{}
+	hub := NewServiceMessageHub(NewOnMemoryMsgRouter([]MsgRoute{
+		{DstAddrFamily: MsgNotifyAddrFamilyConsole, NextHop: consoleSvc},
+	}), "admin@example.com")
+
+	// Same as examCompletionSender but without the mailing-consent label.
+	sender := AddrId{
+		AddressFamily: MsgNotifyAddrFamilyService,
+		Address:       "exam-tracker",
+		Tags: AssociationsList{
+			MakeLabelKey(WellKnownLabelKeyMsgSource, WellKnownLabelValueExamReportServer),
+			MakeLabelKey(WellKnownLabelKeyExamEvent, WellKnownLabelValueExamCompleted),
+			MakeLabelKey(WellKnownLabelKeyExamTakerExmail, "taker@example.com"),
+		},
+	}
+	if err := hub.Send(context.Background(), sender, AddrId{}, hubTestMsg("m3")); err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if len(consoleSvc.sent) != 1 {
+		t.Fatalf("console svc got %d messages, want 1", len(consoleSvc.sent))
+	}
+	want := AddrId{AddressFamily: MsgNotifyAddrFamilyConsole, Address: WellKnownAddrConsoleStdout}
+	if got := consoleSvc.sent[0].to; !got.AddrEqual(want) {
+		t.Errorf("delivered to %v, want %v", got, want)
 	}
 }
 

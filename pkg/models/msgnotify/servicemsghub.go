@@ -44,8 +44,9 @@ type MsgRoute struct {
 type ServiceMessageHub struct {
 	router ServiceMessageRouter
 	// sysadminEmail is the email address of the system administrator, used
-	// as the fallback destination when the real recipient of a message
-	// cannot be derived. It may be empty.
+	// as the sender (From) address of email-destined messages. It may be
+	// empty, in which case the original service sender address passes
+	// through to the next hop unchanged.
 	sysadminEmail string
 }
 
@@ -53,9 +54,8 @@ var _ MsgNotifySvc = (*ServiceMessageHub)(nil)
 
 // NewServiceMessageHub returns a ServiceMessageHub routing through router.
 // sysadminEmail is the email address of the system administrator, used as
-// the fallback destination when the real recipient of a message cannot be
-// derived; it may be empty, in which case such messages are silently
-// dropped.
+// the sender (From) address of email-destined messages; it may be empty, in
+// which case the original service sender address passes through unchanged.
 func NewServiceMessageHub(router ServiceMessageRouter, sysadminEmail string) *ServiceMessageHub {
 	return &ServiceMessageHub{router: router, sysadminEmail: sysadminEmail}
 }
@@ -92,20 +92,27 @@ func (h *ServiceMessageHub) Send(ctx context.Context, replyTo AddrId, to AddrId,
 // process selects the real destination of the message and delivers it through
 // the next hop chosen by the router.
 //
-// The hub only processes messages from known sources — sources it has a
-// defined handling for. A message from any other source is dropped silently:
-// process returns nil without consulting the router.
+// The hub only processes exam-completion notifications: messages from the
+// exam report server (the sender carries the msg_source=exam_report_server
+// label) that also carry the exam_event=exam_completed label. Every other
+// message — session-started events, report deletions, unknown sources — is
+// dropped silently: process returns nil without consulting the router. Such
+// messages still reach the hub, so a future routing rule can steer them
+// somewhere other than a mailbox without touching the emitters.
 //
-// For a message from the exam report server (the sender carries the
-// msg_source=exam_report_server label), the destination handed to Send is not
-// the real recipient: the real destination is derived from the exam taker's
-// email address label, falling back to the sysadmin email address. When
-// neither yields an address, process returns nil, silently proceeding.
+// For an exam-completion notification, the destination handed to Send is not
+// the real recipient: the real destination is the exam taker's email address
+// label, but only when the message carries an explicit
+// examreport_mail_consent=true label — anything else ("false", empty,
+// missing, or non-boolean) is not consent. Without consent the destination
+// is the well-known stdout console address instead of a mailbox; whether the
+// message goes anywhere then depends on the router having a next hop for the
+// console address family.
 //
-// A message from the exam session server (msg_source=exam_session_server)
-// goes to the sysadmin: when the sysadmin email address resolves, it becomes
-// the real destination address; otherwise process returns nil, silently
-// proceeding.
+// The sender address handed to the next hop is derived too: it becomes the
+// sysadmin email address, so an email next hop receives an email-family From
+// address. When the sysadmin email address is not configured, the original
+// sender address is passed through unchanged.
 //
 // When there is no router, or no next hop for the destination, the message is
 // dropped and the event is logged; process still reports success in that
@@ -117,26 +124,14 @@ func (h *ServiceMessageHub) process(ctx context.Context, replyTo AddrId, to Addr
 		return nil
 	}
 
-	switch {
-	case isFromExamReportServer(replyTo):
-		derived, ok := h.deriveDestination(replyTo)
-		if !ok {
-			// Neither the exam taker's nor the sysadmin's email address is
-			// known: silently proceed.
-			return nil
-		}
-		to = derived
-	case isFromExamSessionServer(replyTo):
-		if h.sysadminEmail == "" {
-			// The sysadmin email address is not configured: silently proceed.
-			return nil
-		}
-		to = AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: h.sysadminEmail}
-	default:
-		// Unknown source: no handling has been defined for it, so the
-		// message is dropped silently.
+	if !isFromExamReportServer(replyTo) || !isExamCompletionEvent(replyTo) {
+		// Not an exam-completion notification: no routing is defined for it,
+		// so the message is dropped silently.
 		return nil
 	}
+
+	to = h.deriveDestination(replyTo)
+	replyTo = h.deriveSender(replyTo)
 
 	nextHop := h.router.GetNextHop(replyTo, to)
 	if nextHop == nil {
@@ -150,20 +145,20 @@ func (h *ServiceMessageHub) process(ctx context.Context, replyTo AddrId, to Addr
 // isFromExamReportServer reports whether the sender address is labeled as the
 // exam report server.
 func isFromExamReportServer(replyTo AddrId) bool {
-	return hasMsgSource(replyTo, WellKnownLabelValueExamReportServer)
+	return hasLabelValue(replyTo, WellKnownLabelKeyMsgSource, WellKnownLabelValueExamReportServer)
 }
 
-// isFromExamSessionServer reports whether the sender address is labeled as
-// the exam session server.
-func isFromExamSessionServer(replyTo AddrId) bool {
-	return hasMsgSource(replyTo, WellKnownLabelValueExamSessionServer)
+// isExamCompletionEvent reports whether the sender address carries an
+// exam_event label marking the message as an exam-completion notification.
+func isExamCompletionEvent(replyTo AddrId) bool {
+	return hasLabelValue(replyTo, WellKnownLabelKeyExamEvent, WellKnownLabelValueExamCompleted)
 }
 
-// hasMsgSource reports whether the address carries a msg_source label with
-// the given value.
-func hasMsgSource(addr AddrId, source string) bool {
-	for _, v := range addr.Tags.GetByLabelKey(WellKnownLabelKeyMsgSource) {
-		if v == source {
+// hasLabelValue reports whether the address carries a label with the given
+// key and value.
+func hasLabelValue(addr AddrId, key, value string) bool {
+	for _, v := range addr.Tags.GetByLabelKey(key) {
+		if v == value {
 			return true
 		}
 	}
@@ -171,14 +166,37 @@ func hasMsgSource(addr AddrId, source string) bool {
 }
 
 // deriveDestination derives the real destination of a message from the exam
-// report server: the exam taker's email address label when it carries one,
-// otherwise the sysadmin email address. ok is false when neither is known.
-func (h *ServiceMessageHub) deriveDestination(replyTo AddrId) (dest AddrId, ok bool) {
-	if emails := replyTo.Tags.GetByLabelKey(WellKnownLabelKeyExamTakerExmail); len(emails) > 0 && emails[0] != "" {
-		return AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: emails[0]}, true
+// report server: the exam taker's email address label, but only when the
+// message carries explicit mailing consent; otherwise the well-known stdout
+// console address. The console fallback always resolves, so a destination is
+// always derived; whether the message goes anywhere then depends on the
+// router having a next hop for the console address family.
+func (h *ServiceMessageHub) deriveDestination(replyTo AddrId) AddrId {
+	if mailingConsentGiven(replyTo) {
+		if emails := replyTo.Tags.GetByLabelKey(WellKnownLabelKeyExamTakerExmail); len(emails) > 0 && emails[0] != "" {
+			return AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: emails[0]}
+		}
 	}
-	if h.sysadminEmail != "" {
-		return AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: h.sysadminEmail}, true
+	return AddrId{AddressFamily: MsgNotifyAddrFamilyConsole, Address: WellKnownAddrConsoleStdout}
+}
+
+// mailingConsentGiven reports whether the sender address carries an explicit
+// examreport_mail_consent=true label. Only the exact string "true" (what
+// strconv.FormatBool produces) counts as consent: a missing, empty, or any
+// other value is not consent.
+func mailingConsentGiven(replyTo AddrId) bool {
+	return hasLabelValue(replyTo, WellKnownLabelKeyExamReportMailConsent, "true")
+}
+
+// deriveSender derives the sender address handed to the next hop for a
+// service-originated message: the sysadmin email address, so that an email
+// next hop receives an email-family From address. When the sysadmin email
+// address is not configured, the original sender address passes through
+// unchanged (services that tolerate any sender family, such as the console
+// sink, still accept the message).
+func (h *ServiceMessageHub) deriveSender(replyTo AddrId) AddrId {
+	if h.sysadminEmail == "" {
+		return replyTo
 	}
-	return AddrId{}, false
+	return AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: h.sysadminEmail}
 }

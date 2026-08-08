@@ -11,8 +11,8 @@ import (
 // SimpleConsoleMessagingService is a MsgNotifySvc that writes messages to the
 // well-known console addresses /dev/stdout and /dev/stderr. It only accepts
 // destination addresses in the console address family; the reply-to address
-// may belong to any family. Attachments are ignored: only the plaintext Text
-// is written.
+// may belong to any family. Attachments and the HTML body are ignored: only
+// the plaintext Text is written.
 type SimpleConsoleMessagingService struct{}
 
 var _ MsgNotifySvc = SimpleConsoleMessagingService{}

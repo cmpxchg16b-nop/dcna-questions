@@ -130,17 +130,28 @@ func (cli *CLI) Run() error {
 	// The outbound SMTP sender described by the <smtpServer/> section of the
 	// server configuration document. Constructing it here also validates the
 	// SMTP settings at startup.
+	//
+	// The email route is wired only when a sysadmin email address is also
+	// configured (--sysadmin-email): the service message hub derives the
+	// sender address of service-originated messages from it, so without it
+	// the hub would either drop the message or hand this sink a
+	// service-family sender address it rejects.
 	if serverCfg != nil && serverCfg.SMTPServer != nil {
-		smtpSender, err := newEmailBasedMsgSvc(serverCfg.SMTPServer)
-		if err != nil {
-			return err
+		if cli.SysadminEmail == "" {
+			logger.Warn("SMTP server configured but --sysadmin-email is not set; email notifications are disabled",
+				"server", serverCfg.SMTPServer.Host, "port", serverCfg.SMTPServer.Port)
+		} else {
+			smtpSender, err := newEmailBasedMsgSvc(serverCfg.SMTPServer)
+			if err != nil {
+				return err
+			}
+			msgRoutes = append(msgRoutes, pkgmodelsmsgnotify.MsgRoute{
+				DstAddrFamily: pkgmodelsmsgnotify.MsgNotifyAddrFamilyEmail,
+				NextHop:       smtpSender,
+			})
+			logger.Info("registered SMTP message sink for email destinations",
+				"server", serverCfg.SMTPServer.Host, "port", serverCfg.SMTPServer.Port)
 		}
-		msgRoutes = append(msgRoutes, pkgmodelsmsgnotify.MsgRoute{
-			DstAddrFamily: pkgmodelsmsgnotify.MsgNotifyAddrFamilyEmail,
-			NextHop:       smtpSender,
-		})
-		logger.Info("registered SMTP message sink for email destinations",
-			"server", serverCfg.SMTPServer.Host, "port", serverCfg.SMTPServer.Port)
 	}
 
 	msgRouter := pkgmodelsmsgnotify.NewOnMemoryMsgRouter(msgRoutes)

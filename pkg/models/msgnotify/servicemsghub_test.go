@@ -122,6 +122,44 @@ func TestServiceMessageHub_RoutesToNextHop(t *testing.T) {
 	}
 }
 
+func TestServiceMessageHub_ExamReportServerMessage_DerivesSender(t *testing.T) {
+	t.Run("sysadmin configured: the sender becomes the sysadmin email address", func(t *testing.T) {
+		next := &recordingSvc{}
+		router := &staticRouter{nextHop: next}
+		hub := NewServiceMessageHub(router, "sysadmin@example.com")
+
+		from := reportServerSender("taker@example.com")
+		if err := hub.Send(context.Background(), from, hubRecipient, hubTestMsg("hub-derive-sender")); err != nil {
+			t.Fatalf("Send: %v", err)
+		}
+
+		wantSender := AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: "sysadmin@example.com"}
+		if !router.lastReplyTo.AddrEqual(wantSender) {
+			t.Errorf("GetNextHop replyTo = %v, want %v", router.lastReplyTo, wantSender)
+		}
+		if len(next.sent) != 1 {
+			t.Fatalf("next hop received %d messages, want 1", len(next.sent))
+		}
+		if !next.sent[0].replyTo.AddrEqual(wantSender) {
+			t.Errorf("next hop received replyTo = %v, want %v", next.sent[0].replyTo, wantSender)
+		}
+	})
+
+	t.Run("no sysadmin: the original sender passes through unchanged", func(t *testing.T) {
+		next := &recordingSvc{}
+		router := &staticRouter{nextHop: next}
+		hub := NewServiceMessageHub(router, "")
+
+		from := reportServerSender("taker@example.com")
+		if err := hub.Send(context.Background(), from, hubRecipient, hubTestMsg("hub-derive-sender-none")); err != nil {
+			t.Fatalf("Send: %v", err)
+		}
+		if !router.lastReplyTo.AddrEqual(from) {
+			t.Errorf("GetNextHop replyTo = %v, want the original sender %v", router.lastReplyTo, from)
+		}
+	})
+}
+
 // sessionServerSender builds a service sender address labeled as the exam
 // session server.
 func sessionServerSender() AddrId {
@@ -134,33 +172,123 @@ func sessionServerSender() AddrId {
 	}
 }
 
-func TestServiceMessageHub_ExamSessionServerMessage_SentToSysadmin(t *testing.T) {
-	next := &recordingSvc{}
-	router := &staticRouter{nextHop: next}
-	hub := NewServiceMessageHub(router, "sysadmin@example.com")
+// TestServiceMessageHub_ExamSessionServerMessage_SilentlyDropped confirms
+// that exam-session-started notifications are dropped: only exam-completion
+// notifications are routed, so session starts no longer reach a mailbox.
+func TestServiceMessageHub_ExamSessionServerMessage_SilentlyDropped(t *testing.T) {
+	for _, sysadmin := range []string{"", "sysadmin@example.com"} {
+		next := &recordingSvc{}
+		router := &staticRouter{nextHop: next}
+		hub := NewServiceMessageHub(router, sysadmin)
 
-	if err := hub.Send(context.Background(), sessionServerSender(), hubRecipient, hubTestMsg("hub-session")); err != nil {
-		t.Fatalf("Send: %v", err)
-	}
-
-	wantTo := AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: "sysadmin@example.com"}
-	if !router.lastTo.AddrEqual(wantTo) {
-		t.Errorf("GetNextHop to = %v, want %v", router.lastTo, wantTo)
-	}
-	if len(next.sent) != 1 || !next.sent[0].to.AddrEqual(wantTo) {
-		t.Errorf("next hop received %+v, want one message to %v", next.sent, wantTo)
+		if err := hub.Send(context.Background(), sessionServerSender(), hubRecipient, hubTestMsg("hub-session-drop")); err != nil {
+			t.Fatalf("Send(sysadmin=%q) = %v, want nil: session-started events are dropped silently", sysadmin, err)
+		}
+		if router.called != 0 {
+			t.Errorf("sysadmin=%q: GetNextHop called %d times, want 0 for a session-started event", sysadmin, router.called)
+		}
+		if len(next.sent) != 0 {
+			t.Errorf("sysadmin=%q: next hop received %d messages, want 0", sysadmin, len(next.sent))
+		}
 	}
 }
 
-func TestServiceMessageHub_ExamSessionServerMessage_NoSysadminSilentlyProceeds(t *testing.T) {
-	router := &staticRouter{nextHop: &recordingSvc{}}
-	hub := NewServiceMessageHub(router, "") // no sysadmin email
-
-	if err := hub.Send(context.Background(), sessionServerSender(), hubRecipient, hubTestMsg("hub-session-drop")); err != nil {
-		t.Fatalf("Send = %v, want nil: no sysadmin address silently proceeds", err)
+// TestServiceMessageHub_NonCompletionReportServerMessage_SilentlyDropped
+// confirms that exam report server messages that are not exam-completion
+// notifications (a report deletion, or no event label at all) are dropped
+// silently.
+func TestServiceMessageHub_NonCompletionReportServerMessage_SilentlyDropped(t *testing.T) {
+	senders := map[string]AddrId{
+		"report deleted event": {
+			AddressFamily: MsgNotifyAddrFamilyService,
+			Address:       WellKnownAddrServiceOnMemoryExamTrackingServer,
+			Tags: AssociationsList{
+				MakeLabelKey(WellKnownLabelKeyMsgSource, WellKnownLabelValueExamReportServer),
+				MakeLabelKey(WellKnownLabelKeyExamEvent, WellKnownLabelValueExamReportDeleted),
+				MakeLabelKey(WellKnownLabelKeyExamTakerExmail, "taker@example.com"),
+			},
+		},
+		"no event label": {
+			AddressFamily: MsgNotifyAddrFamilyService,
+			Address:       WellKnownAddrServiceOnMemoryExamTrackingServer,
+			Tags: AssociationsList{
+				MakeLabelKey(WellKnownLabelKeyMsgSource, WellKnownLabelValueExamReportServer),
+				MakeLabelKey(WellKnownLabelKeyExamTakerExmail, "taker@example.com"),
+			},
+		},
 	}
-	if router.called != 0 {
-		t.Errorf("GetNextHop called %d times, want 0 when the sysadmin address does not resolve", router.called)
+	for name, from := range senders {
+		t.Run(name, func(t *testing.T) {
+			next := &recordingSvc{}
+			router := &staticRouter{nextHop: next}
+			hub := NewServiceMessageHub(router, "sysadmin@example.com")
+
+			if err := hub.Send(context.Background(), from, hubRecipient, hubTestMsg("hub-noncompletion")); err != nil {
+				t.Fatalf("Send = %v, want nil: non-completion messages are dropped silently", err)
+			}
+			if router.called != 0 {
+				t.Errorf("GetNextHop called %d times, want 0", router.called)
+			}
+			if len(next.sent) != 0 {
+				t.Errorf("next hop received %d messages, want 0", len(next.sent))
+			}
+		})
+	}
+}
+
+// TestServiceMessageHub_RequiresExplicitMailingConsent confirms that the
+// exam taker's mailbox is used only with an explicit
+// examreport_mail_consent=true label: any other value (or none at all)
+// derives the console stdout destination instead of a mailbox.
+func TestServiceMessageHub_RequiresExplicitMailingConsent(t *testing.T) {
+	consoleDst := AddrId{AddressFamily: MsgNotifyAddrFamilyConsole, Address: WellKnownAddrConsoleStdout}
+
+	senderWithConsent := func(consent *string) AddrId {
+		tags := AssociationsList{
+			MakeLabelKey(WellKnownLabelKeyMsgSource, WellKnownLabelValueExamReportServer),
+			MakeLabelKey(WellKnownLabelKeyExamEvent, WellKnownLabelValueExamCompleted),
+			MakeLabelKey(WellKnownLabelKeyExamTakerExmail, "taker@example.com"),
+		}
+		if consent != nil {
+			tags = append(tags, MakeLabelKey(WellKnownLabelKeyExamReportMailConsent, *consent))
+		}
+		return AddrId{
+			AddressFamily: MsgNotifyAddrFamilyService,
+			Address:       WellKnownAddrServiceOnMemoryExamTrackingServer,
+			Tags:          tags,
+		}
+	}
+
+	strptr := func(s string) *string { return &s }
+
+	tests := []struct {
+		name    string
+		consent *string // nil: label absent
+		wantTo  AddrId
+	}{
+		{"explicit true reaches the exam taker", strptr("true"), AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: "taker@example.com"}},
+		{"explicit false falls back to the console", strptr("false"), consoleDst},
+		{"empty value falls back to the console", strptr(""), consoleDst},
+		{"non-boolean value falls back to the console", strptr("yes"), consoleDst},
+		{"capitalized True is not consent", strptr("True"), consoleDst},
+		{"missing label falls back to the console", nil, consoleDst},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			next := &recordingSvc{}
+			router := &staticRouter{nextHop: next}
+			hub := NewServiceMessageHub(router, "sysadmin@example.com")
+
+			if err := hub.Send(context.Background(), senderWithConsent(tc.consent), hubRecipient, hubTestMsg("hub-consent")); err != nil {
+				t.Fatalf("Send = %v, want nil", err)
+			}
+			if len(next.sent) != 1 {
+				t.Fatalf("next hop received %d messages, want 1", len(next.sent))
+			}
+			if got := next.sent[0].to; !got.AddrEqual(tc.wantTo) {
+				t.Errorf("delivered to %v, want %v", got, tc.wantTo)
+			}
+		})
 	}
 }
 
@@ -276,14 +404,17 @@ func TestServiceMessageHub_RouterPanicPropagates(t *testing.T) {
 }
 
 // reportServerSender builds a service sender address labeled as the exam
-// report server, with the given exam taker email label value.
+// report server emitting an exam-completion notification, with the given exam
+// taker email label value and explicit mailing consent.
 func reportServerSender(takerEmail string) AddrId {
 	return AddrId{
 		AddressFamily: MsgNotifyAddrFamilyService,
 		Address:       WellKnownAddrServiceOnMemoryExamTrackingServer,
 		Tags: AssociationsList{
 			MakeLabelKey(WellKnownLabelKeyMsgSource, WellKnownLabelValueExamReportServer),
+			MakeLabelKey(WellKnownLabelKeyExamEvent, WellKnownLabelValueExamCompleted),
 			MakeLabelKey(WellKnownLabelKeyExamTakerExmail, takerEmail),
+			MakeLabelKey(WellKnownLabelKeyExamReportMailConsent, "true"),
 		},
 	}
 }
@@ -310,33 +441,47 @@ func TestServiceMessageHub_ExamReportServerMessage_DerivesDestinationFromExamTak
 	}
 }
 
-func TestServiceMessageHub_ExamReportServerMessage_FallsBackToSysadmin(t *testing.T) {
+// TestServiceMessageHub_ExamReportServerMessage_FallsBackToConsole confirms
+// that a completion notification whose exam taker email label is empty is
+// derived to the console destination, not to a mailbox — even with explicit
+// mailing consent.
+func TestServiceMessageHub_ExamReportServerMessage_FallsBackToConsole(t *testing.T) {
 	next := &recordingSvc{}
 	router := &staticRouter{nextHop: next}
 	hub := NewServiceMessageHub(router, "sysadmin@example.com")
 
 	// The exam taker email label is present but empty.
 	from := reportServerSender("")
-	if err := hub.Send(context.Background(), from, hubRecipient, hubTestMsg("hub-sysadmin")); err != nil {
+	if err := hub.Send(context.Background(), from, hubRecipient, hubTestMsg("hub-console")); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
-	wantTo := AddrId{AddressFamily: MsgNotifyAddrFamilyEmail, Address: "sysadmin@example.com"}
+	wantTo := AddrId{AddressFamily: MsgNotifyAddrFamilyConsole, Address: WellKnownAddrConsoleStdout}
 	if !router.lastTo.AddrEqual(wantTo) {
 		t.Errorf("GetNextHop to = %v, want %v", router.lastTo, wantTo)
 	}
 }
 
-func TestServiceMessageHub_ExamReportServerMessage_NoAddressSilentlyProceeds(t *testing.T) {
-	router := &staticRouter{nextHop: &recordingSvc{}}
+// TestServiceMessageHub_ConsoleFallbackNeedsNoSysadmin confirms that the
+// console fallback destination always resolves, even with no sysadmin email
+// configured, so the router is still consulted and the next hop still
+// receives the message.
+func TestServiceMessageHub_ConsoleFallbackNeedsNoSysadmin(t *testing.T) {
+	next := &recordingSvc{}
+	router := &staticRouter{nextHop: next}
 	hub := NewServiceMessageHub(router, "") // no sysadmin email
 
 	from := reportServerSender("")
-	if err := hub.Send(context.Background(), from, hubRecipient, hubTestMsg("hub-silent")); err != nil {
-		t.Fatalf("Send = %v, want nil: an underivable destination silently proceeds", err)
+	if err := hub.Send(context.Background(), from, hubRecipient, hubTestMsg("hub-console-nosysadmin")); err != nil {
+		t.Fatalf("Send: %v", err)
 	}
-	if router.called != 0 {
-		t.Errorf("GetNextHop called %d times, want 0 when no destination can be derived", router.called)
+
+	wantTo := AddrId{AddressFamily: MsgNotifyAddrFamilyConsole, Address: WellKnownAddrConsoleStdout}
+	if !router.lastTo.AddrEqual(wantTo) {
+		t.Errorf("GetNextHop to = %v, want %v", router.lastTo, wantTo)
+	}
+	if len(next.sent) != 1 || !next.sent[0].to.AddrEqual(wantTo) {
+		t.Errorf("next hop received %+v, want one message to %v", next.sent, wantTo)
 	}
 }
 

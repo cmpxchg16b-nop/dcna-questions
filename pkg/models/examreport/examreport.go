@@ -7,13 +7,16 @@
 package examreport
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
+	htmltemplate "html/template"
 	"log/slog"
 	"strconv"
 	"sync"
+	texttemplate "text/template"
 	"time"
 
 	"dcna-questions/pkg/models/msgnotify"
@@ -179,12 +182,22 @@ var notificationRecipient = msgnotify.AddrId{
 // attempted. Delivery is best-effort: Send errors are logged and never fail
 // the tracking operation.
 //
+// The message carries text as its plaintext body and, when html is non-empty,
+// html as its rich-text body. The serialized exam report travels as an
+// attachment; a report that cannot be serialized is logged and the
+// notification goes out without the attachment.
+//
 // mailingConsent is the exam taker's consent to the exam report being emailed
 // to the exam taker's email address; it is carried on the message as the
 // WellKnownLabelKeyExamReportMailConsent label so downstream messaging can act
 // on it. Operations that have no consent decision (DeleteExamTracking) pass
 // false.
-func (s *OnMemoryExamTrackingServer) notify(ctx context.Context, userid string, report ExamReport, mailingConsent bool, title string, level msgnotify.MessageLevel, text string) {
+//
+// event identifies the exam lifecycle event the notification reports (one of
+// the WellKnownLabelValueExam* constants); it is carried as the
+// WellKnownLabelKeyExamEvent label so downstream messaging can tell, say, a
+// completed exam session apart from a report deletion.
+func (s *OnMemoryExamTrackingServer) notify(ctx context.Context, userid string, report ExamReport, mailingConsent bool, event string, title string, level msgnotify.MessageLevel, text, html string) {
 	// The sender carries the message tags: the message source, the exam
 	// taker's subject id, the overall result of the exam assessment, the
 	// mailing consent, and the exam taker labels lifted from the report's
@@ -201,6 +214,7 @@ func (s *OnMemoryExamTrackingServer) notify(ctx context.Context, userid string, 
 	sender := notificationSender
 	sender.Tags = msgnotify.AssociationsList{
 		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyMsgSource, msgnotify.WellKnownLabelValueExamReportServer),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamEvent, event),
 		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerSubjectId, userid),
 		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamOverallResult, overallResult),
 		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamReportMailConsent, strconv.FormatBool(mailingConsent)),
@@ -216,6 +230,16 @@ func (s *OnMemoryExamTrackingServer) notify(ctx context.Context, userid string, 
 		Title:   title,
 		Level:   level,
 		Text:    text,
+		HTML:    html,
+	}
+	if attachment, err := reportAttachment(report); err != nil {
+		// Best effort, exactly like delivery itself: a report that cannot be
+		// serialized must not fail the notification, let alone the tracking
+		// operation.
+		slog.WarnContext(ctx, "examreport: failed to serialize report attachment, sending without it",
+			"reportId", report.Id, "error", err)
+	} else {
+		msg.Attachments = []msgnotify.BlobAttachment{attachment}
 	}
 	for _, svc := range s.notifiers {
 		if !acceptsAddrFamily(svc.GetAcceptedSenderAddressFamilies(), sender.AddressFamily) {
@@ -257,8 +281,9 @@ func (s *OnMemoryExamTrackingServer) Put(ctx context.Context, userid string, exa
 		if s.counts.CompareAndSwap(userid, idx, idx+1) {
 			// idx is now ours: safe to store the report at this index.
 			s.reports.Store(reportKey(userid, idx), examReport)
-			s.notify(ctx, userid, examReport, mailingConsent, "Exam session completed", msgnotify.MessageLevelCommon,
-				fmt.Sprintf("User %s completed exam session %s; exam report %s recorded.", userid, examReport.ExamSessionId, examReport.Id))
+			text, html := examCompletionMessage(userid, examReport)
+			s.notify(ctx, userid, examReport, mailingConsent, msgnotify.WellKnownLabelValueExamCompleted,
+				"Exam session completed", msgnotify.MessageLevelCommon, text, html)
 			return nil
 		}
 	}
@@ -316,8 +341,9 @@ func (s *OnMemoryExamTrackingServer) DeleteExamTracking(ctx context.Context, use
 			continue
 		}
 		s.reports.Delete(key)
-		s.notify(ctx, userid, report, false, "Exam report deleted", msgnotify.MessageLevelImportant,
-			fmt.Sprintf("User %s deleted exam report %s.", userid, examReportId))
+		s.notify(ctx, userid, report, false, msgnotify.WellKnownLabelValueExamReportDeleted,
+			"Exam report deleted", msgnotify.MessageLevelImportant,
+			fmt.Sprintf("The exam report %s of %s has been deleted.", report.Id, displayName(userid, report)), "")
 		return nil
 	}
 	return ErrExamTrackingNotFound
@@ -326,4 +352,124 @@ func (s *OnMemoryExamTrackingServer) DeleteExamTracking(ctx context.Context, use
 // reportKey builds the synthesized reports-map key "{userid}:{index}".
 func reportKey(userid string, idx int64) string {
 	return userid + ":" + strconv.FormatInt(idx, 10)
+}
+
+// displayName returns the exam taker's display name for notifications: the
+// username lifted from the report's first person when available, otherwise
+// the raw subject id.
+func displayName(userid string, report ExamReport) string {
+	if len(report.ExamTaker.Persons) > 0 && report.ExamTaker.Persons[0].Name != "" {
+		return report.ExamTaker.Persons[0].Name
+	}
+	return userid
+}
+
+// reportAttachment serializes report as an XML <examreport> document (the
+// shape defined by exam.xsd) so it can travel as an email attachment.
+func reportAttachment(report ExamReport) (msgnotify.BlobAttachment, error) {
+	raw, err := xml.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return msgnotify.BlobAttachment{}, fmt.Errorf("examreport: serializing report %s: %w", report.Id, err)
+	}
+	content := append([]byte(xml.Header), raw...)
+	return msgnotify.BlobAttachment{
+		Id:       "exam-report-" + report.Id,
+		Content:  content,
+		MIMEType: "application/xml",
+		Size:     len(content),
+		Filename: "exam-report-" + report.Id + ".xml",
+	}, nil
+}
+
+// completionNotice carries the values rendered into the exam-completion
+// notification bodies.
+type completionNotice struct {
+	Name           string
+	ExamTitle      string
+	ExamCode       string
+	ExamSessionId  string
+	ReportId       string
+	OverallResult  string // empty when the assessment has no overall result
+	Score          string // "earned/total", empty when the assessment has no scores
+	FinishedAt     string
+	AttachmentName string
+}
+
+var completionTextTmpl = texttemplate.Must(texttemplate.New("exam-completion").Parse(`Hello {{.Name}},
+
+your exam session for "{{.ExamTitle}}"{{if .ExamCode}} ({{.ExamCode}}){{end}} has completed, and your exam report has been recorded.
+
+  Exam session:   {{.ExamSessionId}}
+  Exam report:    {{.ReportId}}
+{{- if .OverallResult}}
+  Overall result: {{.OverallResult}}
+{{- end}}
+{{- if .Score}}
+  Score:          {{.Score}}
+{{- end}}
+  Finished at:    {{.FinishedAt}}
+
+The full exam report is attached as {{.AttachmentName}}.
+`))
+
+var completionHTMLTmpl = htmltemplate.Must(htmltemplate.New("exam-completion").Parse(`<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Exam session completed</title></head>
+<body style="margin:0;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#1f2933;background-color:#f8fafc;">
+  <div style="max-width:560px;margin:0 auto;padding:24px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:8px;">
+    <h2 style="margin:0 0 16px;color:#0f172a;">Exam session completed</h2>
+    <p>Hello {{.Name}},</p>
+    <p>your exam session for <strong>{{.ExamTitle}}</strong>{{if .ExamCode}} ({{.ExamCode}}){{end}} has completed, and your exam report has been recorded.</p>
+    <table style="border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Exam session</td><td>{{.ExamSessionId}}</td></tr>
+      <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Exam report</td><td>{{.ReportId}}</td></tr>
+      {{- if .OverallResult}}
+      <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Overall result</td><td><strong>{{.OverallResult}}</strong></td></tr>
+      {{- end}}
+      {{- if .Score}}
+      <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Score</td><td>{{.Score}}</td></tr>
+      {{- end}}
+      <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Finished at</td><td>{{.FinishedAt}}</td></tr>
+    </table>
+    <p>The full exam report is attached as <code>{{.AttachmentName}}</code>.</p>
+  </div>
+</body>
+</html>`))
+
+// examCompletionMessage builds the plain-text and HTML bodies of the
+// notification sent when an exam session completes. The exam taker is greeted
+// by the username lifted from the report when available, falling back to the
+// raw subject id. The HTML body is escaped by html/template, so report fields
+// can never break the markup.
+func examCompletionMessage(userid string, report ExamReport) (text, html string) {
+	n := completionNotice{
+		Name:           displayName(userid, report),
+		ExamTitle:      report.Title,
+		ExamCode:       report.ExamCode,
+		ExamSessionId:  report.ExamSessionId,
+		ReportId:       report.Id,
+		FinishedAt:     time.UnixMilli(report.FinishedAt).UTC().Format(time.RFC1123),
+		AttachmentName: "exam-report-" + report.Id + ".xml",
+	}
+	if report.Assessment.OverallResult != nil {
+		n.OverallResult = string(*report.Assessment.OverallResult)
+	}
+	if report.Assessment.ScoreResult != nil {
+		n.Score = fmt.Sprintf("%g/%g", report.Assessment.ScoreResult.EarnedScore, report.Assessment.ScoreResult.TotalScore)
+	}
+
+	var textBuf, htmlBuf bytes.Buffer
+	if err := completionTextTmpl.Execute(&textBuf, n); err != nil {
+		// Template execution fails only on I/O errors, which a bytes.Buffer
+		// never produces; guard anyway and fall back to a minimal body.
+		text = fmt.Sprintf("User %s completed exam session %s; exam report %s recorded.", userid, report.ExamSessionId, report.Id)
+	} else {
+		text = textBuf.String()
+	}
+	if err := completionHTMLTmpl.Execute(&htmlBuf, n); err != nil {
+		html = ""
+	} else {
+		html = htmlBuf.String()
+	}
+	return text, html
 }
