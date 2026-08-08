@@ -33,11 +33,15 @@ export type ExamDocs = ExamExcerpt[];
 export type ExamDocsLine = { Data?: ExamExcerpt; Err?: string };
 
 // ProfileResponse is the JSON body of a successful GET /api/profile:
-// {"session_id": "...", "subject_id": "..."}. Mirrors the Go ProfileResponse
-// struct in pkg/api/profile/profile.go.
+// {"session_id": "...", "subject_id": "...", "username": "...", "email": "..."}.
+// Mirrors the Go ProfileResponse struct in pkg/api/profile/profile.go.
+// username/email come from the JWT claims and may be empty (e.g. a visitor
+// session has no email).
 export type ProfileResponse = {
   session_id: string;
   subject_id: string;
+  username: string;
+  email: string;
 };
 
 // ExamSessionSummary mirrors the Go examSessionSummary struct in

@@ -8,7 +8,7 @@ import (
 )
 
 // ProfileHandler is an http.Handler that serves the caller's profile (session
-// id, subject id and email) at GET /api/profile.
+// id, subject id, username and email) at GET /api/profile.
 type ProfileHandler struct {
 	sm pkgsession.SessionManager
 }
@@ -23,6 +23,7 @@ func NewProfileHandler(sm pkgsession.SessionManager) *ProfileHandler {
 type ProfileResponse struct {
 	SessionID string `json:"session_id"`
 	SubjectID string `json:"subject_id"`
+	Username  string `json:"username"`
 	Email     string `json:"email"`
 }
 
@@ -45,6 +46,7 @@ func (h *ProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := &ProfileResponse{
 		SessionID: sess.Id(),
 		SubjectID: sess.SubjectId(),
+		Username:  sess.Username(),
 		Email:     sess.Email(),
 	}
 	json.NewEncoder(w).Encode(resp)

@@ -14,7 +14,7 @@
   "profile": {
     "login": "登录",
     "logout": "退出登录",
-    "account": "账号：{{subjectId}}"
+    "account": "账号：{{name}}"
   },
   "language": {
     "label": "语言"

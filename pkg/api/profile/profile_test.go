@@ -18,6 +18,7 @@ import (
 type profileResponse struct {
 	SessionID string `json:"session_id"`
 	SubjectID string `json:"subject_id"`
+	Username  string `json:"username"`
 	Email     string `json:"email"`
 }
 
@@ -29,10 +30,10 @@ func decodeJSON(t *testing.T, body string, v any) {
 	}
 }
 
-// newRequest seeds the request context with session/subject ids and email the
-// way the JWT middleware does in production. An empty value leaves that context
-// key unset.
-func newRequest(method, target, sessionID, subjectID, email string) *http.Request {
+// newRequest seeds the request context with session/subject ids, username and
+// email the way the JWT middleware does in production. An empty value leaves
+// that context key unset.
+func newRequest(method, target, sessionID, subjectID, username, email string) *http.Request {
 	r := httptest.NewRequest(method, target, nil)
 	ctx := r.Context()
 	if sessionID != "" {
@@ -40,6 +41,9 @@ func newRequest(method, target, sessionID, subjectID, email string) *http.Reques
 	}
 	if subjectID != "" {
 		ctx = context.WithValue(ctx, pkgutils.CtxKeySubjectId, subjectID)
+	}
+	if username != "" {
+		ctx = context.WithValue(ctx, pkgutils.CtxKeyUsername, username)
 	}
 	if email != "" {
 		ctx = context.WithValue(ctx, pkgutils.CtxKeyEmail, email)
@@ -53,6 +57,7 @@ func TestProfileHandler(t *testing.T) {
 		method     string
 		sessionID  string
 		subjectID  string
+		username   string
 		email      string
 		noSession  bool
 		wantStatus int
@@ -62,17 +67,18 @@ func TestProfileHandler(t *testing.T) {
 		check      func(t *testing.T, rr *httptest.ResponseRecorder)
 	}{
 		{
-			name:       "GET returns session id, subject id and email",
+			name:       "GET returns session id, subject id, username and email",
 			method:     http.MethodGet,
 			sessionID:  "sess-123",
 			subjectID:  "subj-456",
+			username:   "alice",
 			email:      "alice@example.com",
 			wantStatus: http.StatusOK,
 			wantCT:     "application/json",
-			want:       profileResponse{SessionID: "sess-123", SubjectID: "subj-456", Email: "alice@example.com"},
+			want:       profileResponse{SessionID: "sess-123", SubjectID: "subj-456", Username: "alice", Email: "alice@example.com"},
 		},
 		{
-			name:       "GET with only a session id omits the subject id and email",
+			name:       "GET with only a session id omits the other fields",
 			method:     http.MethodGet,
 			sessionID:  "sess-only",
 			wantStatus: http.StatusOK,
@@ -95,7 +101,7 @@ func TestProfileHandler(t *testing.T) {
 			want:       profileResponse{},
 			check: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				// Empty strings must be emitted as "" rather than null.
-				for _, field := range []string{"session_id", "subject_id", "email"} {
+				for _, field := range []string{"session_id", "subject_id", "username", "email"} {
 					if !strings.Contains(rr.Body.String(), "\""+field+"\":\"\"") {
 						t.Errorf("body = %q, want empty %s string", rr.Body.String(), field)
 					}
@@ -153,7 +159,7 @@ func TestProfileHandler(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			handler.ServeHTTP(rr, newRequest(tc.method, "/api/profile", tc.sessionID, tc.subjectID, tc.email))
+			handler.ServeHTTP(rr, newRequest(tc.method, "/api/profile", tc.sessionID, tc.subjectID, tc.username, tc.email))
 
 			if rr.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d (body %q)", rr.Code, tc.wantStatus, rr.Body.String())
@@ -194,7 +200,7 @@ func TestProfileHandler_RouteMounted(t *testing.T) {
 	var h http.Handler = mux
 	h = session.WithSessionId(h, sm)
 
-	r := newRequest(http.MethodGet, "/api/profile", "sess-route", "subj-route", "route@example.com")
+	r := newRequest(http.MethodGet, "/api/profile", "sess-route", "subj-route", "routey", "route@example.com")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, r)
 
@@ -203,7 +209,7 @@ func TestProfileHandler_RouteMounted(t *testing.T) {
 	}
 	var got profileResponse
 	decodeJSON(t, rr.Body.String(), &got)
-	if got.SessionID != "sess-route" || got.SubjectID != "subj-route" || got.Email != "route@example.com" {
-		t.Errorf("response = %+v, want sess-route/subj-route/route@example.com", got)
+	if got.SessionID != "sess-route" || got.SubjectID != "subj-route" || got.Username != "routey" || got.Email != "route@example.com" {
+		t.Errorf("response = %+v, want sess-route/subj-route/routey/route@example.com", got)
 	}
 }

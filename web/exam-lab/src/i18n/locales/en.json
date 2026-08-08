@@ -14,7 +14,7 @@
   "profile": {
     "login": "Login",
     "logout": "Log Out",
-    "account": "Account: {{subjectId}}"
+    "account": "Account: {{name}}"
   },
   "language": {
     "label": "Language"

@@ -35,9 +35,11 @@ function avatarHue(subjectId: string): number {
 }
 
 // ProfileMenu is the account area at the right end of the top bar. For an
-// authenticated caller it is a round avatar with the subject's first initial,
-// plus the subject id text when the viewport is sm (600px) or wider; clicking
-// it opens a menu showing the subject id and a Log Out item. For an
+// authenticated caller it is a round avatar with the display name's first
+// initial, plus the display name text when the viewport is sm (600px) or
+// wider; clicking it opens a menu showing the display name and a Log Out
+// item. The display name is the session's username when the JWT carries one,
+// falling back to the subject id otherwise. For an
 // unauthenticated caller (GET /api/profile 401s) it renders as a Login link
 // button instead — hidden entirely on pages under /login, where a login
 // affordance would be redundant — and navigates to the login page unless
@@ -83,6 +85,11 @@ export default function ProfileMenu() {
   const subjectId = data?.subject_id;
   if (!subjectId) return null;
 
+  // displayName prefers the human-friendly username from the JWT claims and
+  // falls back to the (always present) subject id when it is unset or blank.
+  const username = data?.username?.trim();
+  const displayName = username ? username : subjectId;
+
   const closeMenu = () => setAnchorEl(null);
 
   const handleLogout = () => {
@@ -99,7 +106,7 @@ export default function ProfileMenu() {
   return (
     <>
       <ButtonBase
-        aria-label={t("profile.account", { subjectId })}
+        aria-label={t("profile.account", { name: displayName })}
         aria-controls={open ? "profile-menu" : undefined}
         aria-haspopup="true"
         aria-expanded={open ? "true" : undefined}
@@ -118,7 +125,7 @@ export default function ProfileMenu() {
             boxSizing: "border-box",
           }}
         >
-          {subjectId.charAt(0).toUpperCase()}
+          {displayName.charAt(0).toUpperCase()}
         </Avatar>
         <Typography
           variant="body2"
@@ -130,7 +137,7 @@ export default function ProfileMenu() {
             overflow: "hidden",
           }}
         >
-          {subjectId}
+          {displayName}
         </Typography>
       </ButtonBase>
       <Menu
@@ -153,7 +160,7 @@ export default function ProfileMenu() {
             color="text.secondary"
             sx={{ overflowWrap: "anywhere" }}
           >
-            {subjectId}
+            {displayName}
           </Typography>
         </MenuItem>
         <Divider />

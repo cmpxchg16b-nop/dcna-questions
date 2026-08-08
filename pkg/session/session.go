@@ -11,6 +11,7 @@ import (
 type Session struct {
 	id           string
 	subjectId    string
+	username     string
 	email        string
 	expiresAtSec    int64
 }
@@ -18,6 +19,8 @@ type Session struct {
 func (s *Session) Id() string { return s.id }
 
 func (s *Session) SubjectId() string { return s.subjectId }
+
+func (s *Session) Username() string { return s.username }
 
 func (s *Session) Email() string { return s.email }
 
@@ -63,6 +66,10 @@ func WithSessionId(h http.Handler, sm *OnMemorySessionManager) http.Handler {
 
 		if subjectIdAny := ctx.Value(pkgutils.CtxKeySubjectId); subjectIdAny != nil {
 			sess.subjectId = subjectIdAny.(string)
+		}
+
+		if usernameAny := ctx.Value(pkgutils.CtxKeyUsername); usernameAny != nil {
+			sess.username = usernameAny.(string)
 		}
 
 		if emailAny := ctx.Value(pkgutils.CtxKeyEmail); emailAny != nil {
