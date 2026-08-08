@@ -293,18 +293,31 @@ type QuestionSet struct {
 	QuestionCollections []QuestionCollection `xml:"questioncollection" json:"questionCollections,omitempty"`
 }
 
+// VirtualCollection models a <virtualcollection>: an ad-hoc question
+// collection assembled on the fly by sampling SampleSize questions from the
+// union of the real question collections referenced by CollectionIdx (0-based
+// indices into the enclosing exam's question set). Indices can only reach
+// collections within the same exam document, so cross-document references are
+// impossible by construction. A virtual collection is only valid in a
+// certification exam; see Exam.validate for the full rule set.
+type VirtualCollection struct {
+	SampleSize    int   `xml:"samplesize" json:"sampleSize"`
+	CollectionIdx []int `xml:"collectionidx" json:"collectionIdx"`
+}
+
 // Exam is the root <exam> document: a named certification exam carrying
 // metadata and exactly one question set.
 type Exam struct {
-	XMLName      xml.Name     `xml:"exam" json:"-"`
-	Id           string       `xml:"id,attr" json:"id"`
-	ShortName    string       `xml:"shortname,attr" json:"shortName"`
-	Code         string       `xml:"code,attr" json:"code"`
-	Title        PlainText    `xml:"title" json:"title"`
-	Description  PlainText    `xml:"description" json:"description"`
-	PassingScore *float32     `xml:"passingscore" json:"passingScore,omitempty"`
-	ExamCategory ExamCategory `xml:"examcategory" json:"examCategory"`
-	QuestionSet  QuestionSet  `xml:"questionset" json:"questionSet"`
+	XMLName           xml.Name           `xml:"exam" json:"-"`
+	Id                string             `xml:"id,attr" json:"id"`
+	ShortName         string             `xml:"shortname,attr" json:"shortName"`
+	Code              string             `xml:"code,attr" json:"code"`
+	Title             PlainText          `xml:"title" json:"title"`
+	Description       PlainText          `xml:"description" json:"description"`
+	PassingScore      *float32           `xml:"passingscore" json:"passingScore,omitempty"`
+	ExamCategory      ExamCategory       `xml:"examcategory" json:"examCategory"`
+	VirtualCollection *VirtualCollection `xml:"virtualcollection" json:"virtualCollection,omitempty"`
+	QuestionSet       QuestionSet        `xml:"questionset" json:"questionSet"`
 }
 
 // ExamCategory is the value of the <examcategory> element in an exam. It mirrors
@@ -523,6 +536,43 @@ func (e *Exam) validate() error {
 				return fmt.Errorf("question %q: unknown type %q", q.Id, q.Type)
 			}
 		}
+	}
+	return e.validateVirtualCollection()
+}
+
+// validateVirtualCollection checks the virtual collection rules: it is only
+// allowed in a certification exam, every referenced collection index must
+// exist (indices can only point within this same document), and the
+// referenced collections must hold at least SampleSize questions in total.
+// Duplicate indices are rejected so the population count cannot be inflated
+// by referencing one collection twice. Whether the referenced collections
+// share duplicate questions is the document author's responsibility.
+func (e *Exam) validateVirtualCollection() error {
+	vc := e.VirtualCollection
+	if vc == nil {
+		return nil
+	}
+	if e.ExamCategory != ExamCategoryCertification {
+		return fmt.Errorf("exam %q: a virtual collection is only allowed in a certification exam", e.Id)
+	}
+	if vc.SampleSize <= 0 {
+		return fmt.Errorf("exam %q: virtual collection sample size must be positive, got %d", e.Id, vc.SampleSize)
+	}
+	cols := e.QuestionSet.QuestionCollections
+	seen := make(map[int]struct{}, len(vc.CollectionIdx))
+	population := 0
+	for _, idx := range vc.CollectionIdx {
+		if idx < 0 || idx >= len(cols) {
+			return fmt.Errorf("exam %q: virtual collection references unknown question collection index %d (exam has %d collections)", e.Id, idx, len(cols))
+		}
+		if _, dup := seen[idx]; dup {
+			return fmt.Errorf("exam %q: virtual collection references question collection index %d twice", e.Id, idx)
+		}
+		seen[idx] = struct{}{}
+		population += len(cols[idx].Questions)
+	}
+	if population < vc.SampleSize {
+		return fmt.Errorf("exam %q: virtual collection sample size %d exceeds the %d questions available across the referenced collections", e.Id, vc.SampleSize, population)
 	}
 	return nil
 }

@@ -10,19 +10,21 @@
 //	        session id as {"exam_session_id": "..."}.
 //	GET    /api/examsessions           list the caller's sessions as
 //	        {"exam_sessions": [{...}, ...]}.
-//	GET    /api/examsessions/{exam_id} fetch a single session as
+//	GET    /api/examsessions/{exam_session_id} fetch a single session as
 //	        {"exam_session": {...}}, including its current question index.
-//	DELETE /api/examsessions/{exam_id} terminate the named session.
-//	GET    /api/examsessions/{exam_id}/my_answer fetch the caller's last saved
-//	        submitting answer via GetMyAnswer; responds {"exam_answer": {...}}
-//	        or {"exam_answer": null} when no answer has been submitted.
-//	POST   /api/examsessions/{exam_id}/answer[?check_only=true] grade the body
-//	        (an ExamAnswer) via SubmitAnswer; responds {"assessment": {...}}.
-//	        With check_only=true the answer is graded but not persisted.
-//	GET    /api/examsessions/{exam_id}/questions?cursor_id=<cursor>
+//	DELETE /api/examsessions/{exam_session_id} terminate the named session.
+//	GET    /api/examsessions/{exam_session_id}/my_answer fetch the caller's
+//	        last saved submitting answer via GetMyAnswer; responds
+//	        {"exam_answer": {...}} or {"exam_answer": null} when no answer
+//	        has been submitted.
+//	POST   /api/examsessions/{exam_session_id}/answer[?check_only=true]
+//	        grade the body (an ExamAnswer) via SubmitAnswer; responds
+//	        {"assessment": {...}}. With check_only=true the answer is graded
+//	        but not persisted.
+//	GET    /api/examsessions/{exam_session_id}/questions?cursor_id=<cursor>
 //	        fetch the next question via GetNextQuestion; responds
 //	        {"cursor_id": <next or null>, "question": {...} or null}.
-//	PUT    /api/examsessions/{exam_id}/cursors?cursor_id=<cursor>&index=<n>
+//	PUT    /api/examsessions/{exam_session_id}/cursors?cursor_id=<cursor>&index=<n>
 //	        reposition the cursor via SeekCursorTo; responds {"cursor_id": <new>}.
 //
 // Mount it as a subtree so the handler receives every path beneath
@@ -106,8 +108,9 @@ type examSessionSummary struct {
 	CurrentQuestion      *question.Question           `json:"current_question"`
 }
 
-// sessionResponse is the JSON body of a successful GET /{exam_id}: the single
-// session, wrapped so the resource can grow independently of the list shape.
+// sessionResponse is the JSON body of a successful GET /{exam_session_id}:
+// the single session, wrapped so the resource can grow independently of the
+// list shape.
 type sessionResponse struct {
 	ExamSession examSessionSummary `json:"exam_session"`
 }
@@ -158,12 +161,12 @@ const apiPrefix = "/api/examsessions"
 // handler is mounted as a subtree and resolves the collection root, a single
 // item, and the questions/cursors sub-resources itself:
 //
-//	""                       -> collection (POST create, GET list)
-//	"/{exam_id}"             -> item (GET single, DELETE)
-//	"/{exam_id}/questions"   -> next question (GET)
-//	"/{exam_id}/cursors"     -> seek cursor (PUT)
-//	"/{exam_id}/answer"      -> submit/grade answer (POST)
-//	"/{exam_id}/my_answer"   -> last saved answer (GET)
+//	""                          -> collection (POST create, GET list)
+//	"/{exam_session_id}"            -> item (GET single, DELETE)
+//	"/{exam_session_id}/questions"  -> next question (GET)
+//	"/{exam_session_id}/cursors"    -> seek cursor (PUT)
+//	"/{exam_session_id}/answer"     -> submit/grade answer (POST)
+//	"/{exam_session_id}/my_answer"  -> last saved answer (GET)
 //
 // Anything else beneath the prefix responds 404.
 func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +177,7 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// segments is the path beneath /api/examsessions split on '/', e.g.
-	// [] (collection), [{exam_id}], or [{exam_id}, "questions"].
+	// [] (collection), [{exam_session_id}], or [{exam_session_id}, "questions"].
 	rel := strings.TrimPrefix(r.URL.Path, apiPrefix)
 	trimmed := strings.Trim(rel, "/")
 	var segments []string

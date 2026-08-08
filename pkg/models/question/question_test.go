@@ -402,3 +402,97 @@ func TestQuestion_OptionImgSrcRoundTrip(t *testing.T) {
 		t.Fatalf("empty imgSrc emitted for text-only option: %s", out)
 	}
 }
+
+// virtualCollectionExamXML builds an exam document of the given category,
+// carrying two question collections (2 and 1 questions) plus the given
+// <virtualcollection> block, for virtual-collection validation tests.
+func virtualCollectionExamXML(category, vcBlock string) string {
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id="1" shortname="X" code="1">
+  <title>t</title><description>d</description>
+  <examcategory>` + category + `</examcategory>
+  ` + vcBlock + `
+  <questionset>
+    <questioncollection>
+      <question id="1" type="single-choice"><description>a</description></question>
+      <question id="2" type="single-choice"><description>b</description></question>
+    </questioncollection>
+    <questioncollection>
+      <question id="3" type="multiple-choice"><description>c</description></question>
+    </questioncollection>
+  </questionset>
+</exam>
+</root>`
+}
+
+func TestExamLoader_LoadVirtualCollection(t *testing.T) {
+	xml := virtualCollectionExamXML("certification-exam",
+		`<virtualcollection><samplesize>2</samplesize><collectionidx>0</collectionidx><collectionidx>1</collectionidx></virtualcollection>`)
+
+	exam, err := NewFileExamLoader().Load([]byte(xml))
+	if err != nil {
+		t.Fatalf("Load: unexpected error: %v", err)
+	}
+	vc := exam.VirtualCollection
+	if vc == nil {
+		t.Fatal("virtual collection not decoded")
+	}
+	if vc.SampleSize != 2 || len(vc.CollectionIdx) != 2 || vc.CollectionIdx[0] != 0 || vc.CollectionIdx[1] != 1 {
+		t.Fatalf("unexpected virtual collection: %+v", vc)
+	}
+}
+
+func TestExamLoader_LoadRejectsInvalidVirtualCollection(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		category string
+		vcBlock  string
+		wantErr  string
+	}{
+		{
+			name:     "practice exam",
+			category: "practice-exam",
+			vcBlock:  `<virtualcollection><samplesize>2</samplesize><collectionidx>0</collectionidx></virtualcollection>`,
+			wantErr:  "only allowed in a certification exam",
+		},
+		{
+			name:     "non-positive sample size",
+			category: "certification-exam",
+			vcBlock:  `<virtualcollection><samplesize>0</samplesize><collectionidx>0</collectionidx></virtualcollection>`,
+			wantErr:  "must be positive",
+		},
+		{
+			name:     "index out of range",
+			category: "certification-exam",
+			vcBlock:  `<virtualcollection><samplesize>1</samplesize><collectionidx>2</collectionidx></virtualcollection>`,
+			wantErr:  "unknown question collection index 2",
+		},
+		{
+			name:     "negative index",
+			category: "certification-exam",
+			vcBlock:  `<virtualcollection><samplesize>1</samplesize><collectionidx>-1</collectionidx></virtualcollection>`,
+			wantErr:  "unknown question collection index -1",
+		},
+		{
+			name:     "duplicate index",
+			category: "certification-exam",
+			vcBlock:  `<virtualcollection><samplesize>2</samplesize><collectionidx>0</collectionidx><collectionidx>0</collectionidx></virtualcollection>`,
+			wantErr:  "index 0 twice",
+		},
+		{
+			name:     "population smaller than sample size",
+			category: "certification-exam",
+			vcBlock:  `<virtualcollection><samplesize>4</samplesize><collectionidx>0</collectionidx><collectionidx>1</collectionidx></virtualcollection>`,
+			wantErr:  "exceeds the 3 questions available",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			xml := virtualCollectionExamXML(tc.category, tc.vcBlock)
+			_, err := NewFileExamLoader().Load([]byte(xml))
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("Load: error = %v, want one containing %q", err, tc.wantErr)
+			}
+		})
+	}
+}

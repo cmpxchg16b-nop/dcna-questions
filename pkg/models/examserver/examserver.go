@@ -577,6 +577,11 @@ type OnMemoryExamSession struct {
 	// only inside dispatch closures) and is therefore lock-free.
 	rng *rand.Rand
 
+	// virtualCollection records whether this session's question collection was
+	// assembled from the exam's virtual collection. Such sessions forcibly
+	// randomize question and option order regardless of the requested options.
+	virtualCollection bool
+
 	// ExamAnswer holds the user's latest submitted answer (the parsed <examanswer>
 	// element; see exam1.xml for its shape). When SubmitAnswer is called with
 	// checkOnly set to true, this field is not updated.
@@ -592,7 +597,13 @@ func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int) *pkgmodelquestion
 	if cached, ok := sess.CachedQuestion[orig.Id]; ok {
 		return cached.Question
 	}
-	omq := buildOnMemoryQuestion(orig, sess.Options, sess.rng)
+	// A virtual-collection session randomizes option order even when the
+	// caller did not request ExamOptionRandomOptions.
+	opts := sess.Options
+	if sess.virtualCollection {
+		opts |= ExamOptionRandomOptions
+	}
+	omq := buildOnMemoryQuestion(orig, opts, sess.rng)
 	sess.CachedQuestion[orig.Id] = omq
 	return omq.Question
 }
@@ -604,11 +615,13 @@ func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int) *pkgmodelquestion
 // per question, as it is first requested.
 func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions.Exam, opts ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) *OnMemoryExamSession {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	qc := selectQuestionCollection(exam.QuestionSet, opts, rng)
+	qc, virtual := selectQuestionCollection(exam, opts, rng)
 	qc.Questions = filterQuestionsByType(qc.Questions, acceptQuestionTypes)
 	n := len(qc.Questions)
 	var qPerm []int
-	if opts&ExamOptionRandomQuestions != 0 {
+	// A session backed by a virtual collection serves its sampled questions in
+	// random order even when ExamOptionRandomQuestions was not requested.
+	if virtual || opts&ExamOptionRandomQuestions != 0 {
 		qPerm = rng.Perm(n)
 	} else {
 		qPerm = identityPermutation(n)
@@ -625,24 +638,36 @@ func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions
 		Cursors:              make(map[string]int),
 		CurrentQuestionIndex: -1,
 		rng:                  rng,
+		virtualCollection:    virtual,
 		Grader:               NewSimpleOnMemoryGrader(&qc, exam.PassingScore, exam.ExamCategory),
 	}
 }
 
 // selectQuestionCollection resolves which QuestionCollection from the exam's
-// question set is presented to a candidate.
+// question set is presented to a candidate, and reports whether that
+// collection was assembled from the exam's virtual collection.
 //
-// With ExamOptionRandomQuestionColl set, one collection is picked at random
-// (the point of a multi-collection set: vary the exam by drawing a different
-// subset). Otherwise every collection's questions are flattened into a single
-// combined collection, so the candidate sees all questions.
-func selectQuestionCollection(qs pkgmodelquestions.QuestionSet, opts ExamOptions, rng *rand.Rand) pkgmodelquestions.QuestionCollection {
-	cols := qs.QuestionCollections
+// A certification exam's virtual collection always wins when present: the
+// collection is assembled on the fly by sampling from the union of the
+// referenced real collections, and ExamOptionRandomQuestionColl is moot — no
+// real collection is ever chosen. Practice exams ignore any virtual
+// collection (the loader already rejects such documents; this is defense in
+// depth for programmatically built exams).
+//
+// Otherwise, with ExamOptionRandomQuestionColl set, one collection is picked
+// at random (the point of a multi-collection set: vary the exam by drawing a
+// different subset). Otherwise every collection's questions are flattened
+// into a single combined collection, so the candidate sees all questions.
+func selectQuestionCollection(exam *pkgmodelquestions.Exam, opts ExamOptions, rng *rand.Rand) (pkgmodelquestions.QuestionCollection, bool) {
+	cols := exam.QuestionSet.QuestionCollections
+	if vc := exam.VirtualCollection; vc != nil && exam.ExamCategory == pkgmodelquestions.ExamCategoryCertification {
+		return sampleVirtualCollection(vc, cols, rng), true
+	}
 	if len(cols) == 0 {
-		return pkgmodelquestions.QuestionCollection{}
+		return pkgmodelquestions.QuestionCollection{}, false
 	}
 	if opts&ExamOptionRandomQuestionColl != 0 {
-		return cols[rng.Intn(len(cols))]
+		return cols[rng.Intn(len(cols))], false
 	}
 	// Flatten all collections into one so the candidate sees every question.
 	var total int
@@ -653,7 +678,34 @@ func selectQuestionCollection(qs pkgmodelquestions.QuestionSet, opts ExamOptions
 	for _, c := range cols {
 		flat = append(flat, c.Questions...)
 	}
-	return pkgmodelquestions.QuestionCollection{Questions: flat}
+	return pkgmodelquestions.QuestionCollection{Questions: flat}, false
+}
+
+// sampleVirtualCollection draws SampleSize distinct questions at random from
+// the union of the referenced collections' questions. The draw order is
+// already random; the session additionally shuffles the serve order. The
+// loader guarantees the population covers SampleSize and every index is in
+// range; out-of-range indices are skipped here so a programmatically built
+// exam degrades to a smaller sample instead of panicking.
+func sampleVirtualCollection(vc *pkgmodelquestions.VirtualCollection, cols []pkgmodelquestions.QuestionCollection, rng *rand.Rand) pkgmodelquestions.QuestionCollection {
+	var total int
+	for _, idx := range vc.CollectionIdx {
+		if idx >= 0 && idx < len(cols) {
+			total += len(cols[idx].Questions)
+		}
+	}
+	pool := make([]pkgmodelquestions.Question, 0, total)
+	for _, idx := range vc.CollectionIdx {
+		if idx >= 0 && idx < len(cols) {
+			pool = append(pool, cols[idx].Questions...)
+		}
+	}
+	n := min(vc.SampleSize, len(pool))
+	sampled := make([]pkgmodelquestions.Question, 0, n)
+	for _, i := range rng.Perm(len(pool))[:n] {
+		sampled = append(sampled, pool[i])
+	}
+	return pkgmodelquestions.QuestionCollection{Questions: sampled}
 }
 
 // filterQuestionsByType returns the questions whose type is in accept,

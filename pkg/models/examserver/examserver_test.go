@@ -539,3 +539,187 @@ func TestStartNewExamSession_AcceptQuestionTypes(t *testing.T) {
 		t.Errorf("StartNewExamSession with unmatched filter = %v, want errEmptyExam", err)
 	}
 }
+
+// walkServedQuestions drains GetNextQuestion and returns every served
+// question, in serve order.
+func walkServedQuestions(t *testing.T, srv *OnMemoryExamServer, ctx context.Context, examId ExamSessionId) []*pkgmodelquestions.Question {
+	t.Helper()
+	var qs []*pkgmodelquestions.Question
+	var cursor *QuestionCursor
+	for {
+		q, next, err := srv.GetNextQuestion(ctx, examId, "user-1", cursor)
+		if err != nil {
+			t.Fatalf("GetNextQuestion: %v", err)
+		}
+		if q == nil {
+			return qs
+		}
+		qs = append(qs, q)
+		cursor = next
+		if cursor == nil {
+			return qs
+		}
+	}
+}
+
+// TestStartNewExamSession_VirtualCollectionSamples builds a certification exam
+// whose virtual collection samples 5 questions from collections 0 and 2 (4
+// questions each), skipping collection 1. The session must serve exactly the
+// 5 sampled questions, all distinct, none from the unreferenced collection —
+// and, since 5 questions cannot come from a single 4-question collection, at
+// least one from each referenced collection. ExamOptionRandomQuestionColl is
+// passed to prove it is moot when a virtual collection is in effect.
+func TestStartNewExamSession_VirtualCollectionSamples(t *testing.T) {
+	mkQ := func(id string) pkgmodelquestions.Question {
+		return pkgmodelquestions.Question{Id: id, Type: pkgmodelquestions.QuestionTypeSingleChoice}
+	}
+	exam := &pkgmodelquestions.Exam{
+		Id:           "cert-vc",
+		ExamCategory: pkgmodelquestions.ExamCategoryCertification,
+		VirtualCollection: &pkgmodelquestions.VirtualCollection{
+			SampleSize:    5,
+			CollectionIdx: []int{0, 2},
+		},
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{mkQ("a1"), mkQ("a2"), mkQ("a3"), mkQ("a4")}},
+				{Questions: []pkgmodelquestions.Question{mkQ("b1"), mkQ("b2"), mkQ("b3"), mkQ("b4")}},
+				{Questions: []pkgmodelquestions.Question{mkQ("c1"), mkQ("c2"), mkQ("c3"), mkQ("c4")}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionRandomQuestionColl, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+
+	served := walkServedQuestions(t, srv, ctx, examId)
+	if len(served) != 5 {
+		t.Fatalf("expected 5 sampled questions, got %d", len(served))
+	}
+	seen := make(map[string]bool, len(served))
+	prefixes := make(map[byte]bool)
+	for _, q := range served {
+		if seen[q.Id] {
+			t.Fatalf("question %q served twice", q.Id)
+		}
+		seen[q.Id] = true
+		prefixes[q.Id[0]] = true
+	}
+	if prefixes['b'] {
+		t.Fatalf("questions from the unreferenced collection were served: %v", seen)
+	}
+	if !prefixes['a'] || !prefixes['c'] {
+		t.Fatalf("pigeonhole: 5 samples from two 4-question collections must cover both, got prefixes %v", prefixes)
+	}
+}
+
+// TestStartNewExamSession_VirtualCollectionForcesRandomOptionOrder confirms
+// that a virtual-collection session shuffles option order even when the caller
+// did not request ExamOptionRandomOptions. With 8 questions of 4 options each,
+// the probability of every question accidentally keeping its document order is
+// (1/4!)^8 — negligible.
+func TestStartNewExamSession_VirtualCollectionForcesRandomOptionOrder(t *testing.T) {
+	mkQ := func(id string) pkgmodelquestions.Question {
+		return pkgmodelquestions.Question{
+			Id:   id,
+			Type: pkgmodelquestions.QuestionTypeSingleChoice,
+			Options: pkgmodelquestions.Options{
+				{Id: "o1"}, {Id: "o2"}, {Id: "o3"}, {Id: "o4"},
+			},
+		}
+	}
+	var questions []pkgmodelquestions.Question
+	for _, id := range []string{"1", "2", "3", "4", "5", "6", "7", "8"} {
+		questions = append(questions, mkQ(id))
+	}
+	exam := &pkgmodelquestions.Exam{
+		Id:           "cert-vc-options",
+		ExamCategory: pkgmodelquestions.ExamCategoryCertification,
+		VirtualCollection: &pkgmodelquestions.VirtualCollection{
+			SampleSize:    8, // sample the whole population: every question is served
+			CollectionIdx: []int{0},
+		},
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: questions},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	// No randomization bits requested; the virtual collection must force them.
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+
+	served := walkServedQuestions(t, srv, ctx, examId)
+	if len(served) != 8 {
+		t.Fatalf("expected all 8 questions, got %d", len(served))
+	}
+	shuffled := 0
+	for _, q := range served {
+		if len(q.Options) != 4 {
+			t.Fatalf("question %q served with %d options, want 4", q.Id, len(q.Options))
+		}
+		if q.Options[0].Id != "o1" || q.Options[1].Id != "o2" ||
+			q.Options[2].Id != "o3" || q.Options[3].Id != "o4" {
+			shuffled++
+		}
+	}
+	if shuffled == 0 {
+		t.Fatal("no question had its option order shuffled; ExamOptionRandomOptions was not forced")
+	}
+}
+
+// TestStartNewExamSession_PracticeIgnoresVirtualCollection confirms that a
+// practice exam never applies a virtual collection (the loader rejects such
+// documents; the server ignores it for programmatically built exams): the
+// usual flatten-everything behavior applies instead.
+func TestStartNewExamSession_PracticeIgnoresVirtualCollection(t *testing.T) {
+	mkQ := func(id string) pkgmodelquestions.Question {
+		return pkgmodelquestions.Question{Id: id, Type: pkgmodelquestions.QuestionTypeSingleChoice}
+	}
+	exam := &pkgmodelquestions.Exam{
+		Id:           "practice-vc",
+		ExamCategory: pkgmodelquestions.ExamCategoryPractice,
+		VirtualCollection: &pkgmodelquestions.VirtualCollection{
+			SampleSize:    2,
+			CollectionIdx: []int{0},
+		},
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{mkQ("a1"), mkQ("a2")}},
+				{Questions: []pkgmodelquestions.Question{mkQ("b1"), mkQ("b2")}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+
+	if served := walkServedQuestions(t, srv, ctx, examId); len(served) != 4 {
+		t.Fatalf("practice exam must serve all 4 flattened questions (virtual collection ignored), got %d", len(served))
+	}
+}

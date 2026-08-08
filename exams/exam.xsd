@@ -331,7 +331,7 @@
   <xs:element name="virtualcollection">
     <xs:annotation>
       <xs:documentation
-      >The feature of virtual collection is not fully implemented yet. In fact, a virtual collection defines a sample size and the population to sample questions from, the use of virtual collection is to define a randomly picked questions list on-the-fly without hard-coding the question collection in the exam document. Virtual collection is specifically useful in an exam document that defines a certification-exam rather than one that defines a pratice-exam. And, when virtual collection is presented in the document, there will never be any real question collection be choosen, as the system will always try to use the virtual collection when present.</xs:documentation>
+      >A virtual collection defines a sample size and the population to sample questions from, yielding a randomly picked questions list on-the-fly without hard-coding a question collection in the exam document. A virtual collection may only be defined in a certification-exam document; the exam loader rejects it otherwise. When present, no real question collection will ever be chosen: every certification exam session samples from the union of the referenced collections instead, with question and option order forcibly randomized.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -341,7 +341,12 @@
           maxOccurs="1"
           type="xs:integer"
         />
-        <xs:element name="collectionidx" minOccurs="1" maxOccurs="unbounded">
+        <xs:element
+          name="collectionidx"
+          minOccurs="1"
+          maxOccurs="unbounded"
+          type="xs:integer"
+        >
           <xs:annotation>
             <xs:documentation
             >Reference a real question collection in the question set specified by the 0-based index, can be used by multiple times for reference multiple collections altogether.</xs:documentation>
