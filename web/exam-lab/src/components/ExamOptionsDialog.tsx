@@ -66,11 +66,15 @@ function ExamOptionsForm({
   const [randomOptions, setRandomOptions] = useState(false);
   const [seekable, setSeekable] = useState(false);
   const [sendExamReportEmail, setSendExamReportEmail] = useState(false);
-  // A visitor has no email address to deliver the report to: hide the
-  // mailing consent checkbox entirely (its state stays false, so the option
-  // bit is never set — the server masks it off for visitors anyway).
-  const isVisitor =
-    profile?.subject_id.startsWith(VISITOR_SUBJECT_PREFIX) ?? false;
+  // The mailing consent only makes sense when the report can actually be
+  // delivered, so the checkbox stays hidden unless the profile is known to
+  // be a non-visitor with an email address (its state stays false while
+  // hidden, so the option bit is never set — the server masks it off for
+  // visitors anyway).
+  const canSendExamReportEmail =
+    profile !== undefined &&
+    !profile.subject_id.startsWith(VISITOR_SUBJECT_PREFIX) &&
+    profile.email !== "";
   // Question types absent from CLIENT_SUPPORTED_QUESTION_TYPES cannot be
   // rendered by the client: they start unchecked and are disabled below.
   const supported = (qt: QuestionType) =>
@@ -131,7 +135,7 @@ function ExamOptionsForm({
             }
             label={t("examOptions.seekable")}
           />
-          {!isVisitor && (
+          {canSendExamReportEmail && (
             <FormControlLabel
               control={
                 <Checkbox
