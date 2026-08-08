@@ -311,6 +311,8 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 		username = idTokenClaims.Name
 	}
 
+	email := idTokenClaims.Email
+
 	// Enrich profile from the userinfo endpoint if the provider exposes one.
 	if endpoint := h.provider.UserInfoEndpoint(); endpoint != "" {
 		userinfo, err := h.provider.UserInfo(ctx, oauth2.StaticTokenSource(oauth2Token))
@@ -333,11 +335,14 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 				if username == "" {
 					username = info.Name
 				}
+				if email == "" {
+					email = info.Email
+				}
 			}
 		}
 	}
 
-	claims, err := h.GetMapClaims(r, subjectId, username)
+	claims, err := h.GetMapClaims(r, subjectId, username, email)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: fmt.Sprintf("Failed to get claims: %v", err)})
@@ -362,7 +367,7 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 	http.Redirect(w, r, redirUrl, http.StatusTemporaryRedirect)
 }
 
-func (h *GenericOIDCLoginHandler) GetMapClaims(r *http.Request, subjectId string, username string) (jwt.MapClaims, error) {
+func (h *GenericOIDCLoginHandler) GetMapClaims(r *http.Request, subjectId string, username string, email string) (jwt.MapClaims, error) {
 
 	customClaims := &pkgauth.CustomClaimType{}
 	customClaims.ID = uuid.NewString()
@@ -373,6 +378,7 @@ func (h *GenericOIDCLoginHandler) GetMapClaims(r *http.Request, subjectId string
 	customClaims.NotBefore = jwt.NewNumericDate(now)
 	customClaims.ExpiresAt = jwt.NewNumericDate(now.Add(h.SessionLifespan))
 	customClaims.Username = username
+	customClaims.Email = email
 
 	return pkgauth.NewMapClaims(customClaims)
 }

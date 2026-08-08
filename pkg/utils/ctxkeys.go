@@ -22,4 +22,7 @@ const (
 
 	// See usage
 	CtxKeyUsername                = CtxKey("username")
+
+	// See usage
+	CtxKeyEmail                   = CtxKey("email")
 )

@@ -4,21 +4,26 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"dcna-questions/pkg/utils"
+	pkgsession "dcna-questions/pkg/session"
 )
 
 // ProfileHandler is an http.Handler that serves the caller's profile (session
-// and subject ids) at GET /api/profile.
-type ProfileHandler struct{}
+// id, subject id and email) at GET /api/profile.
+type ProfileHandler struct {
+	sm pkgsession.SessionManager
+}
 
-// NewProfileHandler constructs a ProfileHandler.
-func NewProfileHandler() *ProfileHandler {
-	return &ProfileHandler{}
+// NewProfileHandler constructs a ProfileHandler, injecting the SessionManager
+// used to resolve the request-scoped session object (populated upstream by the
+// session middleware).
+func NewProfileHandler(sm pkgsession.SessionManager) *ProfileHandler {
+	return &ProfileHandler{sm: sm}
 }
 
 type ProfileResponse struct {
 	SessionID string `json:"session_id"`
 	SubjectID string `json:"subject_id"`
+	Email     string `json:"email"`
 }
 
 func (h *ProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -28,18 +33,19 @@ func (h *ProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID := r.Context().Value(utils.CtxKeySessionId)
-	subjectID := r.Context().Value(utils.CtxKeySubjectId)
+	sess, ok := h.sm.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "session not found", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	resp := &ProfileResponse{}
-	if sessionID != nil {
-		resp.SessionID = sessionID.(string)
-	}
-	if subjectID != nil {
-		resp.SubjectID = subjectID.(string)
+	resp := &ProfileResponse{
+		SessionID: sess.Id(),
+		SubjectID: sess.SubjectId(),
+		Email:     sess.Email(),
 	}
 	json.NewEncoder(w).Encode(resp)
 }

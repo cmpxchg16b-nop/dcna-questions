@@ -43,6 +43,8 @@ type GithubOAuthLoginHandler struct {
 	GithubOAuthLoginPage string
 
 	// If this is empty, we would use default value ("read:user")) for it.
+	// Note: we deliberately do not request the broader "user:email" scope;
+	// only the user's publicly visible email (part of the profile) is read.
 	GithubOAuthScope string
 
 	// If this is empty, we would use default value (see github docs) for it.
@@ -254,7 +256,14 @@ func (h *GithubOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 	subjectId := fmt.Sprintf("github:%d", *githubId)
 	username := profile.Login
 
-	claims, err := h.GetMapClaims(r, subjectId, username)
+	// Only the user's publicly visible email is used: the "email" field of
+	// the profile endpoint is exactly that, and is available under the
+	// "read:user" scope. Users who keep their email addresses private will
+	// simply have an empty email claim; reading those would require the
+	// broader "user:email" scope, which we intentionally do not request.
+	email := profile.Email
+
+	claims, err := h.GetMapClaims(r, subjectId, username, email)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: fmt.Sprintf("Failed to get claims: %v", err)})
@@ -281,7 +290,7 @@ func (h *GithubOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 	http.Redirect(w, r, redirUrl, http.StatusTemporaryRedirect)
 }
 
-func (h *GithubOAuthLoginHandler) GetMapClaims(r *http.Request, subjectId string, username string) (jwt.MapClaims, error) {
+func (h *GithubOAuthLoginHandler) GetMapClaims(r *http.Request, subjectId string, username string, email string) (jwt.MapClaims, error) {
 
 	customClaims := &pkgauth.CustomClaimType{}
 	customClaims.ID = uuid.NewString()
@@ -292,6 +301,7 @@ func (h *GithubOAuthLoginHandler) GetMapClaims(r *http.Request, subjectId string
 	customClaims.NotBefore = jwt.NewNumericDate(now)
 	customClaims.ExpiresAt = jwt.NewNumericDate(now.Add(h.SessionLifespan))
 	customClaims.Username = username
+	customClaims.Email = email
 
 	return pkgauth.NewMapClaims(customClaims)
 }

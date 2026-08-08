@@ -19,6 +19,7 @@ import (
 type CustomClaimType struct {
 	jwt.RegisteredClaims
 	Username string `json:"username,omitempty"`
+	Email    string `json:"email,omitempty"`
 }
 
 type JWTIssuer interface {
@@ -300,6 +301,9 @@ func WithWhiteListJWTAuth(nextHandler http.Handler, jwtValidator JWTValidator, w
 		if customClaimsAny != nil {
 			if customClaims, ok := customClaimsAny.(*CustomClaimType); ok && customClaims != nil {
 				ctx = context.WithValue(ctx, pkgutils.CtxKeyUsername, customClaims.Username)
+				if customClaims.Email != "" {
+					ctx = context.WithValue(ctx, pkgutils.CtxKeyEmail, customClaims.Email)
+				}
 			}
 		}
 

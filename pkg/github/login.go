@@ -14,4 +14,8 @@ type GithubProfileResponse struct {
 	HTMLURL   string `json:"html_url,omitempty"`
 	Type      string `json:"type,omitempty"`
 	Name      string `json:"name,omitempty"`
+	// Email is the user's publicly visible email. It is empty when the user
+	// keeps their email addresses private; reading private emails would
+	// require the broader "user:email" scope.
+	Email     string `json:"email,omitempty"`
 }

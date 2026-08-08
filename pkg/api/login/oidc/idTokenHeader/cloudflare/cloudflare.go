@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	pkgoidc "dcna-questions/pkg/oidc"
 	pkgutils "dcna-questions/pkg/utils"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -90,14 +91,30 @@ func (handler *WithCloudflareJWTValidate) ServeHTTP(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// mapClaims := jwt.MapClaims{}
-	// if err := idToken.Claims(&mapClaims); err != nil {
-	// 	log.Panic("Can not unmarshal id token claims")
-	// }
-
-	// for k, v := range mapClaims {
-	// 	log.Printf("Found claim %s: %v", k, v)
-	// }
+	// Extract the user's identity from the verified id token so downstream
+	// handlers can rely on it. Cloudflare Access JWTs carry OIDC standard
+	// claims such as "sub" and "email" (see
+	// https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/).
+	// Failure to decode is non-fatal: the token has already been verified.
+	claims := new(pkgoidc.UserInfoResponse)
+	if err := idToken.Claims(claims); err != nil {
+		log.Printf("Failed to decode Cloudflare id token claims (non-fatal): %v", err)
+	} else {
+		username := claims.PreferredUsername
+		if username == "" {
+			username = claims.Name
+		}
+		if username == "" {
+			username = claims.Email
+		}
+		if username != "" {
+			ctx = context.WithValue(ctx, pkgutils.CtxKeyUsername, username)
+		}
+		if claims.Email != "" {
+			ctx = context.WithValue(ctx, pkgutils.CtxKeyEmail, claims.Email)
+		}
+		r = r.WithContext(ctx)
+	}
 
 	handler.Origin.ServeHTTP(w, r)
 }

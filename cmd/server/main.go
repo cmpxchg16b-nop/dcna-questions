@@ -114,7 +114,7 @@ func (cli *CLI) Run() error {
 
 	muxHandlerDyn := http.NewServeMux()
 	muxHandlerDyn.Handle("/api/examdocs", examHandler)
-	muxHandlerDyn.Handle("/api/profile", pkgapiprofile.NewProfileHandler())
+	muxHandlerDyn.Handle("/api/profile", pkgapiprofile.NewProfileHandler(sm))
 	// /api/logout is on the JWT whitelist below, so the handler also runs for
 	// requests whose token is already expired or invalid — clearing cookies
 	// must never depend on a still-valid session.

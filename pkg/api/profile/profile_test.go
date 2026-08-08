@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"dcna-questions/pkg/api/profile"
+	"dcna-questions/pkg/session"
 	pkgutils "dcna-questions/pkg/utils"
 )
 
@@ -17,6 +18,7 @@ import (
 type profileResponse struct {
 	SessionID string `json:"session_id"`
 	SubjectID string `json:"subject_id"`
+	Email     string `json:"email"`
 }
 
 // decodeJSON unmarshals body into v, failing the test on error.
@@ -27,9 +29,10 @@ func decodeJSON(t *testing.T, body string, v any) {
 	}
 }
 
-// newRequest seeds the request context with session/subject ids the way the JWT
-// middleware does in production. An empty value leaves that context key unset.
-func newRequest(method, target, sessionID, subjectID string) *http.Request {
+// newRequest seeds the request context with session/subject ids and email the
+// way the JWT middleware does in production. An empty value leaves that context
+// key unset.
+func newRequest(method, target, sessionID, subjectID, email string) *http.Request {
 	r := httptest.NewRequest(method, target, nil)
 	ctx := r.Context()
 	if sessionID != "" {
@@ -37,6 +40,9 @@ func newRequest(method, target, sessionID, subjectID string) *http.Request {
 	}
 	if subjectID != "" {
 		ctx = context.WithValue(ctx, pkgutils.CtxKeySubjectId, subjectID)
+	}
+	if email != "" {
+		ctx = context.WithValue(ctx, pkgutils.CtxKeyEmail, email)
 	}
 	return r.WithContext(ctx)
 }
@@ -47,6 +53,8 @@ func TestProfileHandler(t *testing.T) {
 		method     string
 		sessionID  string
 		subjectID  string
+		email      string
+		noSession  bool
 		wantStatus int
 		wantAllow  string
 		wantCT     string
@@ -54,16 +62,17 @@ func TestProfileHandler(t *testing.T) {
 		check      func(t *testing.T, rr *httptest.ResponseRecorder)
 	}{
 		{
-			name:       "GET returns both session and subject ids",
+			name:       "GET returns session id, subject id and email",
 			method:     http.MethodGet,
 			sessionID:  "sess-123",
 			subjectID:  "subj-456",
+			email:      "alice@example.com",
 			wantStatus: http.StatusOK,
 			wantCT:     "application/json",
-			want:       profileResponse{SessionID: "sess-123", SubjectID: "subj-456"},
+			want:       profileResponse{SessionID: "sess-123", SubjectID: "subj-456", Email: "alice@example.com"},
 		},
 		{
-			name:       "GET with only a session id omits the subject id",
+			name:       "GET with only a session id omits the subject id and email",
 			method:     http.MethodGet,
 			sessionID:  "sess-only",
 			wantStatus: http.StatusOK,
@@ -86,11 +95,21 @@ func TestProfileHandler(t *testing.T) {
 			want:       profileResponse{},
 			check: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				// Empty strings must be emitted as "" rather than null.
-				if !strings.Contains(rr.Body.String(), "\"session_id\":\"\"") {
-					t.Errorf("body = %q, want empty session_id string", rr.Body.String())
+				for _, field := range []string{"session_id", "subject_id", "email"} {
+					if !strings.Contains(rr.Body.String(), "\""+field+"\":\"\"") {
+						t.Errorf("body = %q, want empty %s string", rr.Body.String(), field)
+					}
 				}
-				if !strings.Contains(rr.Body.String(), "\"subject_id\":\"\"") {
-					t.Errorf("body = %q, want empty subject_id string", rr.Body.String())
+			},
+		},
+		{
+			name:       "GET without a session object responds 500",
+			method:     http.MethodGet,
+			noSession:  true,
+			wantStatus: http.StatusInternalServerError,
+			check: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				if !strings.Contains(rr.Body.String(), "session not found") {
+					t.Errorf("body = %q, want it to mention session not found", rr.Body.String())
 				}
 			},
 		},
@@ -119,11 +138,22 @@ func TestProfileHandler(t *testing.T) {
 		},
 	}
 
-	h := profile.NewProfileHandler()
+	sm := session.NewOnMemorySessionManager()
+	h := profile.NewProfileHandler(sm)
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			// Route through the session middleware so the request-scoped
+			// session object is built from the seeded context values, as in
+			// production. When noSession is set the request bypasses that
+			// middleware entirely, so the handler's GetSessionFromContext
+			// misses (producing the guarded 500).
+			var handler http.Handler = h
+			if !tc.noSession {
+				handler = session.WithSessionId(h, sm)
+			}
+
 			rr := httptest.NewRecorder()
-			h.ServeHTTP(rr, newRequest(tc.method, "/api/profile", tc.sessionID, tc.subjectID))
+			handler.ServeHTTP(rr, newRequest(tc.method, "/api/profile", tc.sessionID, tc.subjectID, tc.email))
 
 			if rr.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d (body %q)", rr.Code, tc.wantStatus, rr.Body.String())
@@ -157,19 +187,23 @@ func TestProfileHandler(t *testing.T) {
 // documented mount point to confirm the wiring in main.go (mux.Handle) reaches
 // it correctly.
 func TestProfileHandler_RouteMounted(t *testing.T) {
+	sm := session.NewOnMemorySessionManager()
 	mux := http.NewServeMux()
-	mux.Handle("/api/profile", profile.NewProfileHandler())
+	mux.Handle("/api/profile", profile.NewProfileHandler(sm))
 
-	r := newRequest(http.MethodGet, "/api/profile", "sess-route", "subj-route")
+	var h http.Handler = mux
+	h = session.WithSessionId(h, sm)
+
+	r := newRequest(http.MethodGet, "/api/profile", "sess-route", "subj-route", "route@example.com")
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, r)
+	h.ServeHTTP(rr, r)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())
 	}
 	var got profileResponse
 	decodeJSON(t, rr.Body.String(), &got)
-	if got.SessionID != "sess-route" || got.SubjectID != "subj-route" {
-		t.Errorf("response = %+v, want sess-route/subj-route", got)
+	if got.SessionID != "sess-route" || got.SubjectID != "subj-route" || got.Email != "route@example.com" {
+		t.Errorf("response = %+v, want sess-route/subj-route/route@example.com", got)
 	}
 }

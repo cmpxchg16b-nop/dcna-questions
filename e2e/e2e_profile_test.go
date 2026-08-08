@@ -40,7 +40,7 @@ func TestE2E_VisitorProfile(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/login/visitor", visitorLoginHandler)
-	mux.Handle("/api/profile", pkgapiprofile.NewProfileHandler())
+	mux.Handle("/api/profile", pkgapiprofile.NewProfileHandler(sm))
 
 	jwtValidator := pkgauth.NewStaticKeyJWTValidator(keyProvider, pkgauth.NewNullBlackListProvider(), false)
 
@@ -67,15 +67,19 @@ func TestE2E_VisitorProfile(t *testing.T) {
 		var resp struct {
 			SessionID string `json:"session_id"`
 			SubjectID string `json:"subject_id"`
+			Email     string `json:"email"`
 		}
 		decodeOrFail(t, body, &resp)
-		t.Logf("profile: session_id=%q subject_id=%q", resp.SessionID, resp.SubjectID)
+		t.Logf("profile: session_id=%q subject_id=%q email=%q", resp.SessionID, resp.SubjectID, resp.Email)
 
 		if resp.SessionID == "" {
 			t.Errorf("session_id is empty; the auth middleware should populate it from the JWT jti")
 		}
 		if !strings.HasPrefix(resp.SubjectID, pkgauth.VisitorSubjectPrefix) {
 			t.Errorf("subject_id = %q, want a %q-prefixed visitor id", resp.SubjectID, pkgauth.VisitorSubjectPrefix)
+		}
+		if resp.Email != "" {
+			t.Errorf("email = %q, want empty for a visitor session (no email claim)", resp.Email)
 		}
 	})
 

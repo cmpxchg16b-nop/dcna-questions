@@ -11,12 +11,15 @@ import (
 type Session struct {
 	id           string
 	subjectId    string
+	email        string
 	expiresAtSec    int64
 }
 
 func (s *Session) Id() string { return s.id }
 
 func (s *Session) SubjectId() string { return s.subjectId }
+
+func (s *Session) Email() string { return s.email }
 
 func (s *Session) Expiry() time.Time { return time.Unix(s.expiresAtSec, 0) }
 
@@ -60,6 +63,10 @@ func WithSessionId(h http.Handler, sm *OnMemorySessionManager) http.Handler {
 
 		if subjectIdAny := ctx.Value(pkgutils.CtxKeySubjectId); subjectIdAny != nil {
 			sess.subjectId = subjectIdAny.(string)
+		}
+
+		if emailAny := ctx.Value(pkgutils.CtxKeyEmail); emailAny != nil {
+			sess.email = emailAny.(string)
 		}
 
 		if expAny := ctx.Value(pkgutils.CtxKeySessionTTLSecs); expAny != nil {

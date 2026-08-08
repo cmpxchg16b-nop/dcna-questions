@@ -173,12 +173,13 @@ func TestWhiteListAuth_RejectDelegatesToOnRejectHandler(t *testing.T) {
 func TestWhiteListAuth_ContextIsEnriched(t *testing.T) {
 	v := &fakeValidator{
 		claims:       &jwt.RegisteredClaims{ID: "sess-1", Subject: "subj-1"},
-		customClaims: &CustomClaimType{Username: "alice"},
+		customClaims: &CustomClaimType{Username: "alice", Email: "alice@example.com"},
 	}
-	var gotUsername, gotSession, gotSubject any
+	var gotUsername, gotEmail, gotSession, gotSubject any
 	capture := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		gotUsername = ctx.Value(pkgutils.CtxKeyUsername)
+		gotEmail = ctx.Value(pkgutils.CtxKeyEmail)
 		gotSession = ctx.Value(pkgutils.CtxKeySessionId)
 		gotSubject = ctx.Value(pkgutils.CtxKeySubjectId)
 		w.WriteHeader(http.StatusOK)
@@ -190,6 +191,9 @@ func TestWhiteListAuth_ContextIsEnriched(t *testing.T) {
 
 	if gotUsername != "alice" {
 		t.Fatalf("username in context: got %v, want %q", gotUsername, "alice")
+	}
+	if gotEmail != "alice@example.com" {
+		t.Fatalf("email in context: got %v, want %q", gotEmail, "alice@example.com")
 	}
 	if gotSession != "sess-1" {
 		t.Fatalf("session id in context: got %v, want %q", gotSession, "sess-1")
