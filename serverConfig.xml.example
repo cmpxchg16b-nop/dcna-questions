@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Global server configuration, validated against serverConfig.xsd (project
+     root).
+
+     The <oidcLoginOptions/> section is consumed by the server's generic OIDC
+     login handler (pkg/api/login/oidc/general/oidcgeneral.go). Each
+     <oidcLoginOption/> configures one OIDC provider. Entries with empty
+     issuerURL are ignored by the server.
+
+     sessionLifespan is a Go time.Duration string (e.g. "168h"); when omitted
+     the handler's code-side default applies. -->
+<serverConfig
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="serverConfig.xsd"
+>
+  <oidcLoginOptions>
+    <oidcLoginOption
+      providerName="iedon"
+      issuerURL="https://auth.iedon.net"
+      clientId=""
+      clientSecret=""
+      redirectURL="http://localhost:8080/api/login/oidc/iedon/auth"
+      scope="openid profile email"
+      sessionLifespan="168h"
+      loginSuccessRedirectURL="/"
+    />
+  </oidcLoginOptions>
+</serverConfig>

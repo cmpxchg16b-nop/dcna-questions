@@ -7,6 +7,6 @@ exams/cisco2.xml
 bin/server
 .env
 .env.local
-oidcLoginOptions.xml
+serverConfig.xml
 getquestion.js
 getquestions1.js

@@ -18,6 +18,7 @@ import (
 	pkgmodelsexamserver "dcna-questions/pkg/models/examserver"
 	pkgmodelsmsgnotify "dcna-questions/pkg/models/msgnotify"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
+	pkgmodelsserverconfig "dcna-questions/pkg/models/serverconfig"
 	pkgmodelsuserexamdocsfsbasedassociation "dcna-questions/pkg/models/userexamdocs/fsbasedassociation"
 	pkgmodelsuserupload "dcna-questions/pkg/models/userupload"
 	pkgsession "dcna-questions/pkg/session"
@@ -32,6 +33,7 @@ import (
 	"net/http"
 
 	"github.com/alecthomas/kong"
+	"github.com/joho/godotenv"
 )
 
 // logger is the application-wide structured logger used by the HTTP logging
@@ -43,7 +45,7 @@ type CLI struct {
 	AssetsDir                     string        `name:"assets-dir" help:"Directory of static assets to serve under /assets/." env:"ASSETS_DIR" type:"existingdir"`
 	LoadExam                      []string      `name:"load-exam" help:"Paths to exam documents to load." env:"LOAD_EXAM" type:"existingfile"`
 	LoadExamDir                   []string      `name:"load-exam-dir" help:"Directories of exam documents to load." env:"LOAD_EXAM_DIR" type:"existingdir"`
-	LoadOIDCOptionsXML            string        `name:"load-oidc-options-xml" help:"Path to the OIDC login options XML document (see oidcLoginOptions.xsd)." env:"LOAD_OIDC_OPTIONS_XML" type:"existingfile"`
+	ConfigXML                     string        `name:"config-xml" help:"Path to the server configuration XML document (see serverConfig.xsd)." env:"CONFIG_XML" type:"existingfile"`
 	JWTAuthSecretFromEnv          string        `name:"jwt-auth-secret-from-env" help:"Name of the environment variable that contains the JWT secret" default:"JWT_SECRET"`
 	JWTAuthSecretFromFile         string        `name:"jwt-auth-secret-from-file" help:"Path to the file that contains the JWT secret"`
 	SubjectBlacklistTxtPath       string        `name:"subj-blacklist-path" help:"Path to the blacklist text file, one subject id per a line"`
@@ -188,13 +190,14 @@ func (cli *CLI) Run() error {
 		logger.Info("registered Github login handler", "path", "/api/login/oauth2/github/")
 	}
 
-	// Generic OIDC providers loaded from the XML document referenced by
-	// --load-oidc-options-xml. Each <oidcLoginOption/> with a non-empty
-	// issuerURL registers a GenericOIDCLoginHandler at
-	// /api/login/oidc/{providerName}[/...]. Entries with an empty issuerURL
-	// are skipped so the shipped sample file can be used as-is.
-	if cli.LoadOIDCOptionsXML != "" {
-		oidcOpts, err := loadOIDCLoginOptions(cli.LoadOIDCOptionsXML)
+	// Generic OIDC providers loaded from the <oidcLoginOptions/> section of
+	// the server configuration XML document referenced by --config-xml. Each
+	// <oidcLoginOption/> with a non-empty issuerURL registers a
+	// GenericOIDCLoginHandler at /api/login/oidc/{providerName}[/...].
+	// Entries with an empty issuerURL are skipped so the shipped sample file
+	// can be used as-is.
+	if cli.ConfigXML != "" {
+		serverCfg, err := pkgmodelsserverconfig.LoadServerConfig(cli.ConfigXML)
 		if err != nil {
 			return err
 		}
@@ -202,7 +205,7 @@ func (cli *CLI) Run() error {
 			NonceLifespan:  cli.NonceLifespan,
 			SecretProvider: keyProvider,
 		}
-		for _, opt := range oidcOpts.Options {
+		for _, opt := range serverCfg.OIDCLoginOptions.Options {
 			if opt.IssuerURL == "" {
 				continue
 			}
@@ -210,7 +213,7 @@ func (cli *CLI) Run() error {
 			if providerName == "" {
 				providerName = "oidc"
 			}
-			sessionLifespan, err := parseSessionLifespan(opt.SessionLifespan, 168*time.Hour)
+			sessionLifespan, err := pkgmodelsserverconfig.ParseSessionLifespan(opt.SessionLifespan, 168*time.Hour)
 			if err != nil {
 				return fmt.Errorf("OIDC provider %q: %w", providerName, err)
 			}
@@ -279,7 +282,35 @@ func (hubCmd *CLI) getJWTSecret() ([]byte, error) {
 	return getJWTSecFromSomewhere(hubCmd.JWTAuthSecretFromEnv, hubCmd.JWTAuthSecretFromFile)
 }
 
+// dotEnvFiles are the dotenv files loaded at startup, in decreasing order
+// of precedence: godotenv.Load never overrides a variable that is already
+// set, so .env.local wins over .env, and both lose to the real environment.
+var dotEnvFiles = []string{".env.local", ".env"}
+
+// loadDotEnvFiles loads the conventional dotenv files (.env.local, .env)
+// into the process environment. It runs before kong.Parse so that kong's
+// env-tagged CLI fields observe the variables defined there. Missing files
+// are skipped; a failure to load an existing file is fatal.
+func loadDotEnvFiles() {
+	var existing []string
+	for _, f := range dotEnvFiles {
+		if _, err := os.Stat(f); err == nil {
+			existing = append(existing, f)
+		}
+	}
+	if len(existing) == 0 {
+		return
+	}
+	if err := godotenv.Load(existing...); err != nil {
+		logger.Error("failed to load dot env files", "files", existing, "err", err)
+		os.Exit(1)
+	}
+	logger.Info("loaded dot env files", "files", existing)
+}
+
 func main() {
+	loadDotEnvFiles()
+
 	var cli CLI
 	ctx := kong.Parse(&cli)
 	err := ctx.Run()

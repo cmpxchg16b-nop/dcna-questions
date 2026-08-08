@@ -1,20 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Schema for oidcLoginOptions.xml, the configurable list of generic OIDC
-     login providers. Each <oidcLoginOption/> mirrors the configuration fields
-     of GenericOIDCLoginHandler in pkg/api/login/oidc/general/oidcgeneral.go.
+<!-- Schema for serverConfig.xml, the global server configuration document.
      The XML instance references this schema via
-     xsi:noNamespaceSchemaLocation="oidcLoginOptions.xsd". -->
+     xsi:noNamespaceSchemaLocation="serverConfig.xsd". -->
 <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
 
-  <!-- Root element; holds zero or more oidcLoginOption entries. -->
-  <xsd:element name="oidcLoginOptions">
+  <!-- Root element; holds the global configuration sections. Each section is
+       optional so a minimal document enables only what it needs. -->
+  <xsd:element name="serverConfig">
     <xsd:complexType>
       <xsd:sequence>
-        <xsd:element name="oidcLoginOption" type="oidcLoginOptionType"
-                     minOccurs="0" maxOccurs="unbounded"/>
+        <xsd:element name="oidcLoginOptions" type="oidcLoginOptionsType"
+                     minOccurs="0"/>
       </xsd:sequence>
     </xsd:complexType>
   </xsd:element>
+
+  <!-- The configurable list of generic OIDC login providers; holds zero or
+       more oidcLoginOption entries. -->
+  <xsd:complexType name="oidcLoginOptionsType">
+    <xsd:sequence>
+      <xsd:element name="oidcLoginOption" type="oidcLoginOptionType"
+                   minOccurs="0" maxOccurs="unbounded"/>
+    </xsd:sequence>
+  </xsd:complexType>
 
   <!-- A single OIDC provider configuration. Attribute names mirror the Go
        struct fields of GenericOIDCLoginHandler (with a lowercased first
