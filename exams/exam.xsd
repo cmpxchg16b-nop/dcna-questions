@@ -527,6 +527,7 @@
             <xs:attribute name="name" type="xs:string" use="required" />
             <xs:attribute name="fistname" type="xs:string" use="optional" />
             <xs:attribute name="lastname" type="xs:string" use="optional" />
+            <xs:attribute name="email" type="xs:string" use="optional" />
           </xs:complexType>
         </xs:element>
         <xs:element name="anonymous" minOccurs="0" maxOccurs="unbounded">

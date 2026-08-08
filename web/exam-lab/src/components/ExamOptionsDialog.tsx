@@ -14,13 +14,16 @@ import {
   FormControlLabel,
 } from "@mui/material";
 import { useCreateExamSession } from "@/hooks/useCreateExamSession";
+import { useProfile } from "@/hooks/useProfile";
 import {
   CLIENT_SUPPORTED_QUESTION_TYPES,
   ExamExcerpt,
   ExamOptionRandomOptions,
   ExamOptionRandomQuestions,
   ExamOptionSeekable,
+  ExamOptionSendExamReportEmail,
   QuestionType,
+  VISITOR_SUBJECT_PREFIX,
 } from "@/api/types";
 import { useTranslation } from "react-i18next";
 
@@ -58,9 +61,16 @@ function ExamOptionsForm({
   const { t } = useTranslation();
   const router = useRouter();
   const createSession = useCreateExamSession();
+  const { data: profile } = useProfile();
   const [randomQuestions, setRandomQuestions] = useState(false);
   const [randomOptions, setRandomOptions] = useState(false);
   const [seekable, setSeekable] = useState(false);
+  const [sendExamReportEmail, setSendExamReportEmail] = useState(false);
+  // A visitor has no email address to deliver the report to: hide the
+  // mailing consent checkbox entirely (its state stays false, so the option
+  // bit is never set — the server masks it off for visitors anyway).
+  const isVisitor =
+    profile?.subject_id.startsWith(VISITOR_SUBJECT_PREFIX) ?? false;
   // Question types absent from CLIENT_SUPPORTED_QUESTION_TYPES cannot be
   // rendered by the client: they start unchecked and are disabled below.
   const supported = (qt: QuestionType) =>
@@ -74,7 +84,8 @@ function ExamOptionsForm({
   const options =
     (randomQuestions ? ExamOptionRandomQuestions : 0) |
     (randomOptions ? ExamOptionRandomOptions : 0) |
-    (seekable ? ExamOptionSeekable : 0);
+    (seekable ? ExamOptionSeekable : 0) |
+    (sendExamReportEmail ? ExamOptionSendExamReportEmail : 0);
 
   // The accepted question types, in the order the checkboxes appear. An empty
   // array would mean "accept every type" to the server, so the Take button is
@@ -120,6 +131,17 @@ function ExamOptionsForm({
             }
             label={t("examOptions.seekable")}
           />
+          {!isVisitor && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={sendExamReportEmail}
+                  onChange={(e) => setSendExamReportEmail(e.target.checked)}
+                />
+              }
+              label={t("examOptions.sendExamReportEmail")}
+            />
+          )}
         </Box>
         <DialogContentText sx={{ mt: 2 }}>
           {t("examOptions.questionTypes")}

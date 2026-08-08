@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"dcna-questions/pkg/api/examsessions"
+	"dcna-questions/pkg/models/examreport"
 	"dcna-questions/pkg/models/examserver"
 	"dcna-questions/pkg/models/question"
 	"dcna-questions/pkg/session"
@@ -37,6 +38,7 @@ type fakeExamServer struct {
 	startID       examserver.ExamSessionId
 	startedExam   *question.Exam
 	startedUser   string
+	startedTaker  examreport.Person
 	startedOpts   examserver.ExamOptions
 	startedAccept []question.QuestionType
 
@@ -78,9 +80,10 @@ type fakeExamServer struct {
 	submCheckOnly bool
 }
 
-func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userId string, opts examserver.ExamOptions, acceptQuestionTypes []question.QuestionType) (examserver.ExamSessionId, error) {
+func (s *fakeExamServer) StartNewExamSession(_ context.Context, exam *question.Exam, userId string, taker examreport.Person, opts examserver.ExamOptions, acceptQuestionTypes []question.QuestionType) (examserver.ExamSessionId, error) {
 	s.startedExam = exam
 	s.startedUser = userId
+	s.startedTaker = taker
 	s.startedOpts = opts
 	s.startedAccept = acceptQuestionTypes
 	if s.startErr != nil {

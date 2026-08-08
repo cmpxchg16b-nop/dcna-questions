@@ -492,7 +492,7 @@ func TestSubmitAnswer_GradesAndStores(t *testing.T) {
 	defer srv.Shutdown()
 
 	pass := float32Ptr(6.0)
-	examId, err := srv.StartNewExamSession(ctx, newGradingExam(pass), "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, newGradingExam(pass), "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -538,7 +538,7 @@ func TestSubmitAnswer_CheckOnly(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, newGradingExam(nil), "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, newGradingExam(nil), "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -578,7 +578,7 @@ func TestGetMyAnswer_NoneSubmitted(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, newGradingExam(nil), "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, newGradingExam(nil), "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -623,7 +623,7 @@ func TestSubmitAnswer_CheckOnlyRevealsCorrectAnswers(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -678,7 +678,7 @@ func TestGetMyAnswer_Ownership(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, newGradingExam(nil), "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, newGradingExam(nil), "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -711,7 +711,7 @@ func TestSubmitAnswer_Overwrites(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, newGradingExam(nil), "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, newGradingExam(nil), "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}

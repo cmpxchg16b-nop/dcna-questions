@@ -52,7 +52,7 @@ func TestExamReport_XMLRoundTrip(t *testing.T) {
 		ExamSessionId: "session-1",
 		FinishedAt:    1700000000123,
 		ExamTaker: ExamTaker{
-			Persons: []Person{{Name: "Alice", Fistname: "Alice", Lastname: "Smith"}},
+			Persons:   []Person{{Name: "Alice", Fistname: "Alice", Lastname: "Smith", Email: "alice@example.com"}},
 			Anonymous: []Anonymous{{SessionId: "anon-1"}},
 		},
 		Assessment: pkgmodelsquestion.Assessment{
@@ -86,7 +86,7 @@ func TestExamReport_XMLRoundTrip(t *testing.T) {
 		`<examcategory>certification-exam</examcategory>`,
 		`<examsessionid>session-1</examsessionid>`,
 		`<finishedat>1700000000123</finishedat>`,
-		`<person name="Alice" fistname="Alice" lastname="Smith"></person>`,
+		`<person name="Alice" fistname="Alice" lastname="Smith" email="alice@example.com"></person>`,
 		`<anonymous sessionid="anon-1"></anonymous>`,
 	} {
 		if !strings.Contains(str, want) {
@@ -118,7 +118,7 @@ func TestExamReport_XMLRoundTrip(t *testing.T) {
 		got.Assessment.ScoreResult.EarnedScore != report.Assessment.ScoreResult.EarnedScore {
 		t.Errorf("Assessment.ScoreResult not preserved: %+v", got.Assessment.ScoreResult)
 	}
-	if len(got.ExamTaker.Persons) != 1 || got.ExamTaker.Persons[0].Name != "Alice" {
+	if len(got.ExamTaker.Persons) != 1 || got.ExamTaker.Persons[0].Name != "Alice" || got.ExamTaker.Persons[0].Email != "alice@example.com" {
 		t.Errorf("ExamTaker.Persons not preserved: %+v", got.ExamTaker.Persons)
 	}
 	if len(got.ExamTaker.Anonymous) != 1 || got.ExamTaker.Anonymous[0].SessionId != "anon-1" {
@@ -183,13 +183,13 @@ func TestPutAndGet_SingleUser(t *testing.T) {
 	r2 := mustReport(t, "r2")
 	r3 := mustReport(t, "r3")
 
-	if err := srv.Put(ctx, "alice", r1); err != nil {
+	if err := srv.Put(ctx, "alice", r1, false); err != nil {
 		t.Fatalf("Put r1: %v", err)
 	}
-	if err := srv.Put(ctx, "alice", r2); err != nil {
+	if err := srv.Put(ctx, "alice", r2, false); err != nil {
 		t.Fatalf("Put r2: %v", err)
 	}
-	if err := srv.Put(ctx, "alice", r3); err != nil {
+	if err := srv.Put(ctx, "alice", r3, false); err != nil {
 		t.Fatalf("Put r3: %v", err)
 	}
 
@@ -213,9 +213,9 @@ func TestPutAndGet_MultipleUsersAreIsolated(t *testing.T) {
 	srv := NewOnMemoryExamTrackingServer(nil)
 	ctx := context.Background()
 
-	_ = srv.Put(ctx, "alice", mustReport(t, "a1"))
-	_ = srv.Put(ctx, "bob", mustReport(t, "b1"))
-	_ = srv.Put(ctx, "alice", mustReport(t, "a2"))
+	_ = srv.Put(ctx, "alice", mustReport(t, "a1"), false)
+	_ = srv.Put(ctx, "bob", mustReport(t, "b1"), false)
+	_ = srv.Put(ctx, "alice", mustReport(t, "a2"), false)
 
 	alice, _ := srv.GetExamReportsByUserId(ctx, "alice")
 	bob, _ := srv.GetExamReportsByUserId(ctx, "bob")
@@ -254,7 +254,7 @@ func TestPut_ConcurrentSameUserNoLoss(t *testing.T) {
 			<-start
 			for i := 0; i < perGoroutine; i++ {
 				r := mustReport(t, "x")
-				if err := srv.Put(ctx, userid, r); err != nil {
+				if err := srv.Put(ctx, userid, r, false); err != nil {
 					t.Errorf("Put: unexpected error: %v", err)
 					return
 				}
@@ -319,7 +319,7 @@ func TestPutGet_ConcurrentMixed(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < puts; i++ {
-			if err := srv.Put(ctx, userid, mustReport(t, "p")); err != nil {
+			if err := srv.Put(ctx, userid, mustReport(t, "p"), false); err != nil {
 				getErr.Store(err)
 				return
 			}
@@ -347,10 +347,10 @@ func TestDeleteExamTracking_Basic(t *testing.T) {
 		t.Fatalf("Delete unknown user = %v, want ErrExamTrackingNotFound", err)
 	}
 
-	_ = srv.Put(ctx, "alice", mustReport(t, "r1"))
-	_ = srv.Put(ctx, "alice", mustReport(t, "r2"))
-	_ = srv.Put(ctx, "alice", mustReport(t, "r3"))
-	_ = srv.Put(ctx, "bob", mustReport(t, "r2")) // same id, another user
+	_ = srv.Put(ctx, "alice", mustReport(t, "r1"), false)
+	_ = srv.Put(ctx, "alice", mustReport(t, "r2"), false)
+	_ = srv.Put(ctx, "alice", mustReport(t, "r3"), false)
+	_ = srv.Put(ctx, "bob", mustReport(t, "r2"), false) // same id, another user
 
 	// Alice cannot delete bob's report even though the id matches her own: her
 	// own r2 is removed, bob's r2 must survive.
@@ -376,7 +376,7 @@ func TestDeleteExamTracking_Basic(t *testing.T) {
 	}
 
 	// Puts after a deletion keep claiming fresh indexes: no reuse of the hole.
-	_ = srv.Put(ctx, "alice", mustReport(t, "r4"))
+	_ = srv.Put(ctx, "alice", mustReport(t, "r4"), false)
 	alice, _ = srv.GetExamReportsByUserId(ctx, "alice")
 	wantIds := []string{"r1", "r3", "r4"}
 	if len(alice) != len(wantIds) {
@@ -403,7 +403,7 @@ func TestDeleteExamTracking_ConcurrentWithPut(t *testing.T) {
 	const puts = 200
 	// Pre-seed half the reports so deletes have targets from the start.
 	for i := 0; i < puts/2; i++ {
-		_ = srv.Put(ctx, userid, mustReport(t, fmt.Sprintf("seed-%d", i)))
+		_ = srv.Put(ctx, userid, mustReport(t, fmt.Sprintf("seed-%d", i)), false)
 	}
 
 	var wg sync.WaitGroup
@@ -413,7 +413,7 @@ func TestDeleteExamTracking_ConcurrentWithPut(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < puts; i++ {
-			if err := srv.Put(ctx, userid, mustReport(t, fmt.Sprintf("live-%d", i))); err != nil {
+			if err := srv.Put(ctx, userid, mustReport(t, fmt.Sprintf("live-%d", i)), false); err != nil {
 				opErr.Store(fmt.Errorf("Put: %w", err))
 				return
 			}
@@ -521,7 +521,7 @@ func TestPut_SendsNotification(t *testing.T) {
 	report := mustReport(t, "r1")
 	pass := pkgmodelsquestion.OverallResultPass
 	report.Assessment.OverallResult = &pass
-	if err := srv.Put(ctx, "alice", report); err != nil {
+	if err := srv.Put(ctx, "alice", report, true); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
@@ -546,6 +546,10 @@ func TestPut_SendsNotification(t *testing.T) {
 	}
 	if v := tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamOverallResult); !reflect.DeepEqual(v, []string{"pass"}) {
 		t.Errorf("tag %s = %v, want [pass]", msgnotify.WellKnownLabelKeyExamOverallResult, v)
+	}
+	// The mailing consent handed to Put is carried on the message.
+	if v := tags.GetByLabelKey(msgnotify.WellKnownLabelKeyExamReportMailConsent); !reflect.DeepEqual(v, []string{"true"}) {
+		t.Errorf("tag %s = %v, want [true]", msgnotify.WellKnownLabelKeyExamReportMailConsent, v)
 	}
 	// The remaining exam taker labels are present with empty values.
 	for _, key := range []string{
@@ -574,6 +578,41 @@ func TestPut_SendsNotification(t *testing.T) {
 	}
 }
 
+// TestPut_NotificationLiftsExamTakerProfile confirms that the exam taker
+// labels on the notification are lifted from the report's first person, so
+// downstream messaging learns the exam taker's email address from the report.
+func TestPut_NotificationLiftsExamTakerProfile(t *testing.T) {
+	notifier := &fakeNotifier{
+		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+		areYou:            true,
+	}
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	ctx := context.Background()
+
+	report := mustReport(t, "r1")
+	report.ExamTaker.Persons = []Person{{Name: "alice", Fistname: "Alice", Lastname: "Smith", Email: "alice@example.com"}}
+	if err := srv.Put(ctx, "alice", report, false); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	sent := notifier.sentMessages()
+	if len(sent) != 1 {
+		t.Fatalf("sent %d messages, want 1", len(sent))
+	}
+	tags := sent[0].replyTo.Tags
+	for key, want := range map[string]string{
+		msgnotify.WellKnownLabelKeyExamTakerExmail:    "alice@example.com",
+		msgnotify.WellKnownLabelKeyExamTakerUsername:  "alice",
+		msgnotify.WellKnownLabelKeyExamTakerFirstName: "Alice",
+		msgnotify.WellKnownLabelKeyExamTakerLastName:  "Smith",
+	} {
+		if v := tags.GetByLabelKey(key); !reflect.DeepEqual(v, []string{want}) {
+			t.Errorf("tag %s = %v, want [%q]", key, v, want)
+		}
+	}
+}
+
 func TestDeleteExamTracking_SendsNotification(t *testing.T) {
 	notifier := &fakeNotifier{
 		senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
@@ -583,7 +622,7 @@ func TestDeleteExamTracking_SendsNotification(t *testing.T) {
 	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
 	ctx := context.Background()
 
-	_ = srv.Put(ctx, "alice", mustReport(t, "r1"))
+	_ = srv.Put(ctx, "alice", mustReport(t, "r1"), false)
 	if err := srv.DeleteExamTracking(ctx, "alice", "r1"); err != nil {
 		t.Fatalf("DeleteExamTracking: %v", err)
 	}
@@ -618,7 +657,7 @@ func TestNotify_SkipsNotifiersWithIncompatibleFamilies(t *testing.T) {
 	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
 	ctx := context.Background()
 
-	_ = srv.Put(ctx, "alice", mustReport(t, "r1"))
+	_ = srv.Put(ctx, "alice", mustReport(t, "r1"), false)
 	_ = srv.DeleteExamTracking(ctx, "alice", "r1")
 
 	if sent := notifier.sentMessages(); len(sent) != 0 {
@@ -658,7 +697,7 @@ func TestNotify_NotifierErrorIsLoggedNotPropagated(t *testing.T) {
 	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
 
 	// Put must succeed even though the notifier failed.
-	if err := srv.Put(context.Background(), "alice", mustReport(t, "r1")); err != nil {
+	if err := srv.Put(context.Background(), "alice", mustReport(t, "r1"), false); err != nil {
 		t.Fatalf("Put = %v, want nil: notification errors must not fail tracking", err)
 	}
 	if out := buf.String(); !strings.Contains(out, "notification delivery failed") || !strings.Contains(out, "delivery exploded") {
@@ -677,7 +716,7 @@ func TestNotify_SkipsNotifierThatDoesNotClaimRecipient(t *testing.T) {
 	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
 	ctx := context.Background()
 
-	_ = srv.Put(ctx, "alice", mustReport(t, "r1"))
+	_ = srv.Put(ctx, "alice", mustReport(t, "r1"), false)
 
 	if sent := notifier.sentMessages(); len(sent) != 0 {
 		t.Errorf("sent %d messages, want 0 for a notifier that does not claim the recipient", len(sent))

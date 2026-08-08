@@ -27,11 +27,14 @@ import (
 var ErrExamTrackingNotFound = errors.New("examreport: exam report not found")
 
 // Person is one named <person> within an <examtaker>: a real exam candidate
-// identified by full name. Fistname is spelled as in the XSD attribute.
+// identified by full name. Fistname is spelled as in the XSD attribute. Email
+// is the candidate's email address; it lets the exam report server deliver
+// the report to the candidate when they consented to mailing.
 type Person struct {
 	Name     string `xml:"name,attr" json:"name"`
 	Fistname string `xml:"fistname,attr" json:"fistname,omitempty"`
 	Lastname string `xml:"lastname,attr" json:"lastname,omitempty"`
+	Email    string `xml:"email,attr" json:"email,omitempty"`
 }
 
 // Anonymous is one <anonymous> entry within an <examtaker>: an unidentified
@@ -98,8 +101,11 @@ type ExamReport struct {
 // Reports are keyed by the exam taker (userid), so the history of a user's
 // finished exam sessions can be looked up via GetExamReportsByUserId.
 type ExamTrackingServer interface {
-	// Put stores an exam report for the given userid.
-	Put(ctx context.Context, userid string, examReport ExamReport) error
+	// Put stores an exam report for the given userid. mailingConsent is the
+	// exam taker's consent to the exam report being emailed to the exam
+	// taker's email address; it is carried as a label on the notification
+	// emitted for the stored report, so downstream messaging can act on it.
+	Put(ctx context.Context, userid string, examReport ExamReport, mailingConsent bool) error
 
 	// GetExamReportsByUserId returns all exam reports recorded for userid.
 	GetExamReportsByUserId(ctx context.Context, userid string) ([]ExamReport, error)
@@ -172,23 +178,36 @@ var notificationRecipient = msgnotify.AddrId{
 // when probed with AreYou, so unsupported services are skipped before Send is
 // attempted. Delivery is best-effort: Send errors are logged and never fail
 // the tracking operation.
-func (s *OnMemoryExamTrackingServer) notify(ctx context.Context, userid string, report ExamReport, title string, level msgnotify.MessageLevel, text string) {
+//
+// mailingConsent is the exam taker's consent to the exam report being emailed
+// to the exam taker's email address; it is carried on the message as the
+// WellKnownLabelKeyExamReportMailConsent label so downstream messaging can act
+// on it. Operations that have no consent decision (DeleteExamTracking) pass
+// false.
+func (s *OnMemoryExamTrackingServer) notify(ctx context.Context, userid string, report ExamReport, mailingConsent bool, title string, level msgnotify.MessageLevel, text string) {
 	// The sender carries the message tags: the message source, the exam
-	// taker's subject id, the overall result of the exam assessment, and the
-	// remaining exam taker labels with empty values.
+	// taker's subject id, the overall result of the exam assessment, the
+	// mailing consent, and the exam taker labels lifted from the report's
+	// first person (left empty when the exam taker is anonymous).
 	overallResult := ""
 	if report.Assessment.OverallResult != nil {
 		overallResult = string(*report.Assessment.OverallResult)
+	}
+	var exmail, username, firstName, lastName string
+	if len(report.ExamTaker.Persons) > 0 {
+		p := report.ExamTaker.Persons[0]
+		exmail, username, firstName, lastName = p.Email, p.Name, p.Fistname, p.Lastname
 	}
 	sender := notificationSender
 	sender.Tags = msgnotify.AssociationsList{
 		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyMsgSource, msgnotify.WellKnownLabelValueExamReportServer),
 		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerSubjectId, userid),
 		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamOverallResult, overallResult),
-		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerExmail, ""),
-		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerUsername, ""),
-		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerFirstName, ""),
-		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerLastName, ""),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamReportMailConsent, strconv.FormatBool(mailingConsent)),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerExmail, exmail),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerUsername, username),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerFirstName, firstName),
+		msgnotify.MakeLabelKey(msgnotify.WellKnownLabelKeyExamTakerLastName, lastName),
 	}
 
 	msg := msgnotify.Msg{
@@ -229,7 +248,7 @@ func acceptsAddrFamily(families []msgnotify.MsgNotifyAddrFamily, family msgnotif
 // Put stores examReport under userid. It is safe for concurrent use: Put claims
 // a unique per-user index by compare-and-swapping the count, so concurrent Puts
 // for the same userid never collide on the same key.
-func (s *OnMemoryExamTrackingServer) Put(ctx context.Context, userid string, examReport ExamReport) error {
+func (s *OnMemoryExamTrackingServer) Put(ctx context.Context, userid string, examReport ExamReport, mailingConsent bool) error {
 	s.counts.LoadOrStore(userid, int64(0))
 	for {
 		cur, _ := s.counts.Load(userid)
@@ -238,7 +257,7 @@ func (s *OnMemoryExamTrackingServer) Put(ctx context.Context, userid string, exa
 		if s.counts.CompareAndSwap(userid, idx, idx+1) {
 			// idx is now ours: safe to store the report at this index.
 			s.reports.Store(reportKey(userid, idx), examReport)
-			s.notify(ctx, userid, examReport, "Exam session completed", msgnotify.MessageLevelCommon,
+			s.notify(ctx, userid, examReport, mailingConsent, "Exam session completed", msgnotify.MessageLevelCommon,
 				fmt.Sprintf("User %s completed exam session %s; exam report %s recorded.", userid, examReport.ExamSessionId, examReport.Id))
 			return nil
 		}
@@ -297,7 +316,7 @@ func (s *OnMemoryExamTrackingServer) DeleteExamTracking(ctx context.Context, use
 			continue
 		}
 		s.reports.Delete(key)
-		s.notify(ctx, userid, report, "Exam report deleted", msgnotify.MessageLevelImportant,
+		s.notify(ctx, userid, report, false, "Exam report deleted", msgnotify.MessageLevelImportant,
 			fmt.Sprintf("User %s deleted exam report %s.", userid, examReportId))
 		return nil
 	}

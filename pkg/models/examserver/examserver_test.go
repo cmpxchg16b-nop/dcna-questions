@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"dcna-questions/pkg/auth"
 	"dcna-questions/pkg/models/msgnotify"
 	pkgmodelquestions "dcna-questions/pkg/models/question"
 
@@ -55,14 +56,14 @@ func TestStartNewExamSession_SendsNotification(t *testing.T) {
 	defer srv.Shutdown()
 
 	// A failed session start must not notify.
-	if _, err := srv.StartNewExamSession(ctx, nil, "user-1", 0, nil); err != errEmptyExam {
+	if _, err := srv.StartNewExamSession(ctx, nil, "user-1", examreport.Person{}, 0, nil); err != errEmptyExam {
 		t.Fatalf("expected errEmptyExam for nil exam, got %v", err)
 	}
 	if len(notifier.sent) != 0 {
 		t.Fatalf("sent %d messages for a failed session start, want 0", len(notifier.sent))
 	}
 
-	sessionId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	sessionId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -107,7 +108,7 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 
 	// exam1.xml is a certification exam, so it must not be created seekable;
 	// GetNextQuestion walks questions sequentially regardless of seekability.
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -148,12 +149,12 @@ func TestStartNewExamSession_EmptyExam(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	if _, err := srv.StartNewExamSession(ctx, nil, "user-1", 0, nil); err != errEmptyExam {
+	if _, err := srv.StartNewExamSession(ctx, nil, "user-1", examreport.Person{}, 0, nil); err != errEmptyExam {
 		t.Fatalf("expected errEmptyExam for nil exam, got %v", err)
 	}
 
 	empty := &pkgmodelquestions.Exam{Id: "x"}
-	if _, err := srv.StartNewExamSession(ctx, empty, "user-1", 0, nil); err != errEmptyExam {
+	if _, err := srv.StartNewExamSession(ctx, empty, "user-1", examreport.Person{}, 0, nil); err != errEmptyExam {
 		t.Fatalf("expected errEmptyExam for empty exam, got %v", err)
 	}
 }
@@ -181,12 +182,12 @@ func TestStartNewExamSession_CertificationRejectsSeekable(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	if _, err := srv.StartNewExamSession(ctx, certExam, "user-1", ExamOptionSeekable, nil); err != errSeekableNotAllowed {
+	if _, err := srv.StartNewExamSession(ctx, certExam, "user-1", examreport.Person{}, ExamOptionSeekable, nil); err != errSeekableNotAllowed {
 		t.Fatalf("certification exam with ExamOptionSeekable = %v, want errSeekableNotAllowed", err)
 	}
 
 	// The same certification exam without the seekable bit starts fine.
-	if _, err := srv.StartNewExamSession(ctx, certExam, "user-1", 0, nil); err != nil {
+	if _, err := srv.StartNewExamSession(ctx, certExam, "user-1", examreport.Person{}, 0, nil); err != nil {
 		t.Fatalf("certification exam without seekable: %v", err)
 	}
 }
@@ -213,7 +214,7 @@ func TestStartNewExamSession_PracticeAllowsSeekable(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, practiceExam, "user-1", ExamOptionSeekable, nil)
+	examId, err := srv.StartNewExamSession(ctx, practiceExam, "user-1", examreport.Person{}, ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("practice exam with ExamOptionSeekable: %v", err)
 	}
@@ -253,7 +254,7 @@ func TestStartNewExamSession_RandomCollPicksOneCollection(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionRandomQuestionColl|ExamOptionSeekable, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, ExamOptionRandomQuestionColl|ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -310,7 +311,7 @@ func TestStartNewExamSession_FlattensCollectionsByDefault(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -360,7 +361,7 @@ func TestGetExamSessionById_CurrentQuestionIndex(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -448,7 +449,7 @@ func TestGetNextQuestion_StripsCorrectAnswer(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -523,7 +524,7 @@ func TestOwnershipEnforcement(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionSeekable, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, ExamOptionSeekable, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -551,6 +552,125 @@ func TestOwnershipEnforcement(t *testing.T) {
 	}
 }
 
+// TestEndExamSession_InjectsExamTakerProfile confirms that the exam taker's
+// profile handed to StartNewExamSession is tied to the session and injected
+// into the persisted exam report as the <examtaker> person — alongside the
+// anonymous session-id entry — so the report server learns the exam taker's
+// email address; a session started with a zero Person stays anonymous.
+func TestEndExamSession_InjectsExamTakerProfile(t *testing.T) {
+	exam := &pkgmodelquestions.Exam{
+		Id: "taker-profile",
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{
+					{Id: "q1", Type: pkgmodelquestions.QuestionTypeSingleChoice},
+				}},
+			},
+		},
+	}
+
+	tracking := examreport.NewOnMemoryExamTrackingServer(nil)
+	srv := NewOnMemoryExamServer(tracking, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	// A session started with a profile reports it as the <examtaker> person.
+	taker := examreport.Person{Name: "alice", Email: "alice@example.com"}
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", taker, 0, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+	if _, err := srv.SubmitAnswer(ctx, examId, "user-1", examAnswer(answer("q1")), false); err != nil {
+		t.Fatalf("SubmitAnswer: %v", err)
+	}
+	if err := srv.EndExamSession(ctx, examId, "user-1"); err != nil {
+		t.Fatalf("EndExamSession: %v", err)
+	}
+
+	reports, err := tracking.GetExamReportsByUserId(ctx, "user-1")
+	if err != nil || len(reports) != 1 {
+		t.Fatalf("reports = %+v, err = %v; want exactly one persisted report", reports, err)
+	}
+	got := reports[0].ExamTaker
+	if len(got.Persons) != 1 || got.Persons[0] != taker {
+		t.Errorf("ExamTaker.Persons = %+v, want [%+v]", got.Persons, taker)
+	}
+	if len(got.Anonymous) != 1 || got.Anonymous[0].SessionId != "user-1" {
+		t.Errorf("ExamTaker.Anonymous = %+v, want the user-id session entry kept", got.Anonymous)
+	}
+
+	// A session started with a zero Person reports no person at all.
+	anonId, err := srv.StartNewExamSession(ctx, exam, "user-2", examreport.Person{}, 0, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession (anonymous): %v", err)
+	}
+	if _, err := srv.SubmitAnswer(ctx, anonId, "user-2", examAnswer(answer("q1")), false); err != nil {
+		t.Fatalf("SubmitAnswer (anonymous): %v", err)
+	}
+	if err := srv.EndExamSession(ctx, anonId, "user-2"); err != nil {
+		t.Fatalf("EndExamSession (anonymous): %v", err)
+	}
+	anonReports, err := tracking.GetExamReportsByUserId(ctx, "user-2")
+	if err != nil || len(anonReports) != 1 {
+		t.Fatalf("anonymous reports = %+v, err = %v; want exactly one persisted report", anonReports, err)
+	}
+	if got := anonReports[0].ExamTaker; len(got.Persons) != 0 {
+		t.Errorf("anonymous ExamTaker.Persons = %+v, want none", got.Persons)
+	}
+}
+
+// TestStartNewExamSession_VisitorMailingConsentIgnored confirms that a
+// visitor session (subject id with the visitor prefix) cannot opt into the
+// exam report email: the server masks the mailing consent bit off, since a
+// visitor has no email address to deliver the report to. A signed-in user
+// keeps the bit.
+func TestStartNewExamSession_VisitorMailingConsentIgnored(t *testing.T) {
+	exam := &pkgmodelquestions.Exam{
+		Id: "visitor-consent",
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{
+					{Id: "q1", Type: pkgmodelquestions.QuestionTypeSingleChoice},
+				}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	visitorId := auth.VisitorSubjectPrefix + "anon-1"
+	examId, err := srv.StartNewExamSession(ctx, exam, visitorId, examreport.Person{}, ExamOptionSendExamReportEmail, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession (visitor): %v", err)
+	}
+	excerpt, err := srv.GetExamSessionById(ctx, examId, visitorId)
+	if err != nil {
+		t.Fatalf("GetExamSessionById (visitor): %v", err)
+	}
+	if excerpt.Options&ExamOptionSendExamReportEmail != 0 {
+		t.Errorf("visitor session options = %b, want the mailing consent bit masked off", excerpt.Options)
+	}
+
+	userId := "user-1"
+	examId, err = srv.StartNewExamSession(ctx, exam, userId, examreport.Person{}, ExamOptionSendExamReportEmail, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession (user): %v", err)
+	}
+	excerpt, err = srv.GetExamSessionById(ctx, examId, userId)
+	if err != nil {
+		t.Fatalf("GetExamSessionById (user): %v", err)
+	}
+	if excerpt.Options&ExamOptionSendExamReportEmail == 0 {
+		t.Errorf("user session options = %b, want the mailing consent bit kept", excerpt.Options)
+	}
+}
+
 // TestStartNewExamSession_AcceptQuestionTypes loads the real exam1.xml and
 // confirms that acceptQuestionTypes restricts the served questions to the
 // listed types, that the session excerpt reports the filtered question count,
@@ -573,7 +693,7 @@ func TestStartNewExamSession_AcceptQuestionTypes(t *testing.T) {
 		pkgmodelquestions.QuestionTypeSingleChoice,
 		pkgmodelquestions.QuestionTypeMultipleChoice,
 	}
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, accept)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, 0, accept)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -616,7 +736,7 @@ func TestStartNewExamSession_AcceptQuestionTypes(t *testing.T) {
 	}
 
 	// A filter matching no question at all is rejected like an empty exam.
-	if _, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, []pkgmodelquestions.QuestionType{"essay"}); err != errEmptyExam {
+	if _, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, 0, []pkgmodelquestions.QuestionType{"essay"}); err != errEmptyExam {
 		t.Errorf("StartNewExamSession with unmatched filter = %v, want errEmptyExam", err)
 	}
 }
@@ -676,7 +796,7 @@ func TestStartNewExamSession_VirtualCollectionSamples(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", ExamOptionRandomQuestionColl, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, ExamOptionRandomQuestionColl, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -742,7 +862,7 @@ func TestStartNewExamSession_VirtualCollectionForcesRandomOptionOrder(t *testing
 	defer srv.Shutdown()
 
 	// No randomization bits requested; the virtual collection must force them.
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}
@@ -795,7 +915,7 @@ func TestStartNewExamSession_PracticeIgnoresVirtualCollection(t *testing.T) {
 	go srv.Run(ctx)
 	defer srv.Shutdown()
 
-	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", 0, nil)
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, 0, nil)
 	if err != nil {
 		t.Fatalf("StartNewExamSession: %v", err)
 	}

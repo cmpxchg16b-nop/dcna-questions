@@ -66,6 +66,7 @@
     "randomQuestions": "Randomized questions order",
     "randomOptions": "Randomized options order",
     "seekable": "Seekable (allow going back to previous questions)",
+    "sendExamReportEmail": "Email me the exam report when the exam is completed",
     "questionTypes": "Question types",
     "singleChoice": "Single-choice",
     "multipleChoice": "Multiple-choice",

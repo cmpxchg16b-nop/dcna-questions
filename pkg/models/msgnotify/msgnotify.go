@@ -97,6 +97,11 @@ const (
 	// WellKnownLabelKeyExamOverallResult labels the overall result of the
 	// exam assessment.
 	WellKnownLabelKeyExamOverallResult = "exam_overall_result"
+
+	// WellKnownLabelKeyExamReportMailConsent labels the exam taker's consent
+	// to the exam report being emailed to the exam taker's email address. Its
+	// value is a strconv.FormatBool boolean.
+	WellKnownLabelKeyExamReportMailConsent = "examreport_mail_consent"
 )
 
 // Well-known label values, for use with MakeLabelKey.

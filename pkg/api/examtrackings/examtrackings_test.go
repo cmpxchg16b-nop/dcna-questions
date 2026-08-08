@@ -36,7 +36,7 @@ type fakeTrackingServer struct {
 	deleteErr    error
 }
 
-func (s *fakeTrackingServer) Put(_ context.Context, userid string, report examreport.ExamReport) error {
+func (s *fakeTrackingServer) Put(_ context.Context, userid string, report examreport.ExamReport, _ bool) error {
 	s.putUserid = userid
 	s.putReports = append(s.putReports, report)
 	return s.putErr
@@ -384,14 +384,14 @@ func TestExamTrackingsHandler_EndToEnd(t *testing.T) {
 	// Simulate the exam server persisting two finished-session reports under the
 	// caller's subject id.
 	ctx := context.Background()
-	if err := ts.Put(ctx, subjectID, sampleReport("e1")); err != nil {
+	if err := ts.Put(ctx, subjectID, sampleReport("e1"), false); err != nil {
 		t.Fatalf("Put e1: %v", err)
 	}
-	if err := ts.Put(ctx, subjectID, sampleReport("e2")); err != nil {
+	if err := ts.Put(ctx, subjectID, sampleReport("e2"), false); err != nil {
 		t.Fatalf("Put e2: %v", err)
 	}
 	// A second, unrelated subject has its own reports that must not leak.
-	if err := ts.Put(ctx, "subject-other", sampleReport("not-mine")); err != nil {
+	if err := ts.Put(ctx, "subject-other", sampleReport("not-mine"), false); err != nil {
 		t.Fatalf("Put other: %v", err)
 	}
 

@@ -46,6 +46,7 @@ import (
 	"strconv"
 	"strings"
 
+	"dcna-questions/pkg/models/examreport"
 	"dcna-questions/pkg/models/examserver"
 	"dcna-questions/pkg/models/question"
 	"dcna-questions/pkg/session"
@@ -190,7 +191,7 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Collection: POST create, GET list.
 		switch r.Method {
 		case http.MethodPost:
-			h.handleCreate(w, r, sess.SubjectId())
+			h.handleCreate(w, r, sess)
 		case http.MethodGet:
 			h.handleList(w, r, sess.SubjectId())
 		default:
@@ -236,8 +237,12 @@ func (h *ExamSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleCreate starts a new exam session for the exam document named in the
-// request body.
-func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request, userId string) {
+// request body. The caller's session supplies both the user id (subject id)
+// scoping the session and the exam taker's profile (username, email), which
+// the exam server ties to the session and injects into the exam report as the
+// <examtaker> person when the session ends.
+func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request, sess *session.Session) {
+	userId := sess.SubjectId()
 	req, ok := decodeCreate(r)
 	if !ok {
 		http.Error(w, `invalid request body: expected {"exam_id": "..."}`, http.StatusBadRequest)
@@ -277,7 +282,11 @@ func (h *ExamSessionHandler) handleCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sessionID, err := h.server.StartNewExamSession(ctx, exam, userId, req.Options, req.AcceptQuestionTypes)
+	// The exam taker's profile rides with the caller's session: the exam
+	// server injects it into the exam report on session end, which is how the
+	// report server learns the exam taker's email address.
+	taker := examreport.Person{Name: sess.Username(), Email: sess.Email()}
+	sessionID, err := h.server.StartNewExamSession(ctx, exam, userId, taker, req.Options, req.AcceptQuestionTypes)
 	if err != nil {
 		// With the empty-exam case handled above, the realistic remaining
 		// failures are the server shutting down or the request being canceled,

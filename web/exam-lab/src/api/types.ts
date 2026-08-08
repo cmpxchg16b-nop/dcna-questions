@@ -44,6 +44,11 @@ export type ProfileResponse = {
   email: string;
 };
 
+// VISITOR_SUBJECT_PREFIX prefixes the subject id of a visitor session,
+// mirroring auth.VisitorSubjectPrefix in pkg/auth/jwt.go. A visitor has no
+// email address, so features that require one must not be offered to them.
+export const VISITOR_SUBJECT_PREFIX = "visitor:";
+
 // ExamSessionSummary mirrors the Go examSessionSummary struct in
 // pkg/api/examsessions/examsession.go. Unlike ExamDocumentExcerpt it carries
 // json tags, so its wire fields are snake_case. started_at is a
@@ -121,6 +126,7 @@ export const ExamOptionRandomQuestions = 1 << 0; // randomized questions orderin
 export const ExamOptionRandomOptions = 1 << 1; // randomized options ordering
 export const ExamOptionSeekable = 1 << 2; // allows seeking to a question by index at will
 export const ExamOptionRandomQuestionColl = 1 << 3; // randomized question collection picking
+export const ExamOptionSendExamReportEmail = 1 << 4; // email the exam report to the exam taker when the session is completed
 
 // QuestionType mirrors the Go question.QuestionType string enum
 // (pkg/models/question/question.go).

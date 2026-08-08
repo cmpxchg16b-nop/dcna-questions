@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
+	"dcna-questions/pkg/auth"
 	"dcna-questions/pkg/models/msgnotify"
 	pkgmodelquestions "dcna-questions/pkg/models/question"
 
@@ -27,6 +29,10 @@ const (
 	ExamOptionRandomOptions                              // randomized options ordering
 	ExamOptionSeekable                                   // the 'Seekable' allows the client to seek to question with given number at will
 	ExamOptionRandomQuestionColl                         // Randomized question collection picking
+	// SendExamReportEmail is the exam taker's consent to the exam server
+	// emailing the exam report to the exam taker's email address once the
+	// exam session is completed.
+	ExamOptionSendExamReportEmail
 )
 
 var (
@@ -67,8 +73,10 @@ type ExamServer interface {
 	// Start a new exam session. acceptQuestionTypes restricts which question
 	// types the session serves; an empty slice accepts every type. If no
 	// question remains after filtering, the call fails as if the exam were
-	// empty.
-	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) (ExamSessionId, error)
+	// empty. taker is the exam taker's profile: it is tied to the session and
+	// injected into the exam report as the <examtaker> <person> when the
+	// session ends; a zero Person keeps the exam taker anonymous.
+	StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, taker examreport.Person, examOptions ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) (ExamSessionId, error)
 
 	// List started exam sessions of a given user
 	ListExamSessions(ctx context.Context, userId string) []ExamSessionExcerpt
@@ -254,7 +262,7 @@ func (srv *OnMemoryExamServer) dispatch(ctx context.Context, cmd func()) error {
 	}
 }
 
-func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, examOptions ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) (ExamSessionId, error) {
+func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pkgmodelquestions.Exam, userId string, taker examreport.Person, examOptions ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) (ExamSessionId, error) {
 	type result struct {
 		examId ExamSessionId
 		err    error
@@ -273,8 +281,14 @@ func (srv *OnMemoryExamServer) StartNewExamSession(ctx context.Context, exam *pk
 			return
 		}
 		opts := examOptions
+		// A visitor session has no email address the exam report could be
+		// delivered to: mask the mailing consent off outright instead of
+		// carrying a consent that can never be honored.
+		if strings.HasPrefix(userId, auth.VisitorSubjectPrefix) {
+			opts &^= ExamOptionSendExamReportEmail
+		}
 		examId := ExamSessionId(uuid.NewString())
-		sess := newExamSession(examId, userId, exam, opts, acceptQuestionTypes)
+		sess := newExamSession(examId, userId, taker, exam, opts, acceptQuestionTypes)
 		if len(sess.QuestionPermutation) == 0 {
 			// Question-type filtering (or collections that were empty to begin
 			// with) left nothing to serve.
@@ -393,13 +407,17 @@ func (srv *OnMemoryExamServer) EndExamSession(ctx context.Context, examId ExamSe
 				resp <- result{err: fmt.Errorf("end exam session %q: grade submitted answer: %w", examId, err)}
 				return
 			}
+			taker := examreport.ExamTaker{Anonymous: []examreport.Anonymous{{SessionId: userId}}}
+			if sess.Taker != (examreport.Person{}) {
+				taker.Persons = []examreport.Person{sess.Taker}
+			}
 			report := newExamReport(
-				examreport.ExamTaker{Anonymous: []examreport.Anonymous{{SessionId: userId}}},
+				taker,
 				sess.Exam,
 				sess.ExamId,
 				assessment,
 			)
-			if err := srv.examTrackingServer.Put(ctx, userId, report); err != nil {
+			if err := srv.examTrackingServer.Put(ctx, userId, report, sess.Options&ExamOptionSendExamReportEmail != 0); err != nil {
 				resp <- result{err: fmt.Errorf("end exam session %q: persist exam report: %w", examId, err)}
 				return
 			}
@@ -609,8 +627,14 @@ type OnMemoryQuestion struct {
 
 // the singleton OnMemoryExamServer should be the sole ownership holder of every OnMemoryExamSession
 type OnMemoryExamSession struct {
-	ExamId    ExamSessionId
-	UserId    string
+	ExamId ExamSessionId
+	UserId string
+
+	// Taker is the exam taker's profile, tied to the session at start and
+	// injected into the exam report as the <examtaker> <person> when the
+	// session ends; a zero Person keeps the report's exam taker anonymous.
+	Taker examreport.Person
+
 	Exam      *pkgmodelquestions.Exam
 	Questions *pkgmodelquestions.QuestionCollection
 
@@ -689,7 +713,7 @@ func (sess *OnMemoryExamSession) cachedQuestion(actualIdx int) *pkgmodelquestion
 // does not accept, and computing the question permutation up front (the order
 // in which questions are presented). Option permutations are derived lazily,
 // per question, as it is first requested.
-func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions.Exam, opts ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) *OnMemoryExamSession {
+func newExamSession(examId ExamSessionId, userId string, taker examreport.Person, exam *pkgmodelquestions.Exam, opts ExamOptions, acceptQuestionTypes []pkgmodelquestions.QuestionType) *OnMemoryExamSession {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	qc, virtual := selectQuestionCollection(exam, opts, rng)
 	qc.Questions = filterQuestionsByType(qc.Questions, acceptQuestionTypes)
@@ -705,6 +729,7 @@ func newExamSession(examId ExamSessionId, userId string, exam *pkgmodelquestions
 	return &OnMemoryExamSession{
 		ExamId:               examId,
 		UserId:               userId,
+		Taker:                taker,
 		Exam:                 exam,
 		StartedAt:            uint64(time.Now().UnixMilli()),
 		Questions:            &qc,
