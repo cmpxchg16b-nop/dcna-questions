@@ -281,7 +281,7 @@
           </correctanswer>
         </question>
         <question id="17" type="single-choice" score="1">
-          <description>Refer to the exhibit. A engineer must experiment OSPF configuration with BIRD on Linux in a lab environment. The WireGuard tunnel intern-4 to the peer is up and running, but &#96;birdc s p&#96; shows that the state of the OSPF protocol is still Alone. Which of the following action best address the issue? (Choose one.)</description>
+          <description>Refer to the exhibit. A engineer must experiment OSPFv2 configuration with BIRD on Linux in a lab environment. The WireGuard tunnel intern-4 to the peer is up and running, but &#96;birdc s p&#96; shows that the state of the OSPF protocol is still Alone. Which of the following action best address the issue? (Choose one.)</description>
           <exhibits>
             <exhibit>
               <image src="assets/54ce1f21-7caa-4ca7-8776-e22dba50236b.png" />
