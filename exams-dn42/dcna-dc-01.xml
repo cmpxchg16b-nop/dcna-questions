@@ -303,6 +303,26 @@
             </options>
           </correctanswer>
         </question>
+        <question id="18" type="single-choice" score="1">
+          <description>Refer to the exhibit. Which of the following explanation are mostly likely true regarding the modification and the removal of the inet6num resource object shown in the git log? (Choose one.)</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/4dc193c6-d895-4e28-a10c-4d348951ad9b.png" />
+            </exhibit>
+          </exhibits>
+          <options>
+            <option id="1">fd37:03b3:cae6:5158::/48 is not a valid /48 prefix.</option>
+            <option id="2">The IPv6 addresses pool has been exhausted due to the surge in the number of joining people.</option>
+            <option id="3">The network falls within a reserved block which has a registry policy of closed</option>
+            <option id="4">fd37:03b3:cae6:5158::/48 is beyound the scope of ULA and ULA should start with fc00::/8</option>
+            <option id="5">None of the above is true, the constributor is just fiddle around with the basic workflow of git.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="1"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
