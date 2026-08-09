@@ -304,10 +304,16 @@
           </correctanswer>
         </question>
         <question id="18" type="single-choice" score="1">
-          <description>Refer to the exhibit. Which of the following explanation are mostly likely true regarding the modification and the removal of the inet6num resource object shown in the git log? (Choose one.)</description>
+          <description>Refer to the exhibits. Which of the following explanation are mostly likely true regarding the modification and the removal of the inet6num resource object shown in the git log? (Choose one.)</description>
           <exhibits>
             <exhibit>
-              <image src="assets/4dc193c6-d895-4e28-a10c-4d348951ad9b.png" />
+              <image src="assets/4dc193c6-d895-4e28-a10c-4d348951ad9b-1.png" />
+            </exhibit>
+            <exhibit>
+              <image src="assets/4dc193c6-d895-4e28-a10c-4d348951ad9b-2.png" />
+            </exhibit>
+            <exhibit>
+              <image src="assets/4dc193c6-d895-4e28-a10c-4d348951ad9b-3.png" />
             </exhibit>
           </exhibits>
           <options>
