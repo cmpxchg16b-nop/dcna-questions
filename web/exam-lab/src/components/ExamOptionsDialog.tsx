@@ -143,7 +143,11 @@ function ExamOptionsForm({
                   onChange={(e) => setSendExamReportEmail(e.target.checked)}
                 />
               }
-              label={t("examOptions.sendExamReportEmail")}
+              // The branch only renders when canSendExamReportEmail is true,
+              // which guarantees profile is loaded with a non-empty email.
+              label={t("examOptions.sendExamReportEmail", {
+                email: profile?.email,
+              })}
             />
           )}
         </Box>

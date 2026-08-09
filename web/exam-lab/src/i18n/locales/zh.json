@@ -65,7 +65,7 @@
     "randomQuestions": "随机题目顺序",
     "randomOptions": "随机选项顺序",
     "seekable": "可回看（允许返回之前的题目）",
-    "sendExamReportEmail": "考试完成后将考试报告发送到我的邮箱",
+    "sendExamReportEmail": "考试完成后将考试报告发送到 {{email}}",
     "questionTypes": "题目类型",
     "singleChoice": "单选题",
     "multipleChoice": "多选题",
