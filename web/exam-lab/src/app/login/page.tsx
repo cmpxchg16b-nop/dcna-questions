@@ -19,6 +19,7 @@ import hexpAuthJpeg from "./hexpauth.jpeg";
 import hexpAuthDarkPng from "./hexpauth-dark.png";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "react-i18next";
 import { useLoginOptions } from "@/hooks/useLoginOptions";
 import { Fragment, ReactNode } from "react";
 
@@ -120,6 +121,12 @@ function HexpLoginIcon() {
   );
 }
 
+// wellKnownKindVisitor is the login option kind of the built-in visitor
+// (anonymous) login. Unlike the OAuth kinds it is not an IdP name, so its
+// button always uses the well-known label below, taking precedence over any
+// server-provided label.
+const wellKnownKindVisitor = "visitor";
+
 // loginIconGenerators maps a login option name to the generator of its
 // button icon.
 const loginIconGenerators: Record<string, () => ReactNode> = {
@@ -136,17 +143,18 @@ const loginIconGenerators: Record<string, () => ReactNode> = {
   ),
   kioubit: () => <KioubitLoginIcon />,
   hexp: () => <HexpLoginIcon />,
-  visitor: () => <PersonOutlineIcon />,
+  [wellKnownKindVisitor]: () => <PersonOutlineIcon />,
 };
 
 // getLoginIcon resolves a login option name to its icon generator, falling
 // back to the visitor icon when the name is not recognized.
 function getLoginIcon(name: string): () => ReactNode {
-  return loginIconGenerators[name] ?? loginIconGenerators.visitor;
+  return loginIconGenerators[name] ?? loginIconGenerators[wellKnownKindVisitor];
 }
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   // Login options are served by the server from its configuration document
   // (GET /api/login/loginoptions), so deployments can change the IdP list
   // without a frontend rebuild.
@@ -203,7 +211,7 @@ export default function LoginPage() {
                 justifyContent: "center",
               }}
             >
-              Failed to load login options.
+              {t("login.loadFailed")}
             </Box>
           ) : activeLoginOptions.length > 0 ? (
             activeLoginOptions.map((option) => (
@@ -215,7 +223,10 @@ export default function LoginPage() {
                   onClick={() => handleLogin(option.loginURL)}
                   sx={{ textTransform: "none" }}
                 >
-                  {option.label || `Sign in with ${option.displayName}`}
+                  {option.kind === wellKnownKindVisitor
+                    ? t("login.signInAsVisitor")
+                    : option.label ||
+                      t("login.signInWith", { name: option.displayName })}
                 </Button>
               </Fragment>
             ))
@@ -227,7 +238,7 @@ export default function LoginPage() {
                 justifyContent: "center",
               }}
             >
-              No viable login options.
+              {t("login.empty")}
             </Box>
           )}
         </Box>

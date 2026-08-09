@@ -13,7 +13,7 @@ Wants=network-online.target
 Type=simple
 User=@SERVICE_USER@
 WorkingDirectory=@PROJECT_DIR@
-ExecStart=@PROJECT_DIR@/server --addr=:18971 --assets-dir=assets --load-exam-dir=exams-dn42 --load-exam-dir=exams-carc --config-xml=serverConfig.xml --sysadmin-email=i@exploro.one
+ExecStart=@PROJECT_DIR@/server --addr=:18971 --assets-dir=assets --load-exam-dir=exams-dn42 --load-exam-dir=exams-ncc-arl --load-exam-dir=exams-carc --config-xml=serverConfig.xml --sysadmin-email=i@exploro.one
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

@@ -16,6 +16,12 @@
     "logout": "Log Out",
     "account": "Account: {{name}}"
   },
+  "login": {
+    "signInWith": "Sign in with {{name}}",
+    "signInAsVisitor": "Sign in as Visitor",
+    "loadFailed": "Failed to load login options.",
+    "empty": "No viable login options."
+  },
   "language": {
     "label": "Language"
   },

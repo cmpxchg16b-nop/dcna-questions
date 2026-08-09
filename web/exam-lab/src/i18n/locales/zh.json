@@ -16,6 +16,12 @@
     "logout": "退出登录",
     "account": "账号：{{name}}"
   },
+  "login": {
+    "signInWith": "使用 {{name}} 登录",
+    "signInAsVisitor": "以访客身份登录",
+    "loadFailed": "加载登录选项失败。",
+    "empty": "没有可用的登录方式。"
+  },
   "language": {
     "label": "语言"
   },
