@@ -349,6 +349,23 @@
             </options>
           </correctanswer>
         </question>
+        <question id="20" type="multiple-choice" score="1">
+          <description>Route your network with ? (Which of the two following protocols are routing protocol) (Choose two.)</description>
+          <options>
+            <option id="1">L-A-C-P</option>
+            <option id="2">P-P-P-O-E</option>
+            <option id="3">O-S-P-F</option>
+            <option id="4">V-X-L-A-N</option>
+            <option id="5">L-2-T-P</option>
+            <option id="6">B-A-B-E-L</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="3"></option>
+              <option id="6"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
