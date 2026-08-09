@@ -280,6 +280,29 @@
             </options>
           </correctanswer>
         </question>
+        <question id="17" type="single-choice" score="1">
+          <description>Refer to the exhibit. A engineer must experiment OSPF configuration with BIRD on Linux in a lab environment. The WireGuard tunnel intern-4 to the peer is up and running, but &#96;birdc s p&#96; shows that the state of the OSPF protocol is still Alone. Which of the following action best address the issue? (Choose one.)</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/54ce1f21-7caa-4ca7-8776-e22dba50236b.png" />
+            </exhibit>
+            <exhibit>
+              <image src="assets/fd4f7372-e048-474d-ab0c-619173f7469b.png" />
+            </exhibit>
+          </exhibits>
+          <options>
+            <option id="1">Remove type ptp from the interface block.</option>
+            <option id="2">Ensure that 224.0.0.5/32 and 224.0.0.6/32 is in the the peer's AllowedIPs on both sides.</option>
+            <option id="3">No action is needed, the Alone state means the protocol is already up and running.</option>
+            <option id="4">No action is needed since the protocol take time to negotiate before reach the running state.</option>
+            <option id="5">Set persistent-keepalive to 25 to make the wg tunnel more resistant to the interference of NAT.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="2"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
