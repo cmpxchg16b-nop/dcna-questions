@@ -203,7 +203,7 @@
           <description>An engineer is joining the DN42 experimental network and must plan IPv4 addressing for the registering AS. The network is a homelab with three servers and one router. Which action is coherent with the discipline of the address management policy of the registry? (Choose one.)</description>
           <options>
             <option id="1">Request a /24 allocation to accommodate future growth and to simplify reverse DNS delegation.</option>
-            <option id="2">Register an inetnum object for a /26 or smaller prefix via a registry pull request, verifying that the parent block carries an open policy and has no overlap with the allocated blocks, and prefer IPv6 for peering wherever possible.</option>
+            <option id="2">Register an inetnum object for a /27 or smaller prefix via a registry pull request, verifying that the parent block carries an open policy and has no overlap with the allocated blocks, and prefer IPv6 for peering wherever possible.</option>
             <option id="3">Begin announcing an unused-looking prefix from 172.20.0.0/14 immediately, as per RFC1918, no formal reigstration is needed for using the reserved address space.</option>
             <option id="4">Announce a publicly routable /24 into DN42 instead, since globally routable prefixes has higher precedence over the RFC1918 prefixes in DN42.</option>
             <option id="5">Assign a dedicated DN42 IPv4 address to every physical interface, container, and VM to achieve the full utilization of the IPv4 address allocation.</option>
@@ -236,6 +236,26 @@
           <correctanswer>
             <options>
               <option id="1"></option>
+            </options>
+          </correctanswer>
+        </question>
+        <question id="15" type="single-choice" score="1">
+          <description>Refer to the exhibit. An engineer must investigate a connectivity issue between router BAW-G01 and destination host 172.22.155.161. The mtr output shows the results of the probe packets sent toward the destination. To redact sensitive information, a part of CLI output has been dictionary-substituted. Which statement is correct? (Choose one.)</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/b343853a-40f5-424b-9b56-542785a72993.png" />
+            </exhibit>
+          </exhibits>
+          <options>
+            <option id="1">The destination host resides in AS4242420003.</option>
+            <option id="2">Packets destined to 172.22.155.161 are looping between AS4242420002 and AS4242420003.</option>
+            <option id="3">The latency increase at hop 3 indicates congestion on the link toward host4.example.com.</option>
+            <option id="4">Probe packets are being rate-limited by the routers beyond hop 4.</option>
+            <option id="5">AS4242420002 is the only transit AS along the path to the destination.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="2"></option>
             </options>
           </correctanswer>
         </question>
