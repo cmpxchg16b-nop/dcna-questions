@@ -3,7 +3,7 @@
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../exams/exam.xsd"
 >
-  <exam id="ncc-arl-3" shortname="NCC-3" code="二等">
+  <exam id="ncc-arl-3" shortname="NCC-3" code="三等">
     <title>三等業餘無線電人員資格測試題庫</title>
     <description>從事業餘無線電作業，請共同遵守下列規定：須經測試合格，領有業餘無線電人員執照者，始得申設業餘電臺。須經取得業餘電臺執照及電臺呼號後，始得從事業餘無線電作業。不得從事具有任何營利性質之通信。不得擅自使用及變更業餘分配頻段、發射功率、發射方式及電臺識別呼號。145MHz 及 433MHz 為呼叫及緊急救難頻率，任何電臺不得停留佔用及干擾。違反以上規定者將被依電信管理法第八十二條第一項第五款、第六款規定處新臺幣一萬元以上十萬元以下罰鍰</description>
     <!-- 25 out of 35 questions -->
