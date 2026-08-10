@@ -384,14 +384,22 @@
             </options>
           </correctanswer>
         </question>
-        <!-- todo: dnssec -->
-        <!-- <question id="22" type="single-choice" score="1">
-          <description></description>
+        <question id="22" type="single-choice" score="1">
+          <description>An engineer must configure DNSSEC of their newly registered DN42 domain &#96;example.dn42.&#96;. To establish the chain of validation of DNSSEC, which of the following must be known to the parent authoritative nameserver at a minimum? (Choose one.)</description>
           <options>
-            <option id=""></option>
+            <option id="1">Public key of the KSK key pair of &#96;example.dn42.&#96;.</option>
+            <option id="2">Public key of the ZSK key pair of &#96;example.dn42.&#96;.</option>
+            <option id="3">The authoritative DS record that is derived from the public key of the KSK key pair.</option>
+            <option id="4">The authoritative DS record that is derived from the public key of the ZSK key pair.</option>
+            <option id="5">The authoritative DS record that is derived from the public key of the KSK key pair as well as the authoritative DS record that is derived from the public key of the ZSK key pair.</option>
+            <option id="6">Authoritative DNSKEY records of &#96;example.dn42.&#96; that consists of the public key of the KSK key pair, the public key of the ZSK key pair, along with the RRSIG.</option>
           </options>
-          <correctanswer></correctanswer>
-        </question> -->
+          <correctanswer>
+            <options>
+              <option id="3"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
