@@ -400,6 +400,23 @@
             </options>
           </correctanswer>
         </question>
+        <question id="23" type="multiple-choice" score="1">
+          <description>An engineer must configure GeoFeed for their DN42 IPv4 and IPv6 addresses, which two of the following actions must take? (Choose two.)</description>
+          <options>
+            <option id="1">Upload the GeoFeed document directly to the registry.</option>
+            <option id="2">Reference the URL of the published GeoFeed document in the &#96;geofeed:;&#96; attribute of the inet(6)num objects in the registry as per RFC9632.</option>
+            <option id="3">Update the &#96;remarks:&#96; attribute of the inet(6)num objects to include the geolocation information of the addresses.</option>
+            <option id="4">Make a RFC8805-compliant document and publish it as a DN42 accssible or publicly accssible URL.</option>
+            <option id="5">Update the &#96;country:&#96; attribute of the inet(6)num objects to reflect the up to date country location of the address blocks.</option>
+            <option id="6">GeoFeed also known as DNS LOC records (as defined in RFC1876), so one must publish the DNS LOC records as well.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="2"></option>
+              <option id="4"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
