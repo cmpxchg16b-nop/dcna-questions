@@ -78,6 +78,10 @@ type LoginOptionXML struct {
 	DisplayName string `xml:"displayName,attr"`
 	Label       string `xml:"label,attr"`
 	LoginURL    string `xml:"loginURL,attr"`
+	// AllowedOrigins is the raw comma-separated allowedOrigins attribute;
+	// an empty string means no origin restriction. Split it with
+	// loginoptions.ParseAllowedOrigins.
+	AllowedOrigins string `xml:"allowedOrigins,attr"`
 }
 
 // LoadServerConfig parses the global server configuration XML document.

@@ -126,13 +126,24 @@
        login icon on the frontend; name is the option's unique key. Several
        options may share a kind under different names (e.g. "entra-public"
        and "entra-corporation", both with kind "entra"). Options with an
-       empty loginURL are hidden by the login page. -->
+       empty loginURL are hidden by the login page.
+
+       allowedOrigins is an optional comma-separated list of origins
+       ("scheme://host"); empty (the default) means no restriction. When
+       non-empty, GET /api/login/loginoptions serves the option only to
+       requests whose origin appears in the list. -->
   <xsd:complexType name="loginOptionType">
     <xsd:attribute name="kind" type="xsd:string" use="required" />
     <xsd:attribute name="name" type="xsd:string" use="required" />
     <xsd:attribute name="displayName" type="xsd:string" use="required" />
     <xsd:attribute name="loginURL" type="xsd:string" use="required" />
     <xsd:attribute name="label" type="xsd:string" use="optional" />
+    <xsd:attribute
+      name="allowedOrigins"
+      type="xsd:string"
+      use="optional"
+      default=""
+    />
   </xsd:complexType>
 
 </xsd:schema>

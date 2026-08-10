@@ -231,11 +231,12 @@ func (cli *CLI) Run() error {
 	if serverCfg != nil {
 		for _, opt := range serverCfg.LoginOptions.Options {
 			loginOptions = append(loginOptions, pkgapiloginoptions.LoginOption{
-				Kind:        opt.Kind,
-				Name:        opt.Name,
-				DisplayName: opt.DisplayName,
-				Label:       opt.Label,
-				LoginURL:    opt.LoginURL,
+				Kind:           opt.Kind,
+				Name:           opt.Name,
+				DisplayName:    opt.DisplayName,
+				Label:          opt.Label,
+				LoginURL:       opt.LoginURL,
+				AllowedOrigins: pkgapiloginoptions.ParseAllowedOrigins(opt.AllowedOrigins),
 			})
 		}
 	}
