@@ -236,6 +236,10 @@ JWT_SECRET=change-me go run ./cmd/server --assets-dir=assets --load-exam-dir=exa
 Point `--load-exam` or `--load-exam-dir` at your own XML files to serve
 different exams.
 
+## Acknowledgements
+
+Many appreciations for the DN42 domain exam.edu.dn42 and testcenter.edu.dn42 sponsored by nedifinita AS4242420454.
+
 ## Development
 
 ### Automatic End-to-End Tests Subset

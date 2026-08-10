@@ -138,5 +138,8 @@
     "associate": "关联",
     "download": "下载",
     "uploaded": "上传于"
+  },
+  "sponsor": {
+    "acknowledgement": "{{hostname}} 由 {{sponsor}} 赞助"
   }
 }

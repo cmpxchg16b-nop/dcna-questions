@@ -139,5 +139,8 @@
     "associate": "Associate",
     "download": "Download",
     "uploaded": "Uploaded"
+  },
+  "sponsor": {
+    "acknowledgement": "{{hostname}} is sponsored by {{sponsor}}"
   }
 }

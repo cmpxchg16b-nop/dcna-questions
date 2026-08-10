@@ -6,6 +6,7 @@ import ExamSessionsListDisplay from "@/components/ExamSessionsListDisplay";
 import ExamResultsListDisplay from "@/components/ExamResultsListDisplay";
 import ExamDocumentsListDisplay from "@/components/ExamDocumentsListDisplay";
 import UserUploadsListDisplay from "@/components/UserUploadsListDisplay";
+import SponsorAcknowledgement from "@/components/SponsorAcknowledgement";
 
 export default function Home() {
   // generation is a refresh signal shared by the four sections below: each
@@ -28,6 +29,7 @@ export default function Home() {
         generation={generation}
         onGenerationChange={bumpGeneration}
       />
+      <SponsorAcknowledgement />
     </Box>
   );
 }
