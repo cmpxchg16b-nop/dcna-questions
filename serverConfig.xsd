@@ -20,6 +20,19 @@
           type="loginOptionsType"
           minOccurs="0"
         />
+        <!-- An origin ("scheme://host") the OAuth2/OIDC login handlers trust
+             when their configured redirect URL is relative (starts with
+             "/"): the origin of the incoming login request is prepended to
+             the redirect URL only when it matches one of these entries.
+             Specify the element multiple times to allow several origins,
+             e.g. one per deployment environment alias. When no entry is
+             present, relative redirect URLs are rejected. -->
+        <xsd:element
+          name="allowedOrigin"
+          type="xsd:string"
+          minOccurs="0"
+          maxOccurs="unbounded"
+        />
       </xsd:sequence>
     </xsd:complexType>
   </xsd:element>
@@ -49,7 +62,11 @@
          * loginSuccessRedirectURL  defaults to "/"
 
        Attributes without defaults are required:
-         * issuerURL, clientId, clientSecret, redirectURL -->
+         * issuerURL, clientId, clientSecret, redirectURL
+
+       redirectURL may be relative (start with "/"), in which case the
+       origin of the incoming request is prepended dynamically; the origin
+       must match one of the <allowedOrigin/> entries of the document. -->
   <xsd:complexType name="oidcLoginOptionType">
     <xsd:attribute name="issuerURL" type="xsd:string" use="required" />
     <xsd:attribute name="clientId" type="xsd:string" use="required" />

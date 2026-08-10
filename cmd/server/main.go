@@ -83,6 +83,14 @@ func (cli *CLI) Run() error {
 		serverCfg = cfg
 	}
 
+	// The <allowedOrigin/> entries of the configuration document are shared
+	// by every OAuth2/OIDC login handler below: a handler whose redirect URL
+	// is relative prepends the request's origin only when it appears here.
+	var allowedOrigins []string
+	if serverCfg != nil {
+		allowedOrigins = serverCfg.AllowedOrigins
+	}
+
 	var sources []pkgmodelsquestion.ExamSource
 
 	sm := pkgsession.NewOnMemorySessionManager()
@@ -251,6 +259,7 @@ func (cli *CLI) Run() error {
 			cli.GithubOAuthScope,
 			cli.GithubOAuthTokenEndpoint,
 			cli.GithubLoginSuccessRedirectURL,
+			allowedOrigins,
 			tokenIssuer,
 			nonceIssuer,
 			cookieBuilder,
@@ -292,6 +301,7 @@ func (cli *CLI) Run() error {
 				opt.RedirectURL,
 				opt.Scope,
 				opt.LoginSuccessRedirectURL,
+				allowedOrigins,
 				tokenIssuer,
 				nonceIssuer,
 				cookieBuilder,

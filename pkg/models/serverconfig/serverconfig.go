@@ -19,6 +19,11 @@ type ServerConfigXML struct {
 	// SMTPServer is nil when the document has no <smtpServer/> section.
 	SMTPServer   *SMTPServerXML  `xml:"smtpServer"`
 	LoginOptions LoginOptionsXML `xml:"loginOptions"`
+	// AllowedOrigins holds every <allowedOrigin/> entry of the document: the
+	// request origins trusted by the OAuth2/OIDC login handlers when their
+	// configured redirect URL is relative (see pkg/api/common
+	// ResolveRedirectURL).
+	AllowedOrigins []string `xml:"allowedOrigin"`
 }
 
 // OIDCLoginOptionsXML mirrors the <oidcLoginOptions/> section of

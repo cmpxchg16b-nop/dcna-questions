@@ -58,7 +58,14 @@ type GenericOIDCLoginHandler struct {
 	ClientSecret string
 
 	// One of the authorized redirect URIs for the OAuth 2.0 client.
+	// When it starts with "/", the origin of the incoming request is
+	// prepended dynamically (see AllowedOrigins).
 	RedirectURL string
+
+	// AllowedOrigins lists the request origins trusted when RedirectURL is
+	// relative: the request's origin is prepended to the redirect URL only
+	// when it appears here. When empty, relative redirect URLs are rejected.
+	AllowedOrigins []string
 
 	// Space-delimited scopes. Defaults to "openid profile email" if empty.
 	Scope string
@@ -92,6 +99,7 @@ func NewGenericOIDCLoginHandler(
 	redirectURL string,
 	scope string,
 	loginSuccessRedirectURL string,
+	allowedOrigins []string,
 	tokenIssuer pkgauth.JWTIssuer,
 	nonceIssuer pkgauth.NonceIssuer,
 	cookieBuilder pkgcookie.CookieBuilder,
@@ -105,6 +113,7 @@ func NewGenericOIDCLoginHandler(
 		RedirectURL:             redirectURL,
 		Scope:                   scope,
 		LoginSuccessRedirectURL: loginSuccessRedirectURL,
+		AllowedOrigins:          allowedOrigins,
 		TokenIssuer:             tokenIssuer,
 		NonceIssuer:             nonceIssuer,
 		cookieBuilder:           cookieBuilder,
@@ -183,6 +192,18 @@ func (h *GenericOIDCLoginHandler) handleStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Resolve the redirect URL against this request's origin when the
+	// configured one is relative; oauth2Config is shared and immutable, so a
+	// shallow per-request copy carries the resolved URL.
+	redirectURL, err := pkgapicommon.ResolveRedirectURL(h.RedirectURL, h.AllowedOrigins, r)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: err.Error()})
+		return
+	}
+	oauth2Config := *h.oauth2Config
+	oauth2Config.RedirectURL = redirectURL
+
 	// The state value doubles as a CSRF token: it is stored in a cookie and
 	// echoed back by the IdP, then validated in /auth before the code is
 	// exchanged.
@@ -195,7 +216,7 @@ func (h *GenericOIDCLoginHandler) handleStart(w http.ResponseWriter, r *http.Req
 
 	http.SetCookie(w, h.cookieBuilder.BuildCookieFromKeyValue(pkgapicommon.DefaultNonceCookieKey, state))
 
-	http.Redirect(w, r, h.oauth2Config.AuthCodeURL(state), http.StatusTemporaryRedirect)
+	http.Redirect(w, r, oauth2Config.AuthCodeURL(state), http.StatusTemporaryRedirect)
 }
 
 func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter, r *http.Request) {
@@ -255,9 +276,20 @@ func (h *GenericOIDCLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 		return
 	}
 
+	// The redirect_uri sent with the code exchange must match the one used in
+	// /start; resolve it against this request's origin the same way.
+	redirectURL, err := pkgapicommon.ResolveRedirectURL(h.RedirectURL, h.AllowedOrigins, r)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: err.Error()})
+		return
+	}
+	oauth2Config := *h.oauth2Config
+	oauth2Config.RedirectURL = redirectURL
+
 	// Exchange the authorization code for tokens. oauth2 handles the form
 	// encoding, the grant_type and the redirect_uri.
-	oauth2Token, err := h.oauth2Config.Exchange(ctx, code)
+	oauth2Token, err := oauth2Config.Exchange(ctx, code)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: fmt.Sprintf("Failed to exchange token: %v", err)})

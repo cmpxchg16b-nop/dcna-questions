@@ -63,6 +63,7 @@ func newTestHandler(nonceIssuer pkgauth.NonceIssuer) *github.GithubOAuthLoginHan
 		"", // default scope ("read:user")
 		"", // default github token endpoint
 		"/welcome",
+		nil, // no allowed origins; tests use an absolute redirect URI
 		pkgauth.NewStaticKeyJWTIssuer(keyProvider, "test-issuer"),
 		nonceIssuer,
 		&pkgcookie.SimpleCookieBuilder{},

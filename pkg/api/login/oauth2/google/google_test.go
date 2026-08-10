@@ -63,6 +63,7 @@ func newTestHandler(nonceIssuer pkgauth.NonceIssuer) *google.GoogleOAuthLoginHan
 		"", // default scope ("openid profile email")
 		"", // default google token endpoint
 		"/welcome",
+		nil, // no allowed origins; tests use an absolute redirect URI
 		pkgauth.NewStaticKeyJWTIssuer(keyProvider, "test-issuer"),
 		nonceIssuer,
 		&pkgcookie.SimpleCookieBuilder{},

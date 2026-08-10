@@ -36,8 +36,16 @@ type GithubOAuthLoginHandler struct {
 	// Must be specified, get it from Github OAuth app settings page
 	GithubOAuthAppSecret string
 
-	// Must be specified, get it from Github OAuth app settings page
+	// Must be specified, get it from Github OAuth app settings page.
+	// When it starts with "/", the origin of the incoming request is
+	// prepended dynamically (see AllowedOrigins).
 	GithubOAuthRedirURL string
+
+	// AllowedOrigins lists the request origins trusted when
+	// GithubOAuthRedirURL is relative: the request's origin is prepended to
+	// the redirect URL only when it appears here. When empty, relative
+	// redirect URLs are rejected.
+	AllowedOrigins []string
 
 	// If this is empty, we would use default value (see github docs) for it.
 	GithubOAuthLoginPage string
@@ -69,6 +77,7 @@ func NewGithubOAuthLoginHandler(
 	githubOAuthScope string,
 	githubOAuthTokenEndpoint string,
 	loginSuccessRedirectURL string,
+	allowedOrigins []string,
 	tokenIssuer pkgauth.JWTIssuer,
 	nonceIssuer pkgauth.NonceIssuer,
 	cookieBuilder pkgcookie.CookieBuilder,
@@ -82,6 +91,7 @@ func NewGithubOAuthLoginHandler(
 		GithubOAuthScope:         githubOAuthScope,
 		GithubOAuthTokenEndpoint: githubOAuthTokenEndpoint,
 		LoginSuccessRedirectURL:  loginSuccessRedirectURL,
+		AllowedOrigins:           allowedOrigins,
 		TokenIssuer:              tokenIssuer,
 		NonceIssuer:              nonceIssuer,
 		cookieBuilder:            cookieBuilder,
@@ -123,10 +133,10 @@ func (h *GithubOAuthLoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	h.handleNotFoundForThis(w, r)
 }
 
-func (h *GithubOAuthLoginHandler) getGithubOAuthRedirectURL(nonce string) string {
+func (h *GithubOAuthLoginHandler) getGithubOAuthRedirectURL(redirectURL string, nonce string) string {
 	urlVals := url.Values{}
 	urlVals.Set("client_id", h.GithubOAuthClientId)
-	urlVals.Set("redirect_uri", h.GithubOAuthRedirURL)
+	urlVals.Set("redirect_uri", redirectURL)
 	urlVals.Set("scope", h.getGithubOAuthScope())
 	urlVals.Set("state", nonce)
 	urlObj, err := url.Parse(h.getGithubLoginPage())
@@ -150,7 +160,14 @@ func (h *GithubOAuthLoginHandler) handleStart(w http.ResponseWriter, r *http.Req
 	cookieObj := h.cookieBuilder.BuildCookieFromKeyValue(pkgapicommon.DefaultNonceCookieKey, nonce)
 	http.SetCookie(w, cookieObj)
 
-	redirURL := h.getGithubOAuthRedirectURL(nonce)
+	redirectURL, err := pkgapicommon.ResolveRedirectURL(h.GithubOAuthRedirURL, h.AllowedOrigins, r)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	redirURL := h.getGithubOAuthRedirectURL(redirectURL, nonce)
 	if redirURL == "" {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to determine redir url (internal error)"})
@@ -208,11 +225,18 @@ func (h *GithubOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 		return
 	}
 
+	redirectURL, err := pkgapicommon.ResolveRedirectURL(h.GithubOAuthRedirURL, h.AllowedOrigins, r)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: err.Error()})
+		return
+	}
+
 	bodyVals := url.Values{}
 	bodyVals.Set("client_id", h.GithubOAuthClientId)
 	bodyVals.Set("client_secret", h.GithubOAuthAppSecret)
 	bodyVals.Set("code", authZCode)
-	bodyVals.Set("redirect_uri", h.GithubOAuthRedirURL)
+	bodyVals.Set("redirect_uri", redirectURL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.getGithubTokenEndpoint(), strings.NewReader(bodyVals.Encode()))
 	if err != nil {

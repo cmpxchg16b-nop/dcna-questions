@@ -217,6 +217,7 @@ func newTestHandler(idp *fakeIdP, providerName string, nonceIssuer pkgauth.Nonce
 		testRedirectURI,
 		"", // default scope ("openid profile email")
 		"/welcome",
+		nil, // no allowed origins; tests use an absolute redirect URI
 		pkgauth.NewStaticKeyJWTIssuer(keyProvider, testJWTIssuer),
 		nonceIssuer,
 		&pkgcookie.SimpleCookieBuilder{},
@@ -367,7 +368,7 @@ func TestHandleStart(t *testing.T) {
 		keyProvider := pkgauth.NewStaticSecretProvider([]byte(testJWTSecret))
 		h := general.NewGenericOIDCLoginHandler(
 			24*time.Hour, "testprov", "http://127.0.0.1:1",
-			"test-client-id", "test-client-secret", testRedirectURI, "", "/welcome",
+			"test-client-id", "test-client-secret", testRedirectURI, "", "/welcome", nil,
 			pkgauth.NewStaticKeyJWTIssuer(keyProvider, testJWTIssuer),
 			&stubNonceIssuer{nonce: "state-1"},
 			&pkgcookie.SimpleCookieBuilder{},

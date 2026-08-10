@@ -30,8 +30,16 @@ type GoogleOAuthLoginHandler struct {
 	// Must be specified, get it from Google Cloud Console OAuth 2.0 Client settings
 	GoogleOAuthClientSecret string
 
-	// Must be specified, one of the authorized redirect URIs for the OAuth 2.0 client
+	// Must be specified, one of the authorized redirect URIs for the OAuth 2.0 client.
+	// When it starts with "/", the origin of the incoming request is
+	// prepended dynamically (see AllowedOrigins).
 	GoogleOAuthRedirURL string
+
+	// AllowedOrigins lists the request origins trusted when
+	// GoogleOAuthRedirURL is relative: the request's origin is prepended to
+	// the redirect URL only when it appears here. When empty, relative
+	// redirect URLs are rejected.
+	AllowedOrigins []string
 
 	// If this is empty, we would use default value (https://accounts.google.com/o/oauth2/v2/auth) for it.
 	GoogleOAuthLoginPage string
@@ -61,6 +69,7 @@ func NewGoogleOAuthLoginHandler(
 	googleOAuthScope string,
 	googleOAuthTokenEndpoint string,
 	loginSuccessRedirectURL string,
+	allowedOrigins []string,
 	tokenIssuer pkgauth.JWTIssuer,
 	nonceIssuer pkgauth.NonceIssuer,
 	cookieBuilder pkgcookie.CookieBuilder,
@@ -74,6 +83,7 @@ func NewGoogleOAuthLoginHandler(
 		GoogleOAuthScope:         googleOAuthScope,
 		GoogleOAuthTokenEndpoint: googleOAuthTokenEndpoint,
 		LoginSuccessRedirectURL:  loginSuccessRedirectURL,
+		AllowedOrigins:           allowedOrigins,
 		TokenIssuer:              tokenIssuer,
 		NonceIssuer:              nonceIssuer,
 		cookieBuilder:            cookieBuilder,
@@ -115,10 +125,10 @@ func (h *GoogleOAuthLoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	h.handleNotFoundForThis(w, r)
 }
 
-func (h *GoogleOAuthLoginHandler) getGoogleOAuthRedirectURL(nonce string) string {
+func (h *GoogleOAuthLoginHandler) getGoogleOAuthRedirectURL(redirectURL string, nonce string) string {
 	urlVals := url.Values{}
 	urlVals.Set("client_id", h.GoogleOAuthClientId)
-	urlVals.Set("redirect_uri", h.GoogleOAuthRedirURL)
+	urlVals.Set("redirect_uri", redirectURL)
 	urlVals.Set("response_type", "code")
 	urlVals.Set("scope", h.getGoogleOAuthScope())
 	urlVals.Set("state", nonce)
@@ -143,7 +153,14 @@ func (h *GoogleOAuthLoginHandler) handleStart(w http.ResponseWriter, r *http.Req
 	cookieObj := h.cookieBuilder.BuildCookieFromKeyValue(pkgapicommon.DefaultNonceCookieKey, nonce)
 	http.SetCookie(w, cookieObj)
 
-	redirURL := h.getGoogleOAuthRedirectURL(nonce)
+	redirectURL, err := pkgapicommon.ResolveRedirectURL(h.GoogleOAuthRedirURL, h.AllowedOrigins, r)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	redirURL := h.getGoogleOAuthRedirectURL(redirectURL, nonce)
 	if redirURL == "" {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: "Failed to determine redir url (internal error)"})
@@ -212,6 +229,15 @@ func (h *GoogleOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 		return
 	}
 
+	// The redirect_uri must match the one sent to the authorize endpoint in
+	// /start; resolve it against this request's origin the same way.
+	redirectURL, err := pkgapicommon.ResolveRedirectURL(h.GoogleOAuthRedirURL, h.AllowedOrigins, r)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(&pkgutils.ErrorResponse{Error: err.Error()})
+		return
+	}
+
 	// Exchange authorization code for tokens
 	// See: https://developers.google.com/identity/protocols/oauth2/web-server#httprest_1
 	bodyVals := url.Values{}
@@ -219,7 +245,7 @@ func (h *GoogleOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 	bodyVals.Set("client_secret", h.GoogleOAuthClientSecret)
 	bodyVals.Set("code", authZCode)
 	bodyVals.Set("grant_type", "authorization_code")
-	bodyVals.Set("redirect_uri", h.GoogleOAuthRedirURL)
+	bodyVals.Set("redirect_uri", redirectURL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.getGoogleTokenEndpoint(), strings.NewReader(bodyVals.Encode()))
 	if err != nil {
