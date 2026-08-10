@@ -1,0 +1,20 @@
+name: dn42-examserver
+volumes:
+  caddydata:
+services:
+  web:
+    container_name: dn42-examserver-caddy
+    image: caddy:latest
+    environment:
+      - "HOST_STUB_DNS=${HOST_STUB_DNS}"
+    network_mode: "netns:/var/run/netns/dn42"
+    dns:
+      - "${HOST_STUB_DNS}"
+    volumes:
+      - "./caddy.json:/caddy.json:ro"
+      - "./dn42-root-ca.crt:/dn42-root-ca.crt:ro"
+      - "caddydata:/caddydata"
+    command:
+      - "caddy"
+      - "run"
+      - "--config=/caddy.json"
