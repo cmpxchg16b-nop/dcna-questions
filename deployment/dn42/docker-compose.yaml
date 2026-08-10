@@ -4,12 +4,12 @@ volumes:
 services:
   web:
     container_name: dn42-examserver-caddy
-    image: caddy:latest
+    image: docker.io/library/caddy:latest
     environment:
-      - "HOST_STUB_DNS=${HOST_STUB_DNS}"
-    network_mode: "netns:/var/run/netns/dn42"
+      - "ACME_CONTACT_EMAIL=i@exploro.one"
+    network_mode: "ns:/run/netns/svcs"
     dns:
-      - "${HOST_STUB_DNS}"
+      - "fdda:8ca4:1556:3000::8376:bf72"
     volumes:
       - "./caddy.json:/caddy.json:ro"
       - "./dn42-root-ca.crt:/dn42-root-ca.crt:ro"
@@ -18,3 +18,15 @@ services:
       - "caddy"
       - "run"
       - "--config=/caddy.json"
+# memo:
+# vie1 host interconnect:
+#   container (netns svcs): fdda:8ca4:1556:3000::8376:bf73/127
+#   host: fdda:8ca4:1556:3000::8376:bf72/127
+# vie1-fra1 interconnect:
+#   vie1: fdda:8ca4:1556:3000::8376:bf71/127
+#   fra1: fdda:8ca4:1556:3000::8376:bf70/127
+# statis routes:
+# in vie1 host: fd42:d42:d42:54::1/127 via fdda:8ca4:1556:3000::8376:bf73
+# in vie1 container: fd00::/8 via fdda:8ca4:1556:3000::8376:bf70
+# in fra1: fdda:8ca4:1556:3000::8376:bf72/127 via fdda:8ca4:1556:3000::8376:bf71
+# enable all ipv6 forwarding

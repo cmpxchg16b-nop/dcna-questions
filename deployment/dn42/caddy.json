@@ -1,7 +1,4 @@
 {
-  "admin": {
-    "listen": "{env.CADDY_ADMIN_ADDR}"
-  },
   "logging": {
     "logs": {
       "default": {
@@ -54,7 +51,7 @@
                   "handler": "reverse_proxy",
                   "upstreams": [
                     {
-                      "dial": "{HOST_STUB_DNS}:18971"
+                      "dial": "[fdda:8ca4:1556:3000::8376:bf72]:18971"
                     }
                   ]
                 }
