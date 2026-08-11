@@ -9,7 +9,7 @@
     <label key="topic" value="dn42" />
     <label key="topic" value="computernetwork" />
     <label key="category" value="practice" />
-    <passingscore>6</passingscore>
+    <passingscore>12</passingscore>
     <examcategory>practice-exam</examcategory>
     <questionset>
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->
@@ -70,19 +70,20 @@
             </options>
           </correctanswer>
         </question>
-        <question id="6" type="single-choice" score="1">
-          <description>Which protocol is used to dynamically assign IP addresses to hosts on a network? (Choose one.)</description>
+        <question id="6" type="multiple-choice" score="1">
+          <description>Which two of the following protocols are used to dynamically assign addresses to hosts on a network? (Choose two.)</description>
           <options>
             <option id="1">DNS</option>
             <option id="2">DHCP</option>
             <option id="3">NAT</option>
             <option id="4">ARP</option>
-            <option id="5">SCP</option>
+            <option id="5">DHCPv6</option>
+            <option id="6">SCP</option>
           </options>
           <correctanswer>
             <options>
-              <!-- In some case, more that one option is correct, even it's a single-choice question. -->
               <option id="2">DHCP</option>
+              <option id="5">DHCPv6</option>
             </options>
           </correctanswer>
         </question>
@@ -390,12 +391,11 @@
         <question id="22" type="single-choice" score="1">
           <description>An engineer must configure DNSSEC for their newly registered DN42 domain &#96;example.dn42.&#96; with a single KSK, and CSK must not be used. To establish the chain of trust of DNSSEC, which of the following must be known to the parent authoritative nameserver at a minimum? (Choose one.)</description>
           <options>
-            <option id="1">Public key of the KSK key pair of &#96;example.dn42.&#96;.</option>
-            <option id="2">Public key of the ZSK key pair of &#96;example.dn42.&#96;.</option>
-            <option id="3">The authoritative DS record that is derived from the public key of the KSK key pair.</option>
-            <option id="4">The authoritative DS record that is derived from the public key of the ZSK key pair.</option>
-            <option id="5">The authoritative DS record that is derived from the public key of the KSK key pair as well as the authoritative DS record that is derived from the public key of the ZSK key pair.</option>
-            <option id="6">Authoritative DNSKEY records of &#96;example.dn42.&#96; that consist of the public key of the KSK key pair, the public key of the ZSK key pair, along with the associated RRSIG.</option>
+            <option id="1">KSK DNSKEY of &#96;example.dn42.&#96;.</option>
+            <option id="2">ZSK DNSKEY of &#96;example.dn42.&#96;.</option>
+            <option id="3">DS record that is derived from KSK DNSKEY.</option>
+            <option id="4">DS record that is derived from ZSK DNSKEY.</option>
+            <option id="5">DS record that is derived from the KSK DNSKEY as well as the DS record that is derived from the ZSK DNSKEY.</option>
           </options>
           <correctanswer>
             <options>
@@ -412,6 +412,71 @@
             <option id="4">Make a RFC8805-compliant document and publish it as a DN42 accssible or publicly accssible URL.</option>
             <option id="5">Update the &#96;country:&#96; attribute of the inet(6)num objects to reflect the up to date country location of the address blocks.</option>
             <option id="6">GeoFeed also known as DNS LOC records (as defined in RFC1876), so one must publish the DNS LOC records as well.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="2"></option>
+              <option id="4"></option>
+            </options>
+          </correctanswer>
+        </question>
+        <question id="24" type="multiple-choice" score="1">
+          <description>Select all the DNSKEY records that correspond to a KSK (Choose three.)</description>
+          <options>
+            <option id="1">257 3 13 QVgt1c+OlL9X9jrnD39njabYFCi2eEYjLI5AvpXT6HWAF1BbAOfNm/56 4OeU03oDcCgQ6zNQMV0FNPvrk53K0w==</option>
+            <option id="2">256 3 15 Dex1JgKqrqb/3zIOQfTeoLJzQqWiy2SFV12u0eRjHqA=</option>
+            <option id="3">257 3 13 jDd4k21xTgqOFqtvQkeqdQs/RH5+SU+vFchqnOHk5yaEL6EQDOKNuYJ2 C4ld+tVHf007GgbKX6BC68uMU8iGIg==</option>
+            <option id="4">256 3 13 oUcsKJykGOVwz58smxaygPFhm4PZEPKIukPO+HKbEBwGFnIbcamMsXFJ Gp2Wi7T5a0Z61IT/VxWLV4D7UhcAvg==</option>
+            <option id="5">257 3 15 eE/0MWGb7wYP4U/kf5mXCbE8tGIwo1U++dp22Fumo+g=</option>
+            <option id="6">256 3 13 fu+4con6sb7biVu866tpzq0w6IeFZWTlXSikshue3G26ftLMU0jz5tVV dqOMHP+CpXz9y0kQ6lOHmIlCzi4pAA==</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="1"></option>
+              <option id="3"></option>
+              <option id="5"></option>
+            </options>
+          </correctanswer>
+        </question>
+        <question id="25" type="multiple-choice" score="1">
+          <description>Describe BGP communities of link characteristics and BGP communities of region. (Choose two.)</description>
+          <options>
+            <option id="1">When propagating a route, a router updates the latency community by taking the minimum of the received route's latency value and the latency of its own link to the peer.</option>
+            <option id="2">When propagating a route, a router updates the latency community by taking the maximum of the received route's latency value and the latency of its own link to the peer.</option>
+            <option id="3">The DN42_REGION community must only be attached to routes originating from your own network and must adhere to the accurate location of the node.</option>
+            <option id="4">The DN42_REGION community must be attached to every advertising route regardless of whether it's your own prefix or not.</option>
+            <option id="5">Every advertising route must be attached with accurate DN42_REGION community or it would be unconditionally rejected and won't be propagated to the rest of the network.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="2"></option>
+              <option id="3"></option>
+            </options>
+          </correctanswer>
+        </question>
+        <question id="26" type="single-choice" score="1">
+          <description>Describe how Tinc VPN daemon could be use in DN42 as a dataplane. (Choose one.)</description>
+          <options>
+            <option id="1">Tinc is unusable in DN42 at all as it is not designed for such usage.</option>
+            <option id="2">Tinc must be configured to the "hub mode".</option>
+            <option id="3">Tinc must be configured to the "router mode" because in DN42 packets are routed based on IP address.</option>
+            <option id="4">Tinc must be configured to the "switch mode".</option>
+            <option id="5">Tinc can be either configured to the "router mode" or the "hub mode" as there's already an iGP protocol that is exchanging reachabilities across nodes.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="4"></option>
+            </options>
+          </correctanswer>
+        </question>
+        <question id="27" type="multiple-choice" score="1">
+          <description>Which of the following statements about ROA are correct? (Choose two.)</description>
+          <options>
+            <option id="1">If one omitted the &#96;max-length:&#96; field in the route(6) objects, the maximum prefix length that could be annoncing for such prefix would be /48 for IPv6 and /26 for IPv4.</option>
+            <option id="2">If one omitted the &#96;max-length:&#96; field in the route(6) objects, the maximum prefix length that could be annoncing for such prefix would be /64 for IPv6 and /29 for IPv4.</option>
+            <option id="3">ROA is use for prevent a route from being leaked through unauthorized upstream providers.</option>
+            <option id="4">ROA is use for prevent a route from being announced by an un-authorized origin AS.</option>
+            <option id="5">ROA is abolished in DN42, everyone have configured ASPA on their routers today.</option>
           </options>
           <correctanswer>
             <options>
