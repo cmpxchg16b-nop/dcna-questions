@@ -2,9 +2,25 @@
 
 import { useState } from "react";
 import { Box, Chip, Paper, Stack, Typography } from "@mui/material";
+import type { SxProps, Theme } from "@mui/material";
 import { Assessment, Connect, DropTarget, Question } from "@/api/types";
 import { isConnectionAccepted } from "@/api/dragAndDrop";
 import { useTranslation } from "react-i18next";
+
+// Candidate labels can run to full sentences, so chips wrap their text onto
+// multiple lines rather than stretching the board on one line (MUI chips
+// ellipsize by default, which would hide answer text). Their width stays
+// capped by the responsive maxWidth of the pool and drop sections below.
+const candidateChipSx = {
+  height: "auto",
+  maxWidth: "100%",
+  "& .MuiChip-label": {
+    display: "block",
+    whiteSpace: "normal",
+    textAlign: "left",
+    py: 0.75,
+  },
+} satisfies SxProps<Theme>;
 
 type DragAndDropBoardProps = {
   question: Question;
@@ -156,6 +172,7 @@ export default function DragAndDropBoard({
         draggable={!disabled}
         onDragStart={(e) => startDrag(e, id)}
         sx={{
+          ...candidateChipSx,
           justifyContent: "flex-start",
           // Placed candidates stay visible in the pool (dimmed) so they can
           // be re-picked or re-dragged to move them between slots.
@@ -231,6 +248,7 @@ export default function DragAndDropBoard({
               draggable={!disabled}
               onDragStart={(e) => startDrag(e, candidate.id)}
               onDelete={disabled ? undefined : () => unplaceDrop(drop.id)}
+              sx={candidateChipSx}
             />
             {accepted !== undefined && (
               <Typography
@@ -266,7 +284,10 @@ export default function DragAndDropBoard({
       >
         <Paper
           variant="outlined"
-          sx={{ p: 1.5, minWidth: 200 }}
+          // The pool shares the row with the drop sections: full width on
+          // narrow screens (the sections wrap below), half the row beyond
+          // that so a long candidate can't squeeze the drop zones.
+          sx={{ p: 1.5, minWidth: 200, maxWidth: { xs: "100%", sm: "50%" } }}
           onDragOver={(e) => {
             if (disabled) return;
             e.preventDefault();
@@ -278,15 +299,15 @@ export default function DragAndDropBoard({
             if (candidateId) unplaceCandidate(candidateId);
           }}
         >
-          <Typography variant="subtitle2" gutterBottom>
-            {t("question.candidates")}
-          </Typography>
           <Stack spacing={1}>
             {(question.candidates ?? []).map((c) => renderCandidate(c.id))}
           </Stack>
         </Paper>
         {sections.map((section) => (
-          <Box key={section.id}>
+          // 45% leaves room for the 50% pool plus the row gap, so pool and
+          // sections stay side by side on wide screens; a placed long
+          // candidate wraps within its section instead of ballooning it.
+          <Box key={section.id} sx={{ maxWidth: { xs: "100%", sm: "45%" } }}>
             {section.label && (
               <Typography variant="subtitle2" gutterBottom>
                 {section.label}
