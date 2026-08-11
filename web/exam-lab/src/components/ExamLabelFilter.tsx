@@ -171,7 +171,7 @@ export default function ExamLabelFilter({ children }: ExamLabelFilterProps) {
               <TextField
                 {...params}
                 placeholder={
-                  pairs.length === 0 ? "label1=a&label1=b&label2=c" : ""
+                  pairs.length === 0 ? "topic=dn42&category=practice" : ""
                 }
                 slotProps={{
                   ...params.slotProps,

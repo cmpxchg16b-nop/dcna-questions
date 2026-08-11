@@ -1,4 +1,4 @@
-<?xml version="1.0" ?>
+<?xml version="1.0"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:element name="title" type="xs:string" />
   <xs:element name="description" type="xs:string">
@@ -27,8 +27,7 @@
           <xs:attribute name="id" type="xs:string" use="required" />
           <xs:attribute name="imgSrc" type="xs:string" use="optional">
             <xs:annotation>
-              <xs:documentation
-              >Optional image rendered as the option's content, modeling a pure-image option.</xs:documentation>
+              <xs:documentation>Optional image rendered as the option's content, modeling a pure-image option.</xs:documentation>
             </xs:annotation>
           </xs:attribute>
         </xs:extension>
@@ -115,8 +114,7 @@
         use="required"
       >
         <xs:annotation>
-          <xs:documentation
-          >Dictating the fixed number of unique connections to make the answer to be valid</xs:documentation>
+          <xs:documentation>Dictating the fixed number of unique connections to make the answer to be valid</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>
@@ -240,8 +238,7 @@
   </xs:element>
   <xs:element name="imgDragAndDrop">
     <xs:annotation>
-      <xs:documentation
-      >Drag-and-drop question based on image clips, drag and drop all the image snippets to the correct positions to pass.</xs:documentation>
+      <xs:documentation>Drag-and-drop question based on image clips, drag and drop all the image snippets to the correct positions to pass.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -250,8 +247,7 @@
             <xs:attribute name="nodeId" type="xs:string" use="required" />
             <xs:attribute name="nodeLabel" type="xs:string" use="required">
               <xs:annotation>
-                <xs:documentation
-                >Descriptive text, usually reflects the answer in text, for the drag-and-drop option, use for rendering correct answer in the frontend.</xs:documentation>
+                <xs:documentation>Descriptive text, usually reflects the answer in text, for the drag-and-drop option, use for rendering correct answer in the frontend.</xs:documentation>
               </xs:annotation>
             </xs:attribute>
             <xs:attribute name="width" type="xs:integer" use="required" />
@@ -271,8 +267,7 @@
                     use="required"
                   >
                     <xs:annotation>
-                      <xs:documentation
-                      >Descriptive text, usually reflects the drop in text, for the drag-and-drop option, use for rendering correct answer in the frontend.</xs:documentation>
+                      <xs:documentation>Descriptive text, usually reflects the drop in text, for the drag-and-drop option, use for rendering correct answer in the frontend.</xs:documentation>
                     </xs:annotation>
                   </xs:attribute>
                   <xs:attribute
@@ -330,8 +325,7 @@
   </xs:element>
   <xs:element name="virtualcollection">
     <xs:annotation>
-      <xs:documentation
-      >A virtual collection defines a sample size and the population to sample questions from, yielding a randomly picked questions list on-the-fly without hard-coding a question collection in the exam document. A virtual collection may only be defined in a certification-exam document; the exam loader rejects it otherwise. When present, no real question collection will ever be chosen: every certification exam session samples from the union of the referenced collections instead, with question and option order forcibly randomized.</xs:documentation>
+      <xs:documentation>A virtual collection defines a sample size and the population to sample questions from, yielding a randomly picked questions list on-the-fly without hard-coding a question collection in the exam document. A virtual collection may only be defined in a certification-exam document; the exam loader rejects it otherwise. When present, no real question collection will ever be chosen: every certification exam session samples from the union of the referenced collections instead, with question and option order forcibly randomized.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -348,8 +342,7 @@
           type="xs:integer"
         >
           <xs:annotation>
-            <xs:documentation
-            >Reference a real question collection in the question set specified by the 0-based index, can be used by multiple times for reference multiple collections altogether.</xs:documentation>
+            <xs:documentation>Reference a real question collection in the question set specified by the 0-based index, can be used by multiple times for reference multiple collections altogether.</xs:documentation>
           </xs:annotation>
         </xs:element>
       </xs:sequence>
@@ -387,14 +380,12 @@
     <xs:restriction base="xs:string">
       <xs:enumeration value="certification-exam">
         <xs:annotation>
-          <xs:documentation
-          >A proctored, high-stakes assessment delivered through an authorized testing provider that, when passed, grants an official vendor certification valid for a set period.</xs:documentation>
+          <xs:documentation>A proctored, high-stakes assessment delivered through an authorized testing provider that, when passed, grants an official vendor certification valid for a set period.</xs:documentation>
         </xs:annotation>
       </xs:enumeration>
       <xs:enumeration value="practice-exam">
         <xs:annotation>
-          <xs:documentation
-          >An unproctored study tool that simulates the exam format and provides detailed feedback on incorrect answers to help candidates assess their readiness without awarding certification.</xs:documentation>
+          <xs:documentation>An unproctored study tool that simulates the exam format and provides detailed feedback on incorrect answers to help candidates assess their readiness without awarding certification.</xs:documentation>
         </xs:annotation>
       </xs:enumeration>
     </xs:restriction>
@@ -403,7 +394,7 @@
     <xs:annotation>
       <xs:documentation
         xml:lang="en"
-      >A label is a key-value pair carrying free-form metadata about the enclosing exam. An exam may carry zero or any number of labels.</xs:documentation>
+      >A label is a key-value pair carrying free-form metadata about the enclosing exam. An exam may carry zero or any number of labels. Labels are for purposes like tagging or filtering data, they don't replace the defined semantics elements like &lt;passingscore /&gt; or &lt;examcategory /&gt; because labels are weakly typed.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:attribute name="key" type="xs:string" use="required" />
@@ -420,6 +411,7 @@
       <xs:sequence>
         <xs:element ref="title" minOccurs="1" maxOccurs="1" />
         <xs:element ref="description" minOccurs="1" maxOccurs="1" />
+        <xs:element ref="label" minOccurs="0" maxOccurs="unbounded" />
         <xs:element
           name="passingscore"
           minOccurs="0"
@@ -433,8 +425,7 @@
           type="xs:float"
         >
           <xs:annotation>
-            <xs:documentation
-            >The total score of the exam: the maximum score a candidate can earn across all the questions served in an exam session. A total exam score is only needed in a certification-exam document, where a virtual collection samples questions on the fly and the total therefore cannot be derived from any single question collection; the exam loader rejects it in a practice exam.</xs:documentation>
+            <xs:documentation>The total score of the exam: the maximum score a candidate can earn across all the questions served in an exam session. A total exam score is only needed in a certification-exam document, where a virtual collection samples questions on the fly and the total therefore cannot be derived from any single question collection; the exam loader rejects it in a practice exam.</xs:documentation>
           </xs:annotation>
         </xs:element>
         <xs:element
@@ -443,14 +434,12 @@
           maxOccurs="1"
           type="ExamCategory"
         />
-        <xs:element ref="label" minOccurs="0" maxOccurs="unbounded" />
         <xs:element ref="virtualcollection" minOccurs="0" maxOccurs="1" />
         <xs:element ref="questionset" minOccurs="1" maxOccurs="1" />
       </xs:sequence>
       <xs:attribute name="id" type="xs:string" use="required">
         <xs:annotation>
-          <xs:documentation
-          >This is the exam document id, not the exam session id.</xs:documentation>
+          <xs:documentation>This is the exam document id, not the exam session id.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="shortname" type="xs:string" />
@@ -546,8 +535,7 @@
           <xs:complexType>
             <xs:attribute name="sessionid" type="xs:string" use="required">
               <xs:annotation>
-                <xs:documentation
-                >The session id of the anonymous user, or just user session id.</xs:documentation>
+                <xs:documentation>The session id of the anonymous user, or just user session id.</xs:documentation>
               </xs:annotation>
             </xs:attribute>
           </xs:complexType>
@@ -566,8 +554,7 @@
         <xs:element ref="examtaker" minOccurs="1" maxOccurs="1" />
         <xs:element name="examid" type="xs:string" minOccurs="1" maxOccurs="1">
           <xs:annotation>
-            <xs:documentation
-            >This is the exam document id, not the exam session id.</xs:documentation>
+            <xs:documentation>This is the exam document id, not the exam session id.</xs:documentation>
           </xs:annotation>
         </xs:element>
         <xs:element name="examshortname" type="xs:string" />
@@ -579,8 +566,7 @@
         </xs:element>
         <xs:element ref="description" minOccurs="0" maxOccurs="1">
           <xs:annotation>
-            <xs:documentation
-            >The description of the exam, optional</xs:documentation>
+            <xs:documentation>The description of the exam, optional</xs:documentation>
           </xs:annotation>
         </xs:element>
         <xs:element
@@ -590,8 +576,7 @@
           type="xs:float"
         >
           <xs:annotation>
-            <xs:documentation
-            >The mandated passing score of the exam, should be copied directly from the exam element.</xs:documentation>
+            <xs:documentation>The mandated passing score of the exam, should be copied directly from the exam element.</xs:documentation>
           </xs:annotation>
         </xs:element>
         <xs:element
@@ -601,8 +586,7 @@
           type="ExamCategory"
         >
           <xs:annotation>
-            <xs:documentation
-            >Should be copied directly from the origin exam document too.</xs:documentation>
+            <xs:documentation>Should be copied directly from the origin exam document too.</xs:documentation>
           </xs:annotation>
         </xs:element>
         <xs:element
@@ -612,8 +596,7 @@
           type="xs:string"
         >
           <xs:annotation>
-            <xs:documentation
-            >The id of the exam session which the exam taker was in.</xs:documentation>
+            <xs:documentation>The id of the exam session which the exam taker was in.</xs:documentation>
           </xs:annotation>
         </xs:element>
         <xs:element
@@ -623,21 +606,18 @@
           type="xs:integer"
         >
           <xs:annotation>
-            <xs:documentation
-            >The millisecond-resolution unix timestamp when the exam session was finished by the exam taker.</xs:documentation>
+            <xs:documentation>The millisecond-resolution unix timestamp when the exam session was finished by the exam taker.</xs:documentation>
           </xs:annotation>
         </xs:element>
         <xs:element ref="assessment">
           <xs:annotation>
-            <xs:documentation
-            >The element contains the grade and the score that was achieved by the exam taker.</xs:documentation>
+            <xs:documentation>The element contains the grade and the score that was achieved by the exam taker.</xs:documentation>
           </xs:annotation>
         </xs:element>
       </xs:sequence>
       <xs:attribute name="id" type="xs:string" use="required">
         <xs:annotation>
-          <xs:documentation
-          >This is the id of the exam report, it has to be globally unique, not the id of the exam document, nor the id of the exam session.</xs:documentation>
+          <xs:documentation>This is the id of the exam report, it has to be globally unique, not the id of the exam document, nor the id of the exam session.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
 
