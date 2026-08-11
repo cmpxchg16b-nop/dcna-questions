@@ -6,6 +6,7 @@ import { Box, List, Typography } from "@mui/material";
 import { useExamDocs } from "@/hooks/useExamDocs";
 import { useCreateExamSession } from "@/hooks/useCreateExamSession";
 import ExamCard from "@/components/ExamCard";
+import ExamLabelFilter from "@/components/ExamLabelFilter";
 import ExamOptionsDialog from "@/components/ExamOptionsDialog";
 import {
   CLIENT_SUPPORTED_QUESTION_TYPES,
@@ -40,6 +41,7 @@ export default function ExamDocumentsListDisplay({
   const { data: exams, isPending } = useExamDocs(generation, labelFilter);
   const createSession = useCreateExamSession();
   const [examToTake, setExamToTake] = useState<ExamExcerpt | null>(null);
+  const filtered = Object.keys(labelFilter ?? {}).length > 0;
 
   // Certification exams are proctored: no customization dialog — the session
   // is created with fixed options (randomized question/option order, not
@@ -73,11 +75,15 @@ export default function ExamDocumentsListDisplay({
       <Typography variant="h4" component="h2" gutterBottom>
         {t("exams.title")}
       </Typography>
-      <Typography gutterBottom>
-        {!isPending && exams.length === 0
-          ? t("exams.empty")
-          : t("exams.nonEmpty")}
-      </Typography>
+      <ExamLabelFilter>
+        <Typography>
+          {!isPending && exams.length === 0
+            ? filtered
+              ? t("exams.emptyFiltered")
+              : t("exams.empty")
+            : t("exams.nonEmpty")}
+        </Typography>
+      </ExamLabelFilter>
       {isPending ? (
         <Typography>…</Typography>
       ) : (

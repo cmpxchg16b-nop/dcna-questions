@@ -57,7 +57,13 @@
   "exams": {
     "title": "Exams",
     "empty": "No exam is found",
-    "nonEmpty": "Here are the exams you can take"
+    "emptyFiltered": "No exam matches the current filter",
+    "nonEmpty": "Here are the exams you can take",
+    "filter": {
+      "label": "Filter by labels",
+      "helper": "key=value joined by & — a repeated key means OR, different keys mean AND.",
+      "clear": "Clear filter"
+    }
   },
   "exam": {
     "take": "Take",
