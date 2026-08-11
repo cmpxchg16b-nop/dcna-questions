@@ -472,8 +472,8 @@
         <question id="27" type="multiple-choice" score="1">
           <description>Which of the following statements about ROA are correct? (Choose two.)</description>
           <options>
-            <option id="1">If one omitted the &#96;max-length:&#96; field in the route(6) objects, the maximum prefix length that could be annoncing for such prefix would be /48 for IPv6 and /26 for IPv4.</option>
-            <option id="2">If one omitted the &#96;max-length:&#96; field in the route(6) objects, the maximum prefix length that could be annoncing for such prefix would be /64 for IPv6 and /29 for IPv4.</option>
+            <option id="1">If one omitted the &#96;max-length:&#96; attribute in the route(6) objects, the maximum prefix length that could be annoncing for such prefix would be /48 for IPv6 and /26 for IPv4.</option>
+            <option id="2">If one omitted the &#96;max-length:&#96; attribute in the route(6) objects, the maximum prefix length that could be annoncing for such prefix would be /64 for IPv6 and /29 for IPv4.</option>
             <option id="3">ROA is use for prevent a route from being leaked through unauthorized upstream providers.</option>
             <option id="4">ROA is use for prevent a route from being announced by an un-authorized origin AS.</option>
             <option id="5">ROA is abolished in DN42, everyone have configured ASPA on their routers today.</option>
@@ -483,6 +483,36 @@
               <option id="2"></option>
               <option id="4"></option>
             </options>
+          </correctanswer>
+        </question>
+        <question id="28" type="drag-and-drop" score="1">
+          <description>An engineer must enable DNSSEC for a newly registered DN42 domain &#96;example.dn42&#96;. The domain is served by CoreDNS, which performs on-the-fly (automatic) signing. CSK must not be used. Drag and drop the actions from the left into the correct order of implementation on the right. (Not all options are used.)</description>
+          <candidates>
+            <candidate id="1">Derive the DS record from the KSK DNSKEY record and publish it as the &#96;ds-rdata:&#96; attribute in the registry.</candidate>
+            <candidate id="2">Use dnssec-keygen to create the KSK key pair as well as the ZSK key pair for the domain.</candidate>
+            <candidate id="3">Generate a DS record from the ZSK DNSKEY record.</candidate>
+            <candidate id="4">Configure the dnssec plugin in the Corefile to correctly reference the generated key files.</candidate>
+            <candidate id="5">Run ./validate-my-dns.py locally to verify that DNSSEC is working.</candidate>
+          </candidates>
+          <drops>
+            <drop id="1">Step 1</drop>
+            <drop id="2">Step 2</drop>
+            <drop id="3">Step 3</drop>
+            <drop id="4">Step 4</drop>
+          </drops>
+          <correctanswer>
+            <connectionsolutions>
+              <connectionsolution requiredUniqueConnections="3">
+                <!-- generate -->
+                <connect dst="1" src="2" />
+                <!-- configure -->
+                <connect dst="2" src="4" />
+                <!-- locally testing -->
+                <connect dst="3" src="5" />
+                <!-- submit (after tested) -->
+                <connect dst="4" src="1" />
+              </connectionsolution>
+            </connectionsolutions>
           </correctanswer>
         </question>
       </questioncollection>
