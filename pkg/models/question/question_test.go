@@ -3,8 +3,10 @@ package question
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -540,6 +542,46 @@ if err == nil || !strings.Contains(err.Error(), "only allowed in a certification
 }
 }
 
+func TestExamLoader_LoadLabels(t *testing.T) {
+// An exam carries zero or any number of <label> key-value pairs between
+// <examcategory> and <virtualcollection>/<questionset>.
+const withLabels = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id="1" shortname="X" code="1">
+  <title>t</title><description>d</description>
+  <examcategory>practice-exam</examcategory>
+  <label key="vendor" value="cisco"/>
+  <label key="track" value="datacenter"/>
+  <questionset><questioncollection></questioncollection></questionset>
+</exam>
+</root>`
+const withoutLabels = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id="2" shortname="Y" code="2">
+  <title>t</title><description>d</description>
+  <examcategory>practice-exam</examcategory>
+  <questionset><questioncollection></questioncollection></questionset>
+</exam>
+</root>`
+
+exam, err := NewFileExamLoader().Load([]byte(withLabels))
+if err != nil {
+	t.Fatalf("Load: unexpected error: %v", err)
+}
+want := []Label{{Key: "vendor", Value: "cisco"}, {Key: "track", Value: "datacenter"}}
+if !reflect.DeepEqual(exam.Labels, want) {
+	t.Fatalf("Labels = %+v, want %+v", exam.Labels, want)
+}
+
+exam, err = NewFileExamLoader().Load([]byte(withoutLabels))
+if err != nil {
+	t.Fatalf("Load: unexpected error: %v", err)
+}
+if len(exam.Labels) != 0 {
+	t.Fatalf("expected no labels, got %+v", exam.Labels)
+}
+}
+
 func TestExamExcerptFrom(t *testing.T) {
 total := float32(120)
 coll := QuestionCollection{Questions: []Question{
@@ -601,5 +643,112 @@ for _, tc := range []struct {
 			t.Fatalf("excerpt = %+v, want NumQuestions %d and TotalScores %g", excerpt, tc.wantNum, tc.wantTotal)
 		}
 	})
+}
+}
+
+func TestExamExcerptFromCarriesLabels(t *testing.T) {
+labels := []Label{{Key: "vendor", Value: "cisco"}}
+excerpt := ExamExcerptFrom(&Exam{Id: "1", ExamCategory: ExamCategoryPractice, Labels: labels})
+if !reflect.DeepEqual(excerpt.Labels, labels) {
+	t.Fatalf("excerpt.Labels = %+v, want %+v", excerpt.Labels, labels)
+}
+}
+
+func TestLabelFilter_Matches(t *testing.T) {
+labels := []Label{{Key: "label1", Value: "a"}, {Key: "label2", Value: "c"}}
+for _, tc := range []struct {
+	name   string
+	filter LabelFilter
+	labels []Label
+	want   bool
+}{
+	{"empty filter matches labeled exam", LabelFilter{}, labels, true},
+	{"empty filter matches unlabeled exam", LabelFilter{}, nil, true},
+	{"single key single value", LabelFilter{"label1": {"a"}}, labels, true},
+	{"OR within a key", LabelFilter{"label1": {"a", "b"}}, labels, true},
+	{"value not among accepted", LabelFilter{"label1": {"b"}}, labels, false},
+	{"AND across keys", LabelFilter{"label1": {"a", "b"}, "label2": {"c"}}, labels, true},
+	{"missing key", LabelFilter{"label1": {"a"}, "label2": {"x"}}, labels, false},
+	{"non-empty filter never matches unlabeled exam", LabelFilter{"label1": {"a"}}, nil, false},
+	{"duplicate labels on the exam, one matching", LabelFilter{"label1": {"a"}}, []Label{{Key: "label1", Value: "x"}, {Key: "label1", Value: "a"}}, true},
+} {
+	t.Run(tc.name, func(t *testing.T) {
+		if got := tc.filter.Matches(tc.labels); got != tc.want {
+			t.Fatalf("Matches(%v, %v) = %v, want %v", tc.filter, tc.labels, got, tc.want)
+		}
+	})
+}
+}
+
+// labeledExamXML is a valid, minimal exam document carrying the given labels,
+// used as file content by the repository filter tests.
+func labeledExamXML(id string, labels ...Label) string {
+	var b strings.Builder
+	for _, l := range labels {
+		fmt.Fprintf(&b, `  <label key=%q value=%q/>
+`, l.Key, l.Value)
+	}
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id=%q shortname="X" code="1">
+  <title>t</title><description>d</description>
+  <examcategory>certification-exam</examcategory>
+%s  <questionset><questioncollection>
+    <question id="1" type="single-choice"><description>a</description></question>
+  </questioncollection></questionset>
+</exam>
+</root>`, id, b.String())
+}
+
+func TestExamRepository_ListExamDocumentsByLabel(t *testing.T) {
+dir := t.TempDir()
+files := map[string]string{
+	"exam-a.xml": labeledExamXML("A", Label{Key: "label1", Value: "a"}, Label{Key: "label2", Value: "c"}),
+	"exam-b.xml": labeledExamXML("B", Label{Key: "label1", Value: "b"}, Label{Key: "label2", Value: "c"}),
+	"exam-c.xml": labeledExamXML("C", Label{Key: "label1", Value: "a"}),
+	"broken.xml": "not xml at all",
+}
+for name, content := range files {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+repo := NewExamRepository([]ExamSource{NewDynamicDirExamSource(dir)})
+
+// collect drains a stream, returning the ids of the Data events and the
+// number of Err events.
+collect := func(events <-chan ExamDataEvent) (ids []string, errs int) {
+	for ev := range events {
+		if ev.Err != nil {
+			errs++
+			continue
+		}
+		ids = append(ids, ev.Data.Id)
+	}
+	return ids, errs
+}
+
+filter := LabelFilter{"label1": {"a", "b"}, "label2": {"c"}}
+ids, errs := collect(repo.ListExamDocumentsByLabel(filter))
+if errs != 1 {
+	t.Fatalf("got %d Err events, want 1 for the broken file", errs)
+}
+if !reflect.DeepEqual(ids, []string{"A", "B"}) {
+	t.Fatalf("ids = %v, want [A B]", ids)
+}
+
+// The unfiltered listing streams every exam; the broken file still errors.
+ids, errs = collect(repo.ListExamDocuments())
+if errs != 1 {
+	t.Fatalf("got %d Err events, want 1 for the broken file", errs)
+}
+if !reflect.DeepEqual(ids, []string{"A", "B", "C"}) {
+	t.Fatalf("ids = %v, want [A B C]", ids)
+}
+
+// A filtered-out exam is still cached by the filtered stream, feeding
+// GetExamDocumentById.
+if _, err := repo.GetExamDocumentById(context.Background(), "C", ""); err != nil {
+	t.Fatalf("GetExamDocumentById(C): %v", err)
 }
 }

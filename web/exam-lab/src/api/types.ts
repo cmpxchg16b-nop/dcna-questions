@@ -11,9 +11,20 @@ export type ExamCategory = "certification-exam" | "practice-exam";
 // The human-readable label for each category lives in the i18n bundles
 // (src/i18n/locales) under "exam.category", keyed by the wire value.
 
+// ExamLabel mirrors the Go question.Label struct (pkg/models/question/question.go):
+// a key-value pair carrying free-form metadata about an exam. Unlike the
+// enclosing excerpt struct, Label carries json tags, so its fields marshal
+// under their lowercase names.
+export type ExamLabel = {
+  key: string;
+  value: string;
+};
+
 // ExamExcerpt mirrors the Go question.ExamExcerpt projection. Title and
 // Description are question.Plaintext, which is `type PlainText string`, so they
-// marshal as plain strings here.
+// marshal as plain strings here. Labels is null when the exam carries no
+// labels (the Go excerpt struct has no json tags, so a nil slice marshals as
+// null rather than being omitted).
 export type ExamExcerpt = {
   Id: string;
   ShortName: string;
@@ -21,9 +32,16 @@ export type ExamExcerpt = {
   Title: string;
   Description: string;
   ExamCategory: ExamCategory;
+  Labels: ExamLabel[] | null;
   NumQuestions: number;
   TotalScores: number;
 };
+
+// LabelFilter mirrors the Go question.LabelFilter map: label key -> accepted
+// values. An exam matches when every key matches at least one of its values
+// (OR within a key, AND across keys). The Exams section derives it from the
+// page URL's query parameters and forwards it to /api/examdocs/bylabel.
+export type LabelFilter = Record<string, string[]>;
 
 // ExamDocs is the resolved list of exam excerpts exposed by useExamDocs.
 export type ExamDocs = ExamExcerpt[];

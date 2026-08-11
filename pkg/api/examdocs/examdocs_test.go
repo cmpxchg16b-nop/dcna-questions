@@ -327,6 +327,105 @@ func TestExamHandler_PerUserFirst(t *testing.T) {
 	})
 }
 
+// TestExamHandler_ByLabel exercises the label-filtered listing: the query
+// string parses into a LabelFilter (OR within a repeated key, AND across
+// keys), non-matching exams are dropped from the stream, and in-band Err
+// lines still surface. The plain path ignores query parameters entirely.
+func TestExamHandler_ByLabel(t *testing.T) {
+	labeled := func(id string, kv ...string) *question.Exam {
+		e := examWith(id, "c"+id, 1)
+		for i := 0; i+1 < len(kv); i += 2 {
+			e.Labels = append(e.Labels, question.Label{Key: kv[i], Value: kv[i+1]})
+		}
+		return e
+	}
+	sources := []question.ExamSourceEntry{
+		{
+			Loader: &fakeLoader{byURL: map[string]*question.Exam{
+				"a": labeled("A", "label1", "a", "label2", "c"),
+				"b": labeled("B", "label1", "b", "label2", "c"),
+				"c": labeled("C", "label1", "a"),
+				"d": labeled("D", "label1", "x", "label2", "c"),
+				"e": labeled("E"),
+			},
+				errURL: map[string]bool{"bad": true},
+			},
+			URLs: []string{"a", "b", "c", "d", "e", "bad"},
+		},
+	}
+
+	newHandler := func(t *testing.T) (http.Handler, *session.OnMemorySessionManager) {
+		t.Helper()
+		sm := session.NewOnMemorySessionManager()
+		return examdocs.NewExamHandler(sm, question.NewExamRepository([]question.ExamSource{question.NewStaticFileExamSource(sources)})), sm
+	}
+
+	// dataIDs returns the ids of the Data lines, in stream order.
+	dataIDs := func(t *testing.T, rr *httptest.ResponseRecorder) []string {
+		t.Helper()
+		var ids []string
+		for _, l := range parseLines(t, rr.Body.String()) {
+			if l.Data != nil {
+				ids = append(ids, l.Data.Id)
+			}
+		}
+		return ids
+	}
+
+	t.Run("OR within a key, AND across keys", func(t *testing.T) {
+		h, sm := newHandler(t)
+		rr := serveRequest(t, h, sm, http.MethodGet, "/api/examdocs/bylabel?label1=a&label1=b&label2=c", true)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())
+		}
+		got := dataIDs(t, rr)
+		if len(got) != 2 || got[0] != "A" || got[1] != "B" {
+			t.Errorf("ids = %v, want [A B]", got)
+		}
+	})
+
+	t.Run("no query parameters matches every exam", func(t *testing.T) {
+		h, sm := newHandler(t)
+		rr := serveRequest(t, h, sm, http.MethodGet, "/api/examdocs/bylabel", true)
+		got := dataIDs(t, rr)
+		if len(got) != 5 {
+			t.Errorf("ids = %v, want all 5 exams", got)
+		}
+	})
+
+	t.Run("load failures still surface as Err lines", func(t *testing.T) {
+		h, sm := newHandler(t)
+		rr := serveRequest(t, h, sm, http.MethodGet, "/api/examdocs/bylabel?label2=c", true)
+		lines := parseLines(t, rr.Body.String())
+		var errs int
+		for _, l := range lines {
+			if l.Err != "" {
+				errs++
+			}
+		}
+		if errs != 1 {
+			t.Errorf("got %d Err lines, want 1 (body %q)", errs, rr.Body.String())
+		}
+	})
+
+	t.Run("plain path ignores query parameters", func(t *testing.T) {
+		h, sm := newHandler(t)
+		rr := serveRequest(t, h, sm, http.MethodGet, "/api/examdocs?label1=a", true)
+		got := dataIDs(t, rr)
+		if len(got) != 5 {
+			t.Errorf("ids = %v, want all 5 exams (query ignored)", got)
+		}
+	})
+
+	t.Run("unknown subpath responds 404", func(t *testing.T) {
+		h, sm := newHandler(t)
+		rr := serveRequest(t, h, sm, http.MethodGet, "/api/examdocs/bogus", true)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404 (body %q)", rr.Code, rr.Body.String())
+		}
+	})
+}
+
 // failingWriter is an http.ResponseWriter whose Write always errors, simulating
 // a client that has disconnected mid-stream. It also implements http.Flusher.
 type failingWriter struct {

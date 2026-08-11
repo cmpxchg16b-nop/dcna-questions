@@ -175,6 +175,9 @@ func (cli *CLI) Run() error {
 
 	muxHandlerDyn := http.NewServeMux()
 	muxHandlerDyn.Handle("/api/examdocs", examHandler)
+	// The subtree registration lets GET /api/examdocs/bylabel reach the
+	// handler, which parses the label filter out of the query string itself.
+	muxHandlerDyn.Handle("/api/examdocs/", examHandler)
 	muxHandlerDyn.Handle("/api/profile", pkgapiprofile.NewProfileHandler(sm))
 	// /api/logout is on the JWT whitelist below, so the handler also runs for
 	// requests whose token is already expired or invalid — clearing cookies

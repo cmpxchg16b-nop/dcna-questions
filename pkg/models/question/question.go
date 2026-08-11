@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -305,6 +306,37 @@ type VirtualCollection struct {
 	CollectionIdx []int `xml:"collectionidx" json:"collectionIdx"`
 }
 
+// Label is a <label> element: a key-value pair carrying free-form metadata
+// about the enclosing exam. An exam may carry zero or any number of labels.
+type Label struct {
+	Key   string `xml:"key,attr" json:"key"`
+	Value string `xml:"value,attr" json:"value"`
+}
+
+// LabelFilter selects exams by their labels: a map from label key to the
+// values accepted for that key. An exam matches when, for every key in the
+// filter, it carries at least one label with that key whose value is among
+// the accepted values — OR within a key, AND across keys. An empty filter
+// matches every exam, including one carrying no labels.
+type LabelFilter map[string][]string
+
+// Matches reports whether labels satisfy the filter.
+func (f LabelFilter) Matches(labels []Label) bool {
+	for key, values := range f {
+		matched := false
+		for _, l := range labels {
+			if l.Key == key && slices.Contains(values, l.Value) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
 // Exam is the root <exam> document: a named certification exam carrying
 // metadata and exactly one question set.
 type Exam struct {
@@ -317,6 +349,7 @@ type Exam struct {
 	PassingScore      *float32           `xml:"passingscore" json:"passingScore,omitempty"`
 	TotalExamScore    *float32           `xml:"totalExamScore" json:"totalExamScore,omitempty"`
 	ExamCategory      ExamCategory       `xml:"examcategory" json:"examCategory"`
+	Labels            []Label            `xml:"label" json:"labels,omitempty"`
 	VirtualCollection *VirtualCollection `xml:"virtualcollection" json:"virtualCollection,omitempty"`
 	QuestionSet       QuestionSet        `xml:"questionset" json:"questionSet"`
 }
@@ -421,6 +454,7 @@ type ExamDocumentExcerpt struct {
 	Title        PlainText
 	Description  PlainText
 	ExamCategory ExamCategory
+	Labels       []Label
 	NumQuestions int
 	TotalScores  float32
 }
@@ -439,6 +473,7 @@ func ExamExcerptFrom(e *Exam) ExamDocumentExcerpt {
 		Title:        e.Title,
 		Description:  e.Description,
 		ExamCategory: e.ExamCategory,
+		Labels:       e.Labels,
 	}
 	if e.VirtualCollection != nil {
 		excerpt.NumQuestions = e.VirtualCollection.SampleSize
@@ -724,6 +759,23 @@ type ExamDataEvent struct {
 // callee-spawned goroutine closes the channel once every source has been
 // exhausted. The caller tests for failure by checking the event's Err field.
 func (r *ExamRepository) ListExamDocuments() <-chan ExamDataEvent {
+	return r.listExamDocuments(nil)
+}
+
+// ListExamDocumentsByLabel is the label-filtered analogue of
+// ListExamDocuments: only exams whose labels satisfy filter are streamed (see
+// LabelFilter.Matches for the matching semantics).
+func (r *ExamRepository) ListExamDocumentsByLabel(filter LabelFilter) <-chan ExamDataEvent {
+	return r.listExamDocuments(filter)
+}
+
+// listExamDocuments implements ListExamDocuments and ListExamDocumentsByLabel.
+// A nil filter streams every exam; otherwise an exam is streamed only when
+// its labels satisfy the filter. Load failures are emitted as in-band Err
+// events regardless of the filter: a failed load cannot be matched. Every
+// successfully loaded exam is inserted into the cache, matching or not, so a
+// filtered stream feeds GetExamDocumentById just like an unfiltered one.
+func (r *ExamRepository) listExamDocuments(filter LabelFilter) <-chan ExamDataEvent {
 	events := make(chan ExamDataEvent)
 	go func() {
 		defer close(events)
@@ -736,6 +788,9 @@ func (r *ExamRepository) ListExamDocuments() <-chan ExamDataEvent {
 						continue
 					}
 					r.cacheExam(exam) // refresh the cache as each exam loads
+					if !filter.Matches(exam.Labels) {
+						continue
+					}
 					events <- ExamDataEvent{Data: exam}
 				}
 			}
@@ -756,6 +811,22 @@ func (r *ExamRepository) ListExamDocuments() <-chan ExamDataEvent {
 // not cachable by default, so loaded exams are streamed straight to the caller
 // and never inserted into the shared cache.
 func (r *ExamRepository) ListExamDocumentsByUserId(ctx context.Context, userID string) <-chan ExamDataEvent {
+	return r.listExamDocumentsByUserId(ctx, userID, nil)
+}
+
+// ListExamDocumentsByUserIdAndLabel is the label-filtered analogue of
+// ListExamDocumentsByUserId: only exams whose labels satisfy filter are
+// streamed (see LabelFilter.Matches for the matching semantics).
+func (r *ExamRepository) ListExamDocumentsByUserIdAndLabel(ctx context.Context, userID string, filter LabelFilter) <-chan ExamDataEvent {
+	return r.listExamDocumentsByUserId(ctx, userID, filter)
+}
+
+// listExamDocumentsByUserId implements ListExamDocumentsByUserId and
+// ListExamDocumentsByUserIdAndLabel. A nil filter streams every exam visible
+// to the user; otherwise an exam is streamed only when its labels satisfy the
+// filter. Load failures are emitted as in-band Err events regardless of the
+// filter: a failed load cannot be matched.
+func (r *ExamRepository) listExamDocumentsByUserId(ctx context.Context, userID string, filter LabelFilter) <-chan ExamDataEvent {
 	events := make(chan ExamDataEvent)
 	go func() {
 		defer close(events)
@@ -770,6 +841,9 @@ func (r *ExamRepository) ListExamDocumentsByUserId(ctx context.Context, userID s
 					exam, err := entry.Loader.LoadFrom(ctx, url)
 					if err != nil {
 						events <- ExamDataEvent{Err: fmt.Errorf("load exam %q: %w", url, err)}
+						continue
+					}
+					if !filter.Matches(exam.Labels) {
 						continue
 					}
 					events <- ExamDataEvent{Data: exam}

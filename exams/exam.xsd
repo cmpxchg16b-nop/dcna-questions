@@ -399,6 +399,17 @@
       </xs:enumeration>
     </xs:restriction>
   </xs:simpleType>
+  <xs:element name="label">
+    <xs:annotation>
+      <xs:documentation
+        xml:lang="en"
+      >A label is a key-value pair carrying free-form metadata about the enclosing exam. An exam may carry zero or any number of labels.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="key" type="xs:string" use="required" />
+      <xs:attribute name="value" type="xs:string" use="required" />
+    </xs:complexType>
+  </xs:element>
   <xs:element name="exam">
     <xs:annotation>
       <xs:documentation
@@ -432,6 +443,7 @@
           maxOccurs="1"
           type="ExamCategory"
         />
+        <xs:element ref="label" minOccurs="0" maxOccurs="unbounded" />
         <xs:element ref="virtualcollection" minOccurs="0" maxOccurs="1" />
         <xs:element ref="questionset" minOccurs="1" maxOccurs="1" />
       </xs:sequence>

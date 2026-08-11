@@ -12,11 +12,17 @@ import {
   ExamExcerpt,
   ExamOptionRandomOptions,
   ExamOptionRandomQuestions,
+  LabelFilter,
 } from "@/api/types";
 import { useTranslation } from "react-i18next";
 
 type ExamDocumentsListDisplayProps = {
   generation: number;
+  // labelFilter narrows the list server-side via /api/examdocs/bylabel: an
+  // exam is listed only when every key matches at least one of its accepted
+  // values (OR within a key, AND across keys). The parent page derives it
+  // from the URL's query parameters.
+  labelFilter?: LabelFilter;
 };
 
 // The Exams section: every exam document the caller can take, including those
@@ -27,10 +33,11 @@ type ExamDocumentsListDisplayProps = {
 // so no generation bump is needed for that.
 export default function ExamDocumentsListDisplay({
   generation,
+  labelFilter,
 }: ExamDocumentsListDisplayProps) {
   const { t } = useTranslation();
   const router = useRouter();
-  const { data: exams, isPending } = useExamDocs(generation);
+  const { data: exams, isPending } = useExamDocs(generation, labelFilter);
   const createSession = useCreateExamSession();
   const [examToTake, setExamToTake] = useState<ExamExcerpt | null>(null);
 
