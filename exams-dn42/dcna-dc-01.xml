@@ -502,7 +502,7 @@
           </drops>
           <correctanswer>
             <connectionsolutions>
-              <connectionsolution requiredUniqueConnections="3">
+              <connectionsolution requiredUniqueConnections="4">
                 <!-- generate -->
                 <connect dst="1" src="2" />
                 <!-- configure -->
@@ -515,6 +515,14 @@
             </connectionsolutions>
           </correctanswer>
         </question>
+        <!-- todo: ipv6 reverse dns config -->
+        <!-- <question id="29" type="single-choice" score="1">
+          <description></description>
+          <options>
+            <option id=""></option>
+          </options>
+          <correctanswer></correctanswer>
+        </question> -->
       </questioncollection>
     </questionset>
   </exam>
