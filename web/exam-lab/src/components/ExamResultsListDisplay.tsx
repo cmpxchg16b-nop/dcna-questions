@@ -15,6 +15,7 @@ import {
 import { useExamTrackings } from "@/hooks/useExamTrackings";
 import { useDeleteExamTracking } from "@/hooks/useDeleteExamTracking";
 import ExamReportCard from "@/components/ExamReportCard";
+import VerifyCertButton from "@/components/VerifyCertButton";
 import { ExamReport } from "@/api/types";
 import { useTranslation } from "react-i18next";
 
@@ -36,9 +37,19 @@ export default function ExamResultsListDisplay({
 
   return (
     <Box sx={{ mt: 4 }}>
-      <Typography variant="h4" component="h2" gutterBottom>
-        {t("results.title")}
-      </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2,
+        }}
+      >
+        <Typography variant="h4" component="h2" gutterBottom>
+          {t("results.title")}
+        </Typography>
+        <VerifyCertButton />
+      </Box>
       <Typography gutterBottom>
         {!isPending && reports.length === 0
           ? t("results.empty")

@@ -493,3 +493,29 @@ export type LoginOption = {
 // LoginOptions is the resolved list of login options exposed by
 // useLoginOptions.
 export type LoginOptions = LoginOption[];
+
+// CertVerificationCertificate is the signing certificate reported by a
+// successful POST /api/certs/verify (see pkg/api/certs): the X.509
+// certificate carried in the signature's KeyInfo that validated the uploaded
+// document.
+export type CertVerificationCertificate = {
+  subject: string;
+  issuer: string;
+  serial_number: string;
+  not_before: string;
+  not_after: string;
+  sha256_fingerprint: string;
+};
+
+// CertVerificationResponse is the JSON body of POST /api/certs/verify. A
+// failed verification is still a 200: valid reports the outcome and error
+// carries the reason. certificate is present only when the document verified
+// and its signature carried an X.509 certificate in its KeyInfo. report is
+// the verified exam report itself (reusing the ExamReport shape above),
+// present when the document verified and parses as an <examreport>.
+export type CertVerificationResponse = {
+  valid: boolean;
+  error?: string;
+  certificate?: CertVerificationCertificate;
+  report?: ExamReport;
+};

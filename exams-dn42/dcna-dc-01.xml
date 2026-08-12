@@ -9,7 +9,7 @@
     <label key="topic" value="dn42" />
     <label key="topic" value="computernetwork" />
     <label key="category" value="practice" />
-    <passingscore>12</passingscore>
+    <passingscore>2</passingscore>
     <examcategory>practice-exam</examcategory>
     <questionset>
       <!-- A question set can contain multiple question collection candidate, to improve uncertainty by picking random question collection out of a multi-collection question set. -->

@@ -4,7 +4,8 @@
   },
   "common": {
     "cancel": "取消",
-    "delete": "删除"
+    "delete": "删除",
+    "close": "关闭"
   },
   "nav": {
     "breadcrumb": "面包屑",
@@ -53,6 +54,28 @@
     "fail": "未通过",
     "finished": "完成于",
     "passingScore": "通过需 {{score}} 分"
+  },
+  "verify": {
+    "button": "验证证书",
+    "dialogTitle": "验证考试报告",
+    "uploading": "上传中…",
+    "verifying": "验证中…",
+    "statusValid": "状态：有效",
+    "statusInvalid": "状态：无效",
+    "requestFailed": "验证请求失败",
+    "examTaker": "考生",
+    "examTitle": "考试标题",
+    "examCode": "考试代码",
+    "overallResult": "总体结果",
+    "score": "分数",
+    "finishedAt": "完成时间",
+    "certTitle": "签名证书",
+    "subject": "主体",
+    "issuer": "签发者",
+    "serialNumber": "序列号",
+    "fingerprint": "SHA-256 指纹",
+    "notBefore": "生效时间",
+    "notAfter": "失效时间"
   },
   "exams": {
     "title": "考试",

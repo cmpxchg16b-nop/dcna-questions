@@ -2,6 +2,7 @@ package main
 
 import (
 	dcnaquestions "dcna-questions"
+	pkgapicerts "dcna-questions/pkg/api/certs"
 	pkgapiexamassociations "dcna-questions/pkg/api/examassociations"
 	pkgapiexamdocs "dcna-questions/pkg/api/examdocs"
 	pkgapiexamsessions "dcna-questions/pkg/api/examsessions"
@@ -20,6 +21,7 @@ import (
 	pkgmodelsmsgnotify "dcna-questions/pkg/models/msgnotify"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
 	pkgmodelsserverconfig "dcna-questions/pkg/models/serverconfig"
+	pkgmodelssigner "dcna-questions/pkg/models/signer"
 	pkgmodelsuserexamdocsfsbasedassociation "dcna-questions/pkg/models/userexamdocs/fsbasedassociation"
 	pkgmodelsuserupload "dcna-questions/pkg/models/userupload"
 	pkgsession "dcna-questions/pkg/session"
@@ -30,6 +32,7 @@ import (
 	"time"
 
 	"context"
+	"crypto/x509"
 	pkglog "dcna-questions/pkg/log"
 	"errors"
 	"log/slog"
@@ -167,12 +170,12 @@ func (cli *CLI) Run() error {
 	msgHub := pkgmodelsmsgnotify.NewServiceMessageHub(msgRouter, cli.SysadminEmail)
 
 	// When the configuration document carries a <tlsCertKeyStore/> element,
-	// its loaded key pair envelops an XMLDSIG signature into the exam report
-	// XML attachments the tracking server emits; otherwise attachments are
-	// sent unsigned.
-	var reportSigner dsig.X509KeyStore
+	// its loaded key pair backs the XML signer that envelops an XMLDSIG
+	// signature into the exam report XML attachments the tracking server
+	// emits; otherwise attachments are sent unsigned.
+	var reportSigner pkgmodelssigner.XMLETreeSigner
 	if serverCfg != nil && serverCfg.SignerTLSCertKey != nil {
-		reportSigner = serverCfg.SignerTLSCertKey
+		reportSigner = dsig.NewDefaultSigningContext(serverCfg.SignerTLSCertKey)
 		logger.Info("exam report attachments will be XMLDSIG-signed",
 			"certPath", serverCfg.TLSCertKeyStore.CertPath)
 	}
@@ -208,6 +211,24 @@ func (cli *CLI) Run() error {
 	muxHandlerDyn.Handle("/api/examassociations", examAssociationsHandler)
 	muxHandlerDyn.Handle("/api/examassociations/{association_id}", examAssociationsHandler)
 	muxHandlerDyn.Handle("/api/dyn-assets/uploads/{upload_id}/{vfs_path...}", associationManager)
+
+	// The cert verification endpoint lets the holder of a signed exam report
+	// verify its enveloped XMLDSIG signature. It is wired only when the
+	// configuration document carries a <tlsCertKeyStore/> element: the
+	// certificate that signs the reports is the trust anchor for
+	// verification. The endpoint is also added to the JWT whitelist below —
+	// the signature itself is the proof being checked, so a logged-out exam
+	// taker can verify a report received by email.
+	if serverCfg != nil && serverCfg.SignerTLSCertKey != nil {
+		leaf, err := x509.ParseCertificate(serverCfg.SignerTLSCertKey.Certificate[0])
+		if err != nil {
+			return fmt.Errorf("failed to parse <tlsCertKeyStore/> certificate: %w", err)
+		}
+		certStore := &dsig.MemoryX509CertificateStore{Roots: []*x509.Certificate{leaf}}
+		muxHandlerDyn.Handle("/api/certs/verify",
+			pkgapicerts.NewCertVerificationHandler(dsig.NewDefaultValidationContext(certStore)))
+		logger.Info("registered cert verification handler", "path", "/api/certs/verify")
+	}
 
 	jwtSec, err := cli.getJWTSecret()
 	if err != nil {
@@ -344,6 +365,12 @@ func (cli *CLI) Run() error {
 		"/api/login",
 		"/api/login/",
 		"/api/logout",
+	}
+	if serverCfg != nil && serverCfg.SignerTLSCertKey != nil {
+		// Cert verification needs no session: the XMLDSIG signature itself is
+		// the proof, so a logged-out exam taker can verify a report received
+		// by email.
+		whList = append(whList, "/api/certs/verify")
 	}
 
 	// Detailed per-request middleware applies only to dynamic (api + assets) endpoints.

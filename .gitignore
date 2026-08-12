@@ -8,5 +8,6 @@ bin/server
 .env
 .env.local
 serverConfig.xml
+signing/key.pem
 getquestion.js
 getquestions1.js

@@ -4,6 +4,7 @@
   },
   "common": {
     "cancel": "Cancel",
+    "close": "Close",
     "delete": "Delete"
   },
   "nav": {
@@ -53,6 +54,28 @@
     "fail": "Fail",
     "finished": "Finished",
     "passingScore": "pass at {{score}}"
+  },
+  "verify": {
+    "button": "Verify Cert",
+    "dialogTitle": "Verify exam report",
+    "uploading": "Uploading…",
+    "verifying": "Verifying ...",
+    "statusValid": "Status: VALID",
+    "statusInvalid": "Status: INVALID",
+    "requestFailed": "Verification request failed",
+    "examTaker": "Exam taker",
+    "examTitle": "Exam title",
+    "examCode": "Exam code",
+    "overallResult": "Overall result",
+    "score": "Score",
+    "finishedAt": "Finished at",
+    "certTitle": "Signing certificate",
+    "subject": "Subject",
+    "issuer": "Issuer",
+    "serialNumber": "Serial number",
+    "fingerprint": "SHA-256 fingerprint",
+    "notBefore": "Not before",
+    "notAfter": "Not after"
   },
   "exams": {
     "title": "Exams",

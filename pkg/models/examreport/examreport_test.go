@@ -17,6 +17,7 @@ import (
 
 	"dcna-questions/pkg/models/msgnotify"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
+	pkgmodelssigner "dcna-questions/pkg/models/signer"
 
 	"github.com/beevik/etree"
 	dsig "github.com/russellhaering/goxmldsig"
@@ -471,6 +472,10 @@ func TestDeleteExamTracking_ConcurrentWithPut(t *testing.T) {
 // interface.
 var _ ExamTrackingServer = (*OnMemoryExamTrackingServer)(nil)
 
+// Compile-time assertion that goxmldsig's signing context satisfies the XML
+// signer interface consumed by the tracking server.
+var _ pkgmodelssigner.XMLETreeSigner = (*dsig.SigningContext)(nil)
+
 // sentMessage records one Send invocation of a fakeNotifier.
 type sentMessage struct {
 	replyTo msgnotify.AddrId
@@ -587,10 +592,10 @@ func TestPut_SendsNotification(t *testing.T) {
 	}
 }
 
-// TestPut_SignsReportAttachment confirms that when the server is built with an
-// x509 key store, the exam report XML attached to the completion notification
-// carries an enveloped XMLDSIG signature that validates against the keystore's
-// certificate, and that without a key store the attachment stays unsigned.
+// TestPut_SignsReportAttachment confirms that when the server is built with
+// an XML signer, the exam report XML attached to the completion notification
+// carries an enveloped XMLDSIG signature that validates against the signing
+// certificate, and that without a signer the attachment stays unsigned.
 func TestPut_SignsReportAttachment(t *testing.T) {
 	newNotifier := func() *fakeNotifier {
 		return &fakeNotifier{
@@ -600,10 +605,11 @@ func TestPut_SignsReportAttachment(t *testing.T) {
 		}
 	}
 
-	t.Run("with key store", func(t *testing.T) {
+	t.Run("with signer", func(t *testing.T) {
 		notifier := newNotifier()
 		keyStore := dsig.RandomKeyStoreForTest()
-		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, keyStore)
+		xmlSigner := dsig.NewDefaultSigningContext(keyStore)
+		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, xmlSigner)
 
 		if err := srv.Put(context.Background(), "alice", mustReport(t, "r1"), false); err != nil {
 			t.Fatalf("Put: %v", err)
@@ -645,7 +651,7 @@ func TestPut_SignsReportAttachment(t *testing.T) {
 		}
 	})
 
-	t.Run("without key store", func(t *testing.T) {
+	t.Run("without signer", func(t *testing.T) {
 		notifier := newNotifier()
 		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 
