@@ -515,14 +515,22 @@
             </connectionsolutions>
           </correctanswer>
         </question>
-        <!-- todo: ipv6 reverse dns config -->
-        <!-- <question id="29" type="single-choice" score="1">
-          <description></description>
+        <question id="29" type="single-choice" score="1">
+          <description>An engineer must configure rDNS to resolve fd42:43:44:45:: to example.dn42, a manual zone file is used, which of the following must be configured in the zone file? (Choose one.)</description>
+          <!-- See also: https://docs.db.ripe.net/Database-Support/Configuring-Reverse-DNS -->
           <options>
-            <option id=""></option>
+            <option id="1">5.4.0.0.4.4.0.0.3.4.0.0.2.4.d.f.ip6.arpa. 3600 IN PTR example.dn42.</option>
+            <option id="2">0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.5.4.4.4.3.4.2.4.d.f.ip6.arpa. 3600 IN PTR example.dn42.</option>
+            <option id="3">5.4.4.4.3.4.2.4.d.f.ip6.arpa. 3600 IN PTR example.dn42.</option>
+            <option id="4">0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.5.4.0.0.4.4.0.0.3.4.0.0.2.4.d.f.ip6.arpa. 3600 IN PTR example.dn42.</option>
+            <option id="5">0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.5.4.0.0.4.4.0.0.3.4.2.4.d.f.ip6.arpa. 3600 IN PTR example.dn42.</option>
           </options>
-          <correctanswer></correctanswer>
-        </question> -->
+          <correctanswer>
+            <options>
+              <option id="4"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
