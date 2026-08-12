@@ -531,6 +531,32 @@
             </options>
           </correctanswer>
         </question>
+        <question id="30" type="multiple-choice" score="1">
+          <description>Refer to the exhibit. An administrator must troubleshoot the IPv6 connectivity issue between PC-1 and Srv-1. Srv-1 is IPv6-only. R1 is single-homed and announced fd00:1:2:3::/48 to its upstream provider. fd00:1:2:3:4::/64 has been assigned as an address for the loopback interface of R1. No ACLs were ever configured in R1 and IP forwarding is enabled for all interfaces in R1. The logs on Srv-1 shows that the packets come from PC-1 has a source address of 2001:db:1234:1::1 when PC-1 is doing a UDP ping to Srv-1 with a designated port. Any kind of dynamic routing or automatic address assignment must not be used in R1's LAN. Which two of the following actions reinstate the IPv6 connectivity? (Choose three.)</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/aa28e6dc-37fc-44a3-a665-836c25b70c88.png" />
+            </exhibit>
+          </exhibits>
+          <options>
+            <option id="1">Configure R1 to announce 2001:db:1234::/48 to its upstream provider.</option>
+            <option id="y">Configure static address fd00:1:2:3:5::1/64 in the interface that connects PC-1 in R1.</option>
+            <option id="4">In PC-1, configure static address 172.20.0.10/29 in the router-facing interface, configure a static route to set 172.20.0.9 as the nexthop for 172.20.0.0::/14.</option>
+            <option id="5">Configure static address 172.20.0.9/29 in the interface that connects PC-1 in R1.</option>
+            <option id="z">Configure static route in R1 that sets fd00:1:2:3:5::101 as the nexthop for fd00:1:2:3:5::/64.</option>
+            <option id="2">Configure Srv-1 to use static address 2001:db:1234:1::/64 such that PC-1 and Srv-1 are in the same subnet.</option>
+            <option id="3">Configure R1 to disable rp_filter for all interfaces.</option>
+            <option id="x">In PC-1, configure static address fd00:1:2:3:5::101/64 in the router-facing interface, configure a static route to set fd00:1:2:3:5::1 as the nexthop for fd00::/8.</option>
+            <option id="6">Configure static route in R1 that sets 172.20.0.10 as the nexthop for 172.20.0.8/29.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="x"></option>
+              <option id="y"></option>
+              <option id="z"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
