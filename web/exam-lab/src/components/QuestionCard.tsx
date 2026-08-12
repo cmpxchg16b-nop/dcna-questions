@@ -174,9 +174,12 @@ export default function QuestionCard({
           </Alert>
         )}
         {question.type === "single-choice" && (
+          // gap opens up breathing room between options; it matters most on
+          // narrow mobile screens where option text wraps onto several lines.
           <RadioGroup
             value={selected[0] ?? ""}
             onChange={(e) => onSelectionChange([e.target.value])}
+            sx={{ gap: { xs: 1.5, sm: 1 } }}
           >
             {question.options?.map((option) => (
               <FormControlLabel
@@ -190,7 +193,7 @@ export default function QuestionCard({
           </RadioGroup>
         )}
         {question.type === "multiple-choice" && (
-          <FormGroup>
+          <FormGroup sx={{ gap: { xs: 1.5, sm: 1 } }}>
             {question.options?.map((option) => (
               <FormControlLabel
                 key={option.id}
