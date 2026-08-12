@@ -557,6 +557,21 @@
             </options>
           </correctanswer>
         </question>
+        <question id="31" type="single-choice" score="1">
+          <description>Which statement about the SOA record in a DNS zone is true? (Choose one.)</description>
+          <options>
+            <option id="1">A DNS zone may contain zero or unbounded number of SOA records to optionally describe the authority source of the zone and to provide redundancy for zone transfers.</option>
+            <option id="2">The SOA record maps a fully qualified domain name to an IPv4 address for authoritative resolution.</option>
+            <option id="3">The SOA record maps a fully qualified domain name to an IPv6 address for authoritative resolution.</option>
+            <option id="x">Every DNS zone must contain exactly one SOA record, which appears as the first record in the zone file and includes a serial number that secondary servers use to determine whether a zone transfer is needed.</option>
+            <option id="4">The refresh value in the SOA record specifies how long a recursive resolver is allowed to cache successful responses from the zone.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="x"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
