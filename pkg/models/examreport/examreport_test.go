@@ -3,6 +3,8 @@ package examreport
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -15,6 +17,9 @@ import (
 
 	"dcna-questions/pkg/models/msgnotify"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
+
+	"github.com/beevik/etree"
+	dsig "github.com/russellhaering/goxmldsig"
 )
 
 // mustReport builds an ExamReport with distinguishable fields.
@@ -167,7 +172,7 @@ func TestReportKey(t *testing.T) {
 }
 
 func TestPutAndGet_SingleUser(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer(nil)
+	srv := NewOnMemoryExamTrackingServer(nil, nil)
 	ctx := context.Background()
 
 	// Unknown user returns nil, nil.
@@ -210,7 +215,7 @@ func TestPutAndGet_SingleUser(t *testing.T) {
 }
 
 func TestPutAndGet_MultipleUsersAreIsolated(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer(nil)
+	srv := NewOnMemoryExamTrackingServer(nil, nil)
 	ctx := context.Background()
 
 	_ = srv.Put(ctx, "alice", mustReport(t, "a1"), false)
@@ -237,7 +242,7 @@ func TestPutAndGet_MultipleUsersAreIsolated(t *testing.T) {
 // goroutines and then verifies every report was retained with a unique index.
 // Under -race this also exercises the CAS loop's memory safety.
 func TestPut_ConcurrentSameUserNoLoss(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer(nil)
+	srv := NewOnMemoryExamTrackingServer(nil, nil)
 	ctx := context.Background()
 
 	const goroutines = 64
@@ -288,7 +293,7 @@ func TestPut_ConcurrentSameUserNoLoss(t *testing.T) {
 // observe fewer than the in-flight count, but must never observe more than the
 // committed count and must never panic.
 func TestPutGet_ConcurrentMixed(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer(nil)
+	srv := NewOnMemoryExamTrackingServer(nil, nil)
 	ctx := context.Background()
 
 	const puts = 200
@@ -339,7 +344,7 @@ func TestPutGet_ConcurrentMixed(t *testing.T) {
 }
 
 func TestDeleteExamTracking_Basic(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer(nil)
+	srv := NewOnMemoryExamTrackingServer(nil, nil)
 	ctx := context.Background()
 
 	// Deleting from a user with no reports is a not-found.
@@ -396,7 +401,7 @@ func TestDeleteExamTracking_Basic(t *testing.T) {
 // nil delete must correspond to a report that disappears, and Gets must never
 // panic or observe an absurd count.
 func TestDeleteExamTracking_ConcurrentWithPut(t *testing.T) {
-	srv := NewOnMemoryExamTrackingServer(nil)
+	srv := NewOnMemoryExamTrackingServer(nil, nil)
 	ctx := context.Background()
 	userid := "racer-delete"
 
@@ -515,7 +520,7 @@ func TestPut_SendsNotification(t *testing.T) {
 		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
 		areYou:            true,
 	}
-	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 	ctx := context.Background()
 
 	report := mustReport(t, "r1")
@@ -582,6 +587,85 @@ func TestPut_SendsNotification(t *testing.T) {
 	}
 }
 
+// TestPut_SignsReportAttachment confirms that when the server is built with an
+// x509 key store, the exam report XML attached to the completion notification
+// carries an enveloped XMLDSIG signature that validates against the keystore's
+// certificate, and that without a key store the attachment stays unsigned.
+func TestPut_SignsReportAttachment(t *testing.T) {
+	newNotifier := func() *fakeNotifier {
+		return &fakeNotifier{
+			senderFamilies:    []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+			recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
+			areYou:            true,
+		}
+	}
+
+	t.Run("with key store", func(t *testing.T) {
+		notifier := newNotifier()
+		keyStore := dsig.RandomKeyStoreForTest()
+		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, keyStore)
+
+		if err := srv.Put(context.Background(), "alice", mustReport(t, "r1"), false); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+		sent := notifier.sentMessages()
+		if len(sent) != 1 {
+			t.Fatalf("sent %d messages, want 1", len(sent))
+		}
+		atts := sent[0].msg.Attachments
+		if len(atts) != 1 {
+			t.Fatalf("attachment count = %d, want 1", len(atts))
+		}
+
+		doc := etree.NewDocument()
+		if err := doc.ReadFromBytes(atts[0].Content); err != nil {
+			t.Fatalf("attachment is not well-formed XML: %v\n%s", err, atts[0].Content)
+		}
+		root := doc.Root()
+		if sig := root.FindElement("./" + dsig.DefaultPrefix + ":" + dsig.SignatureTag); sig == nil {
+			t.Fatalf("signed attachment has no enveloped Signature element:\n%s", atts[0].Content)
+		}
+
+		// The enveloped signature must validate against the keystore's
+		// certificate.
+		_, certBytes, err := keyStore.GetKeyPair()
+		if err != nil {
+			t.Fatalf("GetKeyPair: %v", err)
+		}
+		if block, _ := pem.Decode(certBytes); block != nil {
+			certBytes = block.Bytes
+		}
+		cert, err := x509.ParseCertificate(certBytes)
+		if err != nil {
+			t.Fatalf("ParseCertificate: %v", err)
+		}
+		validationCtx := dsig.NewDefaultValidationContext(&dsig.MemoryX509CertificateStore{Roots: []*x509.Certificate{cert}})
+		if _, err := validationCtx.Validate(root); err != nil {
+			t.Fatalf("enveloped signature does not validate: %v", err)
+		}
+	})
+
+	t.Run("without key store", func(t *testing.T) {
+		notifier := newNotifier()
+		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
+
+		if err := srv.Put(context.Background(), "alice", mustReport(t, "r1"), false); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+		sent := notifier.sentMessages()
+		if len(sent) != 1 {
+			t.Fatalf("sent %d messages, want 1", len(sent))
+		}
+		atts := sent[0].msg.Attachments
+		if len(atts) != 1 {
+			t.Fatalf("attachment count = %d, want 1", len(atts))
+		}
+		if strings.Contains(string(atts[0].Content), dsig.SignatureTag) {
+			t.Errorf("unsigned attachment contains a Signature element:\n%s", atts[0].Content)
+		}
+	})
+}
+
 // TestPut_NotificationLiftsExamTakerProfile confirms that the exam taker
 // labels on the notification are lifted from the report's first person, so
 // downstream messaging learns the exam taker's email address from the report.
@@ -591,7 +675,7 @@ func TestPut_NotificationLiftsExamTakerProfile(t *testing.T) {
 		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
 		areYou:            true,
 	}
-	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 	ctx := context.Background()
 
 	report := mustReport(t, "r1")
@@ -628,7 +712,7 @@ func TestPut_NotificationGreetsExamTakerByName(t *testing.T) {
 
 	t.Run("username from the report when available", func(t *testing.T) {
 		notifier := newNotifier()
-		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 
 		report := mustReport(t, "r1")
 		report.ExamTaker.Persons = []Person{{Name: "alice", Fistname: "Alice", Lastname: "Smith", Email: "alice@example.com"}}
@@ -653,7 +737,7 @@ func TestPut_NotificationGreetsExamTakerByName(t *testing.T) {
 
 	t.Run("falls back to the subject id for an anonymous taker", func(t *testing.T) {
 		notifier := newNotifier()
-		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 
 		if err := srv.Put(context.Background(), "bob", mustReport(t, "r1"), false); err != nil {
 			t.Fatalf("Put: %v", err)
@@ -670,7 +754,7 @@ func TestPut_NotificationGreetsExamTakerByName(t *testing.T) {
 
 	t.Run("report fields are escaped in the HTML body", func(t *testing.T) {
 		notifier := newNotifier()
-		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+		srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 
 		report := mustReport(t, "r1")
 		report.ExamTaker.Persons = []Person{{Name: "alice<script>"}}
@@ -699,7 +783,7 @@ func TestPut_NotificationAttachesSerializedReport(t *testing.T) {
 		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
 		areYou:            true,
 	}
-	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 
 	if err := srv.Put(context.Background(), "alice", mustReport(t, "r1"), false); err != nil {
 		t.Fatalf("Put: %v", err)
@@ -739,7 +823,7 @@ func TestDeleteExamTracking_SendsNotification(t *testing.T) {
 		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
 		areYou:            true,
 	}
-	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 	ctx := context.Background()
 
 	_ = srv.Put(ctx, "alice", mustReport(t, "r1"), false)
@@ -778,7 +862,7 @@ func TestNotify_SkipsNotifiersWithIncompatibleFamilies(t *testing.T) {
 		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyEmail},
 		areYou:            true,
 	}
-	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 	ctx := context.Background()
 
 	_ = srv.Put(ctx, "alice", mustReport(t, "r1"), false)
@@ -795,7 +879,7 @@ func TestDeleteExamTracking_NotFoundSendsNoNotification(t *testing.T) {
 		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
 		areYou:            true,
 	}
-	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 	ctx := context.Background()
 
 	if err := srv.DeleteExamTracking(ctx, "alice", "nope"); !errors.Is(err, ErrExamTrackingNotFound) {
@@ -818,7 +902,7 @@ func TestNotify_NotifierErrorIsLoggedNotPropagated(t *testing.T) {
 		areYou:            true,
 		sendErr:           errors.New("delivery exploded"),
 	}
-	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 
 	// Put must succeed even though the notifier failed.
 	if err := srv.Put(context.Background(), "alice", mustReport(t, "r1"), false); err != nil {
@@ -837,7 +921,7 @@ func TestNotify_SkipsNotifierThatDoesNotClaimRecipient(t *testing.T) {
 		recipientFamilies: []msgnotify.MsgNotifyAddrFamily{msgnotify.MsgNotifyAddrFamilyService},
 		areYou:            false,
 	}
-	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier})
+	srv := NewOnMemoryExamTrackingServer([]msgnotify.MsgNotifySvc{notifier}, nil)
 	ctx := context.Background()
 
 	_ = srv.Put(ctx, "alice", mustReport(t, "r1"), false)

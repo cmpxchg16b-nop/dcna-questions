@@ -49,7 +49,7 @@ func TestStartNewExamSession_SendsNotification(t *testing.T) {
 	}
 
 	notifier := &recordingNotifier{}
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), []msgnotify.MsgNotifySvc{notifier})
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), []msgnotify.MsgNotifySvc{notifier})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -100,7 +100,7 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 		t.Fatalf("load exam: %v", err)
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -143,7 +143,7 @@ func TestStartNewExamSession_WalksAllQuestions(t *testing.T) {
 
 // TestStartNewExamSession_EmptyExam verifies that an exam with no questions is rejected.
 func TestStartNewExamSession_EmptyExam(t *testing.T) {
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -176,7 +176,7 @@ func TestStartNewExamSession_CertificationRejectsSeekable(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -208,7 +208,7 @@ func TestStartNewExamSession_PracticeAllowsSeekable(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -248,7 +248,7 @@ func TestStartNewExamSession_RandomCollPicksOneCollection(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -305,7 +305,7 @@ func TestStartNewExamSession_FlattensCollectionsByDefault(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -355,7 +355,7 @@ func TestGetExamSessionById_CurrentQuestionIndex(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -443,7 +443,7 @@ func TestGetNextQuestion_StripsCorrectAnswer(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -518,7 +518,7 @@ func TestOwnershipEnforcement(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -569,7 +569,7 @@ func TestEndExamSession_InjectsExamTakerProfile(t *testing.T) {
 		},
 	}
 
-	tracking := examreport.NewOnMemoryExamTrackingServer(nil)
+	tracking := examreport.NewOnMemoryExamTrackingServer(nil, nil)
 	srv := NewOnMemoryExamServer(tracking, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -638,7 +638,7 @@ func TestStartNewExamSession_VisitorMailingConsentIgnored(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -681,7 +681,7 @@ func TestStartNewExamSession_AcceptQuestionTypes(t *testing.T) {
 		t.Fatalf("load exam: %v", err)
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -790,7 +790,7 @@ func TestStartNewExamSession_VirtualCollectionSamples(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -855,7 +855,7 @@ func TestStartNewExamSession_VirtualCollectionForcesRandomOptionOrder(t *testing
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -909,7 +909,7 @@ func TestStartNewExamSession_PracticeIgnoresVirtualCollection(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)

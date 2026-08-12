@@ -41,7 +41,7 @@ func TestE2E_VisitorPracticeAndCertification(t *testing.T) {
 		}),
 	})
 
-	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer(nil)
+	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer(nil, nil)
 	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

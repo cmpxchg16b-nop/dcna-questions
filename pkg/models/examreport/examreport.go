@@ -23,7 +23,9 @@ import (
 	"dcna-questions/pkg/models/msgnotify"
 	pkgmodelsquestion "dcna-questions/pkg/models/question"
 
+	"github.com/beevik/etree"
 	"github.com/google/uuid"
+	dsig "github.com/russellhaering/goxmldsig"
 )
 
 // ErrExamTrackingNotFound is returned by DeleteExamTracking when the user has
@@ -150,14 +152,24 @@ type OnMemoryExamTrackingServer struct {
 	// deliver a notification when an exam report is stored or deleted. It may
 	// be empty.
 	notifiers []msgnotify.MsgNotifySvc
+
+	// x509KeyStore, when non-nil, provides the key pair used to envelop an
+	// XMLDSIG signature into the exam report XML document attached to
+	// notifications. When nil, attachments are sent unsigned.
+	x509KeyStore dsig.X509KeyStore
 }
 
 // NewOnMemoryExamTrackingServer returns a ready-to-use OnMemoryExamTrackingServer.
 // notifiers is the list of messaging notification services notified when an
 // exam report is stored (Put) or deleted (DeleteExamTracking); it may be nil
 // or empty, in which case no notifications are sent.
-func NewOnMemoryExamTrackingServer(notifiers []msgnotify.MsgNotifySvc) *OnMemoryExamTrackingServer {
-	return &OnMemoryExamTrackingServer{notifiers: notifiers}
+//
+// x509KeyStore is optional: when non-nil, the serialized exam report XML
+// document that travels as a notification attachment is re-parsed and
+// enveloped-signed (XMLDSIG) with the key pair it provides, so recipients can
+// authenticate the report; when nil, attachments are sent unsigned.
+func NewOnMemoryExamTrackingServer(notifiers []msgnotify.MsgNotifySvc, x509KeyStore dsig.X509KeyStore) *OnMemoryExamTrackingServer {
+	return &OnMemoryExamTrackingServer{notifiers: notifiers, x509KeyStore: x509KeyStore}
 }
 
 // notificationSender is the reply-to address the OnMemoryExamTrackingServer
@@ -233,7 +245,7 @@ func (s *OnMemoryExamTrackingServer) notify(ctx context.Context, userid string, 
 		Text:    text,
 		HTML:    html,
 	}
-	if attachment, err := reportAttachment(report); err != nil {
+	if attachment, err := s.reportAttachment(report); err != nil {
 		// Best effort, exactly like delivery itself: a report that cannot be
 		// serialized must not fail the notification, let alone the tracking
 		// operation.
@@ -366,11 +378,18 @@ func displayName(userid string, report ExamReport) string {
 }
 
 // reportAttachment serializes report as an XML <examreport> document (the
-// shape defined by exam.xsd) so it can travel as an email attachment.
-func reportAttachment(report ExamReport) (msgnotify.BlobAttachment, error) {
+// shape defined by exam.xsd) so it can travel as an email attachment. When the
+// server was built with an x509 key store, the serialized document is
+// re-parsed and enveloped-signed (XMLDSIG) before being attached.
+func (s *OnMemoryExamTrackingServer) reportAttachment(report ExamReport) (msgnotify.BlobAttachment, error) {
 	raw, err := xml.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return msgnotify.BlobAttachment{}, fmt.Errorf("examreport: serializing report %s: %w", report.Id, err)
+	}
+	if s.x509KeyStore != nil {
+		if raw, err = signEnvelopedXML(raw, s.x509KeyStore); err != nil {
+			return msgnotify.BlobAttachment{}, fmt.Errorf("examreport: signing report %s: %w", report.Id, err)
+		}
 	}
 	content := append([]byte(xml.Header), raw...)
 	return msgnotify.BlobAttachment{
@@ -380,6 +399,31 @@ func reportAttachment(report ExamReport) (msgnotify.BlobAttachment, error) {
 		Size:     len(content),
 		Filename: "exam-report-" + report.Id + ".xml",
 	}, nil
+}
+
+// signEnvelopedXML re-parses the XML document produced by encoding/xml,
+// envelops an XMLDSIG signature into its root element with the key pair from
+// keyStore, and returns the signed document.
+func signEnvelopedXML(raw []byte, keyStore dsig.X509KeyStore) ([]byte, error) {
+	doc := etree.NewDocument()
+	if err := doc.ReadFromBytes(raw); err != nil {
+		return nil, fmt.Errorf("re-parsing XML: %w", err)
+	}
+	signingCtx := dsig.NewDefaultSigningContext(keyStore)
+	signed, err := signingCtx.SignEnveloped(doc.Root())
+	if err != nil {
+		return nil, fmt.Errorf("enveloping XMLDSIG signature: %w", err)
+	}
+	// SignEnveloped does not mutate the parsed document: it returns a copy of
+	// the root element with the Signature appended, so the signed document is
+	// built around that copy.
+	signedDoc := etree.NewDocument()
+	signedDoc.SetRoot(signed)
+	out, err := signedDoc.WriteToBytes()
+	if err != nil {
+		return nil, fmt.Errorf("serializing signed document: %w", err)
+	}
+	return out, nil
 }
 
 // completionNotice carries the values rendered into the exam-completion

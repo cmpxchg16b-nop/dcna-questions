@@ -37,6 +37,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/joho/godotenv"
+	dsig "github.com/russellhaering/goxmldsig"
 )
 
 // logger is the application-wide structured logger used by the HTTP logging
@@ -165,7 +166,18 @@ func (cli *CLI) Run() error {
 	msgRouter := pkgmodelsmsgnotify.NewOnMemoryMsgRouter(msgRoutes)
 	msgHub := pkgmodelsmsgnotify.NewServiceMessageHub(msgRouter, cli.SysadminEmail)
 
-	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer([]pkgmodelsmsgnotify.MsgNotifySvc{msgHub})
+	// When the configuration document carries a <tlsCertKeyStore/> element,
+	// its loaded key pair envelops an XMLDSIG signature into the exam report
+	// XML attachments the tracking server emits; otherwise attachments are
+	// sent unsigned.
+	var reportSigner dsig.X509KeyStore
+	if serverCfg != nil && serverCfg.SignerTLSCertKey != nil {
+		reportSigner = serverCfg.SignerTLSCertKey
+		logger.Info("exam report attachments will be XMLDSIG-signed",
+			"certPath", serverCfg.TLSCertKeyStore.CertPath)
+	}
+
+	trackingServer := pkgmodelsexamreport.NewOnMemoryExamTrackingServer([]pkgmodelsmsgnotify.MsgNotifySvc{msgHub}, reportSigner)
 	examServer := pkgmodelsexamserver.NewOnMemoryExamServer(trackingServer, []pkgmodelsmsgnotify.MsgNotifySvc{msgHub})
 	go examServer.Run(context.Background())
 	defer examServer.Shutdown()

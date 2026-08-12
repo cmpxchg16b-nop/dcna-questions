@@ -15,6 +15,16 @@
           minOccurs="0"
         />
         <xsd:element name="smtpServer" type="smtpServerType" minOccurs="0" />
+        <!-- The X.509 certificate and private key the exam tracking server
+             uses to envelop XMLDSIG signatures into the exam report XML
+             documents attached to notification messages (see
+             OnMemoryExamTrackingServer in pkg/models/examreport). When the
+             element is absent, report attachments are sent unsigned. -->
+        <xsd:element
+          name="tlsCertKeyStore"
+          type="tlsCertKeyStoreType"
+          minOccurs="0"
+        />
         <xsd:element
           name="loginOptions"
           type="loginOptionsType"
@@ -106,6 +116,17 @@
     <xsd:attribute name="password" type="xsd:string" use="optional" />
     <xsd:attribute name="startTLS" type="xsd:boolean" use="optional" />
     <xsd:attribute name="tls" type="xsd:boolean" use="optional" />
+  </xsd:complexType>
+
+  <!-- The key pair referenced by <tlsCertKeyStore/>. Both attributes are
+       required filesystem paths to PEM-encoded files, loaded with
+       tls.LoadX509KeyPair at configuration load time:
+         * certPath  the certificate (or certificate chain) file
+         * keyPath   the private key file; only RSA keys are usable for
+                     XMLDSIG signing -->
+  <xsd:complexType name="tlsCertKeyStoreType">
+    <xsd:attribute name="certPath" type="xsd:string" use="required" />
+    <xsd:attribute name="keyPath" type="xsd:string" use="required" />
   </xsd:complexType>
 
   <!-- The login page's configurable IdP list; holds zero or more loginOption

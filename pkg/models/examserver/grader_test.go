@@ -485,7 +485,7 @@ func newGradingExam(passingScore *float32) *pkgmodelquestions.Exam {
 // submission, returns an assessment, and—when checkOnly is false—persists the
 // answer so that a later GetMyAnswer returns it.
 func TestSubmitAnswer_GradesAndStores(t *testing.T) {
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -532,7 +532,7 @@ func TestSubmitAnswer_GradesAndStores(t *testing.T) {
 // TestSubmitAnswer_CheckOnly verifies that SubmitAnswer with checkOnly=true
 // grades the submission but does not persist it.
 func TestSubmitAnswer_CheckOnly(t *testing.T) {
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -572,7 +572,7 @@ func TestSubmitAnswer_CheckOnly(t *testing.T) {
 // TestGetMyAnswer_NoneSubmitted verifies that GetMyAnswer returns (nil, nil)
 // before any non-checkOnly submission has been stored.
 func TestGetMyAnswer_NoneSubmitted(t *testing.T) {
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -617,7 +617,7 @@ func TestSubmitAnswer_CheckOnlyRevealsCorrectAnswers(t *testing.T) {
 		},
 	}
 
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -672,7 +672,7 @@ func TestSubmitAnswer_CheckOnlyRevealsCorrectAnswers(t *testing.T) {
 
 // TestGetMyAnswer_Ownership verifies that GetMyAnswer rejects a non-owner caller.
 func TestGetMyAnswer_Ownership(t *testing.T) {
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -691,7 +691,7 @@ func TestGetMyAnswer_Ownership(t *testing.T) {
 // TestGetMyAnswer_NotFound verifies that GetMyAnswer on an unknown session
 // returns errExamNotFound.
 func TestGetMyAnswer_NotFound(t *testing.T) {
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)
@@ -705,7 +705,7 @@ func TestGetMyAnswer_NotFound(t *testing.T) {
 // TestSubmitAnswer_Overwrites verifies that a second non-checkOnly submission
 // replaces the previously stored answer.
 func TestSubmitAnswer_Overwrites(t *testing.T) {
-	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil), nil)
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.Run(ctx)

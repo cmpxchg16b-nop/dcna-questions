@@ -4,10 +4,13 @@
 package serverconfig
 
 import (
+	"crypto/tls"
 	"encoding/xml"
 	"fmt"
 	"os"
 	"time"
+
+	dsig "github.com/russellhaering/goxmldsig"
 )
 
 // ServerConfigXML mirrors the structure of serverConfig.xml (validated
@@ -17,13 +20,23 @@ type ServerConfigXML struct {
 	XMLName          xml.Name            `xml:"serverConfig"`
 	OIDCLoginOptions OIDCLoginOptionsXML `xml:"oidcLoginOptions"`
 	// SMTPServer is nil when the document has no <smtpServer/> section.
-	SMTPServer   *SMTPServerXML  `xml:"smtpServer"`
-	LoginOptions LoginOptionsXML `xml:"loginOptions"`
+	SMTPServer *SMTPServerXML `xml:"smtpServer"`
+	// TLSCertKeyStore is nil when the document has no <tlsCertKeyStore/>
+	// element.
+	TLSCertKeyStore *TLSCertKeyStoreXML `xml:"tlsCertKeyStore"`
+	LoginOptions    LoginOptionsXML     `xml:"loginOptions"`
 	// AllowedOrigins holds every <allowedOrigin/> entry of the document: the
 	// request origins trusted by the OAuth2/OIDC login handlers when their
 	// configured redirect URL is relative (see pkg/api/common
 	// ResolveRedirectURL).
 	AllowedOrigins []string `xml:"allowedOrigin"`
+
+	// SignerTLSCertKey is the XMLDSIG signing key pair LoadServerConfig loaded
+	// from the <tlsCertKeyStore/> element's certPath/keyPath; it is nil when
+	// the document has no such element. *dsig.TLSCertKeyStore implements
+	// dsig.X509KeyStore, so it can be handed directly to
+	// examreport.NewOnMemoryExamTrackingServer.
+	SignerTLSCertKey *dsig.TLSCertKeyStore `xml:"-"`
 }
 
 // OIDCLoginOptionsXML mirrors the <oidcLoginOptions/> section of
@@ -63,6 +76,16 @@ type SMTPServerXML struct {
 	TLS      bool   `xml:"tls,attr"`
 }
 
+// TLSCertKeyStoreXML mirrors the <tlsCertKeyStore/> element of
+// serverConfig.xml: the filesystem paths of the X.509 certificate and private
+// key the exam tracking server signs XMLDSIG-enveloped exam report
+// attachments with. Both paths point to PEM-encoded files loadable with
+// tls.LoadX509KeyPair; only RSA keys are usable for XMLDSIG signing.
+type TLSCertKeyStoreXML struct {
+	CertPath string `xml:"certPath,attr"`
+	KeyPath  string `xml:"keyPath,attr"`
+}
+
 // LoginOptionsXML mirrors the <loginOptions/> section of serverConfig.xml:
 // the login page's configurable IdP list, served to the frontend as JSON by
 // the login options API handler (pkg/api/loginoptions).
@@ -93,6 +116,23 @@ func LoadServerConfig(path string) (*ServerConfigXML, error) {
 	var cfg ServerConfigXML
 	if err := xml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse server config file %s: %w", path, err)
+	}
+	// The optional <tlsCertKeyStore/> element names the key pair the exam
+	// tracking server signs report attachments with. Load it now so an
+	// unreadable or mismatched pair fails at startup instead of at the first
+	// signed attachment.
+	if cfg.TLSCertKeyStore != nil {
+		cert, err := tls.LoadX509KeyPair(cfg.TLSCertKeyStore.CertPath, cfg.TLSCertKeyStore.KeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load <tlsCertKeyStore/> key pair of server config file %s: %w", path, err)
+		}
+		keyStore := dsig.TLSCertKeyStore(cert)
+		cfg.SignerTLSCertKey = &keyStore
+		// goxmldsig signs with RSA keys only: surface an unusable key now
+		// rather than when the first attachment is signed.
+		if _, _, err := cfg.SignerTLSCertKey.GetKeyPair(); err != nil {
+			return nil, fmt.Errorf("unusable <tlsCertKeyStore/> key pair in server config file %s: %w", path, err)
+		}
 	}
 	return &cfg, nil
 }
