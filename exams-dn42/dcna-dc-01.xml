@@ -609,6 +609,26 @@
             </options>
           </correctanswer>
         </question>
+        <question id="34" type="single-choice" score="1">
+          <description>Refer to the exhibit. An engineer must troubleshoot an intermittent connectivity issue between PC-1 and Srv-1, and Srv-1 is an IPv6-only node. All inter-AS BGP sessions and the dataplane are validated. The engineer observed that there are packets occasionally taking AS1003 as return path, i.e. R6-R5-R4-R1. TCP MSS-clamping must not be used, and no nested tunneling or additional 4-to-6 NAT is allowed. Which setting must be configure to solve the issue? (Choose one.)</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/037cc8b2-c615-4c03-ac0e-f40bdacb8ed3.png" />
+            </exhibit>
+          </exhibits>
+          <options>
+            <option id="2">Configure TCP MSS-clamping on R6.</option>
+            <option id="1">Configure the MTU on the interfaces of link R1-PC-1 to 1280 bytes.</option>
+            <option id="3">Configure TCP MSS-clamping on R1.</option>
+            <option id="4">Configure R4 to prepend itself (AS1003) onto the advertising routes for AS1001.</option>
+            <option id="x">Configure the MTU on the interfaces of link R6-Srv-1 to 1280 bytes.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="x"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
