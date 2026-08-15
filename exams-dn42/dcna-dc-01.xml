@@ -572,6 +572,38 @@
             </options>
           </correctanswer>
         </question>
+        <question id="32" type="multiple-choice" score="1">
+          <description>An engineer is building a WireGuard tunnel on top of standard ethernet-based IPv6 underlay network, it is known that the underlay is IPv6-only, and IPv6 must not be used in the overlay. What should be considered when implementing the solution? (Choose two.)</description>
+          <options>
+            <option id="1">MTU of the overlay tunnel interface should be 1440 bytes.</option>
+            <option id="2">MTU of the overlay tunnel interface should be 1280 bytes.</option>
+            <option id="x">MTU of the underlay interface should be 1500 bytes.</option>
+            <option id="3">To avoid fragmentation, the MTU of the underlay interface must be manually bump up to 1580 to pay for the 80 bytes extra overhead caused by encapsulation.</option>
+            <option id="y">MTU of the overlay tunnel interface should be 1420 bytes.</option>
+            <option id="4">TCP MSS-clamping must be enabled, and the MTU of the overlay tunnel interface can be set to however you want.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="x"></option>
+              <option id="y"></option>
+            </options>
+          </correctanswer>
+        </question>
+        <question id="33" type="single-choice" score="1">
+          <description>Refer to the exhibit. An engineer must configure iBGP to enable inter-AS reachability being synchronized across the border gateway routers. The engineer spotted that no routes to the external ASes has been learnt in all the border gateway routers. Which modification must be perform on the config to reinstate the inter-AS connectivity? (Choose one.)</description>
+          <options>
+            <option id="1">Move both filter functions from the import direction to the export direction.</option>
+            <option id="2">Configure next-hop-self on all iBGP sessions.</option>
+            <option id="3">Configure an iBGP route reflector and configure all iBGP speakers to peer with it.</option>
+            <option id="4">Lower the MTU for all the peering interfaces to 1280 bytes.</option>
+            <option id="x">Remove the is_self_net() and the is_self_net_v6() checks.</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="x"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
