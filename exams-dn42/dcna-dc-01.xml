@@ -590,7 +590,12 @@
           </correctanswer>
         </question>
         <question id="33" type="single-choice" score="1">
-          <description>Refer to the exhibit. An engineer must configure iBGP to enable inter-AS reachability being synchronized across the border gateway routers. The engineer spotted that no routes to the external ASes has been learnt in all the border gateway routers. Which modification must be perform on the config to reinstate the inter-AS connectivity? (Choose one.)</description>
+          <description>Refer to the exhibit. An engineer must configure iBGP to enable inter-AS reachability being synchronized across the border gateway routers. The engineer spotted that no routes to the external ASes have been learned in all the border gateway routers. Which modification must be performed on the config to reinstate the inter-AS connectivity? (Choose one.)</description>
+          <exhibits>
+            <exhibit>
+              <image src="assets/a260973c-9930-4d89-a639-513d2b5881f6.png" />
+            </exhibit>
+          </exhibits>
           <options>
             <option id="1">Move both filter functions from the import direction to the export direction.</option>
             <option id="2">Configure next-hop-self on all iBGP sessions.</option>
