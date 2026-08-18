@@ -629,6 +629,23 @@
             </options>
           </correctanswer>
         </question>
+        <question id="35" type="multiple-choice" score="1">
+          <description>An engineer must configure route summerization out of the following subnets: 172.20.20.0/24, 172.20.21.0/24, 172.20.22.0/24 and 172.20.23.0/24, the summerized route must provide a minimum of 400 usable host addresses and the solution must preserve addresses as possible. Which two of the following solutions are feasible? (Choose two.)</description>
+          <options>
+            <option id="x">Summarize 172.20.20.0/24 and 172.20.21.0/24 as 172.20.20.0/23</option>
+            <option id="1">Summarize 172.20.20.0/24 and 172.20.22.0/24 as 172.20.20.0/22</option>
+            <option id="2">Summarize 172.20.20.0/24 and 172.20.23.0/24 as 172.20.20.0/22</option>
+            <option id="3">Summarize 172.20.21.0/24 and 172.20.22.0/24 as 172.20.21.0/23</option>
+            <option id="4">Summarize 172.20.21.0/24 and 172.20.23.0/24 as 172.20.20.0/22</option>
+            <option id="y">Summarize 172.20.22.0/24 and 172.20.23.0/24 as 172.20.22.0/23</option>
+          </options>
+          <correctanswer>
+            <options>
+              <option id="x"></option>
+              <option id="y"></option>
+            </options>
+          </correctanswer>
+        </question>
       </questioncollection>
     </questionset>
   </exam>
