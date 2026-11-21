@@ -8,6 +8,7 @@ import {
   Checkbox,
   FormControlLabel,
   FormGroup,
+  Link,
   Radio,
   RadioGroup,
   Typography,
@@ -121,28 +122,44 @@ export default function QuestionCard({
   };
 
   // optionLabel renders an option's content and, when imgSrc is set, the
-  // option's image (pure-image options carry no text). The image follows the
-  // same max-bounds pattern as the exhibits above so a large option image
-  // doesn't shove the remaining choices below the fold.
-  const optionLabel = (option: QuestionOption) => (
-    <>
-      {option.content}
-      {option.imgSrc && (
-        <Box
-          component="img"
-          src={resolveAssetSrc(option.imgSrc)}
-          alt={option.content || t("question.optionImageAlt")}
-          sx={{
-            display: "block",
-            maxWidth: "100%",
-            maxHeight: "40vh",
-            my: 0.5,
-          }}
-        />
-      )}
-      {optionMarker(option.id)}
-    </>
-  );
+  // option's image (pure-image options carry no text). Its rationale comes
+  // from the graded origin by option id, so randomized option order is safe.
+  // The served question has no rationales; they appear only after Check.
+  const optionLabel = (option: QuestionOption) => {
+    const explanation = assessment
+      ? gradedQuestion?.options?.find((o) => o.id === option.id)?.explanation
+      : undefined;
+    return (
+      <>
+        {option.content}
+        {option.imgSrc && (
+          <Box
+            component="img"
+            src={resolveAssetSrc(option.imgSrc)}
+            alt={option.content || t("question.optionImageAlt")}
+            sx={{
+              display: "block",
+              maxWidth: "100%",
+              maxHeight: "40vh",
+              my: 0.5,
+            }}
+          />
+        )}
+        {optionMarker(option.id)}
+        {explanation && (
+          <Typography
+            component="span"
+            variant="body2"
+            color="textSecondary"
+            data-testid={`option-explanation-${option.id}`}
+            sx={{ display: "block", mt: 0.75, whiteSpace: "pre-wrap" }}
+          >
+            {explanation}
+          </Typography>
+        )}
+      </>
+    );
+  };
 
   return (
     <Card>
@@ -188,6 +205,7 @@ export default function QuestionCard({
                 control={<Radio />}
                 label={optionLabel(option)}
                 disabled={disabled}
+                sx={{ alignItems: "flex-start" }}
               />
             ))}
           </RadioGroup>
@@ -205,6 +223,7 @@ export default function QuestionCard({
                 }
                 label={optionLabel(option)}
                 disabled={disabled}
+                sx={{ alignItems: "flex-start" }}
               />
             ))}
           </FormGroup>
@@ -233,6 +252,66 @@ export default function QuestionCard({
             <Typography color="textSecondary">
               {t("question.unsupportedType", { type: question.type })}
             </Typography>
+          )}
+        {assessment &&
+          gradedQuestion &&
+          (gradedQuestion.explanation ||
+            (gradedQuestion.references?.length ?? 0) > 0) && (
+            <Box
+              component="section"
+              aria-label={t("question.explanation")}
+              data-testid="question-feedback"
+              sx={{ mt: 2, p: 2, border: 1, borderColor: "divider", borderRadius: 1 }}
+            >
+              {gradedQuestion.explanation && (
+                <>
+                  <Typography variant="subtitle2" gutterBottom>
+                    {t("question.explanation")}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      mb: (gradedQuestion.references?.length ?? 0) > 0 ? 2 : 0,
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {gradedQuestion.explanation}
+                  </Typography>
+                </>
+              )}
+              {gradedQuestion.references &&
+                gradedQuestion.references.length > 0 && (
+                  <>
+                    <Typography variant="subtitle2" gutterBottom>
+                      {t("question.references")}
+                    </Typography>
+                    <Box component="ul" sx={{ m: 0, pl: 3 }}>
+                      {gradedQuestion.references.map((reference, index) => (
+                        <Box
+                          component="li"
+                          key={`${reference.href}:${index}`}
+                          sx={{ overflowWrap: "anywhere" }}
+                        >
+                          {/^https?:\/\//i.test(reference.href) ? (
+                            <Link
+                              href={reference.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              variant="body2"
+                            >
+                              {reference.title || reference.href}
+                            </Link>
+                          ) : (
+                            <Typography variant="body2">
+                              {reference.title || reference.href}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
+                  </>
+                )}
+            </Box>
           )}
       </CardContent>
     </Card>

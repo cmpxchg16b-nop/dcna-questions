@@ -205,6 +205,39 @@ directory).
 Exhibits work with any question type, and a question may carry several of
 them.
 
+### Question labels and learning feedback
+
+A question can carry any number of key-value `<label>` elements, including
+repeated keys. Use them for business metadata such as `domain`, `subdomain`,
+`level`, `skill`, `platform`, or `status`. Each choice can contain one optional
+`<explanation>` describing why it is correct or incorrect. A question can also
+have an overall `<explanation>` and a `<references>` list.
+
+```xml
+<question id="5" type="single-choice" score="1">
+  <description>Which community suppresses advertisement to all BGP peers? (Choose one.)</description>
+  <label key="domain" value="BGP" />
+  <label key="topic" value="communities" />
+  <label key="topic" value="policy" />
+  <options>
+    <option id="1">NO_EXPORT<explanation>Incorrect: this permits advertisement within the confederation.</explanation></option>
+    <option id="2">NO_ADVERTISE<explanation>Correct: RFC 1997 prohibits advertisement to other BGP peers.</explanation></option>
+  </options>
+  <correctanswer><options><option id="2" /></options></correctanswer>
+  <explanation>NO_ADVERTISE applies to both iBGP and eBGP peers.</explanation>
+  <references>
+    <reference href="https://www.rfc-editor.org/rfc/rfc1997.html">RFC 1997 — BGP Communities Attribute</reference>
+  </references>
+</question>
+```
+
+Labels are non-sensitive and remain available in served questions. Correct
+answers, per-option explanations, the overall explanation, and references are
+stripped from unsolved questions. In a practice exam they are returned with the
+assessment and rendered only after **Check**; certification-exam assessments do
+not embed the original questions or their learning feedback. HTTP(S) references
+render as external links; other URI schemes are shown as text.
+
 There are more examples live in `exams/` .
 
 ## What it is (and isn't)

@@ -16,18 +16,17 @@
       <questioncollection>
         <question id="1" type="single-choice" score="1">
           <description>An engineer is configuring router R2 in autonomous system 65002 to control the propagation of the prefix 192.0.2.0/24, which R2 learns from router R1 via an eBGP session. The engineer applies an inbound route map that sets the well-known community NO_ADVERTISE on this prefix. R2 has three fully established iBGP peers inside AS 65002 and one additional eBGP peer in AS 65003. Assuming no other filtering is configured, to which peers will R2 advertise the 192.0.2.0/24 prefix? (Choose one.)</description>
+          <label key="domain" value="BGP" />
+          <label key="subdomain" value="communities" />
+          <label key="level" value="L2" />
+          <label key="skill" value="apply" />
+          <label key="status" value="active" />
           <options>
-            <option
-              id="1"
-            >All iBGP and eBGP peers, because NO_ADVERTISE only prevents the prefix from being readvertised toward the originating AS</option>
-            <option id="2">All three iBGP peers only</option>
-            <option id="3">The eBGP peer in AS 65003 only</option>
-            <option
-              id="4"
-            >All iBGP and eBGP peers, but with the community attribute stripped from the updates</option>
-            <option
-              id="5"
-            >No BGP peers at all; the prefix remains in R2's local BGP table but is not advertised to any peer</option>
+            <option id="1">All iBGP and eBGP peers, because NO_ADVERTISE only prevents the prefix from being readvertised toward the originating AS<explanation>Incorrect: NO_ADVERTISE is not limited to the originating AS or to subsequent eBGP propagation; it suppresses advertisement to every BGP peer.</explanation></option>
+            <option id="2">All three iBGP peers only<explanation>Incorrect: NO_ADVERTISE applies to iBGP as well as eBGP, so the eBGP peer in AS 65003 must not receive the prefix either.</explanation></option>
+            <option id="3">The eBGP peer in AS 65003 only<explanation>Incorrect: advertising to the eBGP peer while suppressing all iBGP advertisements would still violate NO_ADVERTISE.</explanation></option>
+            <option id="4">All iBGP and eBGP peers, but with the community attribute stripped from the updates<explanation>Incorrect: NO_ADVERTISE does not mean advertise after removing the community. The prefix must not be advertised to other BGP peers.</explanation></option>
+            <option id="5">No BGP peers at all; the prefix remains in R2's local BGP table but is not advertised to any peer<explanation>Correct: RFC 1997 requires a route carrying NO_ADVERTISE not to be advertised to other BGP peers. R2 may retain the prefix locally, but neither its iBGP peers nor its eBGP peer receives it.</explanation></option>
           </options>
           <correctanswer>
             <options>
@@ -37,6 +36,11 @@
               >No BGP peers at all; the prefix remains in R2's local BGP table but is not advertised to any peer</option>
             </options>
           </correctanswer>
+          <explanation>The inbound route map attaches NO_ADVERTISE after R2 learns the prefix. The community does not require R2 to discard its local route; it controls subsequent advertisement and applies equally to iBGP and eBGP peers.</explanation>
+          <references>
+            <reference href="https://www.rfc-editor.org/rfc/rfc1997.html">RFC 1997 — BGP Communities Attribute, Well-known Communities</reference>
+            <reference href="https://www.rfc-editor.org/rfc/rfc4271.html">RFC 4271 — A Border Gateway Protocol 4 (BGP-4)</reference>
+          </references>
         </question>
         <question id="4" type="single-choice" score="1">
           <description>Refer to the exhibit. An engineer is investigating a reachability issue in an experimental BGP overlay network. ICMPv6 echo requests from the local router to fdea:6e46:2f1c::1 time out, and the traceroute stops after several hops. The engineer verifies that the iBGP session to i-bzip9 is established, that no ACLs are blocking ICMPv6, and that the rp_filter kernel parameter is set to 0 on all interfaces. Which statement best explains why the pings fail? (Choose one.)</description>

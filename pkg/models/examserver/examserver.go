@@ -853,22 +853,22 @@ func sessionExcerpt(sess *OnMemoryExamSession) ExamSessionExcerpt {
 	}
 }
 
-// buildOnMemoryQuestion returns a shallow copy of orig whose Options are
-// reordered according to the (random or identity) option permutation and whose
-// CorrectAnswer is stripped: a served question must never reveal the answer
-// key. The only legitimate reveal is the grader's assessment, which embeds the
-// origin question (correct answer included) for practice-exam submissions.
-// The original question bank is never mutated; option Ids are preserved so a
-// submitted answer's option ids still match the grader's own unstripped copy.
+// buildOnMemoryQuestion returns a copy of orig whose Options are reordered
+// according to the (random or identity) option permutation and whose answer-
+// sensitive fields are stripped: a served question must never reveal the answer
+// key, option rationales, overall explanation, or references. The legitimate
+// reveal is the grader's practice-exam assessment, which embeds the original
+// question with its learning feedback. Non-sensitive business labels remain.
+// The question bank is never mutated; option Ids are preserved so a submitted
+// answer still matches the grader's own unstripped copy.
 func buildOnMemoryQuestion(orig *pkgmodelquestions.Question, opts ExamOptions, rng *rand.Rand) OnMemoryQuestion {
 	qCopy := *orig
 	qCopy.CorrectAnswer = pkgmodelquestions.CorrectAnswer{}
+	qCopy.Explanation = ""
+	qCopy.References = nil
 	m := len(orig.Options)
-	if m == 0 {
-		return OnMemoryQuestion{Question: &qCopy, OptionPermutation: identityPermutation(0)}
-	}
 	var optPerm []int
-	if opts&ExamOptionRandomOptions != 0 {
+	if opts&ExamOptionRandomOptions != 0 && m > 0 {
 		optPerm = rng.Perm(m)
 	} else {
 		optPerm = identityPermutation(m)
@@ -876,6 +876,7 @@ func buildOnMemoryQuestion(orig *pkgmodelquestions.Question, opts ExamOptions, r
 	reordered := make(pkgmodelquestions.Options, m)
 	for i, p := range optPerm {
 		reordered[i] = orig.Options[p]
+		reordered[i].Explanation = ""
 	}
 	qCopy.Options = reordered
 	return OnMemoryQuestion{Question: &qCopy, OptionPermutation: optPerm}

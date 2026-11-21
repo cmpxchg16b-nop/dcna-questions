@@ -501,6 +501,89 @@ func TestGetNextQuestion_StripsCorrectAnswer(t *testing.T) {
 	}
 }
 
+// TestPracticeFeedbackLifecycle verifies that business labels are safe to serve
+// immediately, while every answer-sensitive explanation and reference remains
+// hidden until the practice assessment. It also guards against mutating the
+// original question bank when options are copied and shuffled.
+func TestPracticeFeedbackLifecycle(t *testing.T) {
+	original := singleChoice("sc", 1, "1")
+	original.Labels = []pkgmodelquestions.Label{
+		{Key: "domain", Value: "BGP"},
+		{Key: "topic", Value: "communities"},
+		{Key: "topic", Value: "policy"},
+	}
+	original.Options = pkgmodelquestions.Options{
+		{Id: "1", Content: "Alpha", Explanation: "Correct rationale"},
+		{Id: "2", Content: "Beta", Explanation: "Incorrect rationale"},
+	}
+	original.Explanation = "Overall rationale"
+	original.References = []pkgmodelquestions.Reference{
+		{Href: "https://www.rfc-editor.org/rfc/rfc1997.html", Title: "RFC 1997"},
+	}
+	exam := &pkgmodelquestions.Exam{
+		Id:           "feedback-lifecycle",
+		ExamCategory: pkgmodelquestions.ExamCategoryPractice,
+		QuestionSet: pkgmodelquestions.QuestionSet{
+			QuestionCollections: []pkgmodelquestions.QuestionCollection{
+				{Questions: []pkgmodelquestions.Question{original}},
+			},
+		},
+	}
+
+	srv := NewOnMemoryExamServer(examreport.NewOnMemoryExamTrackingServer(nil, nil), nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Run(ctx)
+	defer srv.Shutdown()
+
+	examId, err := srv.StartNewExamSession(ctx, exam, "user-1", examreport.Person{}, ExamOptionRandomOptions, nil)
+	if err != nil {
+		t.Fatalf("StartNewExamSession: %v", err)
+	}
+	served, _, err := srv.GetNextQuestion(ctx, examId, "user-1", nil)
+	if err != nil || served == nil {
+		t.Fatalf("GetNextQuestion: q=%v err=%v", served, err)
+	}
+	if !reflect.DeepEqual(served.Labels, original.Labels) {
+		t.Errorf("served labels = %+v, want %+v", served.Labels, original.Labels)
+	}
+	if served.Explanation != "" || len(served.References) != 0 {
+		t.Errorf("served question leaked question feedback: %+v", served)
+	}
+	for _, option := range served.Options {
+		if option.Explanation != "" {
+			t.Errorf("served option %q leaked explanation %q", option.Id, option.Explanation)
+		}
+	}
+	excerpt, err := srv.GetExamSessionById(ctx, examId, "user-1")
+	if err != nil {
+		t.Fatalf("GetExamSessionById: %v", err)
+	}
+	if excerpt.CurrentQuestion == nil || excerpt.CurrentQuestion.Explanation != "" ||
+		len(excerpt.CurrentQuestion.References) != 0 {
+		t.Errorf("CurrentQuestion leaked question feedback: %+v", excerpt.CurrentQuestion)
+	}
+	if original.Explanation != "Overall rationale" || len(original.References) != 1 ||
+		original.Options[0].Explanation != "Correct rationale" || original.Options[1].Explanation != "Incorrect rationale" {
+		t.Fatalf("serving a question mutated the original metadata: %+v", original)
+	}
+
+	assessment, err := srv.SubmitAnswer(ctx, examId, "user-1", examAnswer(answer("sc", "1")), true)
+	if err != nil {
+		t.Fatalf("SubmitAnswer: %v", err)
+	}
+	if len(assessment.Questions) != 1 {
+		t.Fatalf("assessment embedded %d questions, want 1", len(assessment.Questions))
+	}
+	graded := assessment.Questions[0]
+	if !reflect.DeepEqual(graded.Labels, original.Labels) ||
+		graded.Explanation != original.Explanation ||
+		!reflect.DeepEqual(graded.References, original.References) ||
+		!reflect.DeepEqual(graded.Options, original.Options) {
+		t.Fatalf("assessment lost learning metadata:\n got: %+v\nwant: %+v", graded, original)
+	}
+}
+
 // TestOwnershipEnforcement confirms that a user cannot operate on an exam
 // session that belongs to another user: EndExamSession, GetNextQuestion,
 // SeekCursorTo, and SubmitAnswer all reject a non-owner caller, while the

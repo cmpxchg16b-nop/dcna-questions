@@ -132,6 +132,8 @@
     "yourAnswerCorrect": "你的答案——正确",
     "yourAnswerIncorrect": "你的答案——错误",
     "correctAnswer": "正确答案",
+    "explanation": "题目解析",
+    "references": "参考资料",
     "unsupportedType": "暂不支持“{{type}}”类型的题目。",
     "candidates": "候选项",
     "imageSnippets": "图片片段",

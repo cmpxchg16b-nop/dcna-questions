@@ -405,6 +405,87 @@ func TestQuestion_OptionImgSrcRoundTrip(t *testing.T) {
 	}
 }
 
+func TestQuestion_LearningMetadataRoundTrip(t *testing.T) {
+	const examXML = `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<exam id="1" shortname="X" code="1">
+  <title>t</title><description>d</description>
+  <examcategory>practice-exam</examcategory>
+  <questionset><questioncollection>
+    <question id="q1" type="single-choice" score="1">
+      <description>Choose one.</description>
+      <label key="domain" value="BGP" />
+      <label key="topic" value="communities" />
+      <label key="topic" value="policy" />
+      <options>
+        <option id="1">Alpha<explanation>Alpha is correct because it matches the standard.</explanation></option>
+        <option id="2">Beta</option>
+      </options>
+      <correctanswer><options><option id="1" /></options></correctanswer>
+      <explanation>Overall question rationale.</explanation>
+      <references>
+        <reference href="https://www.rfc-editor.org/rfc/rfc1997.html">RFC 1997</reference>
+        <reference href="urn:example:lab-result" />
+      </references>
+    </question>
+  </questioncollection></questionset>
+</exam>
+</root>`
+
+	exam, err := NewFileExamLoader().Load([]byte(examXML))
+	if err != nil {
+		t.Fatalf("Load: unexpected error: %v", err)
+	}
+	q := exam.QuestionSet.QuestionCollections[0].Questions[0]
+	wantLabels := []Label{
+		{Key: "domain", Value: "BGP"},
+		{Key: "topic", Value: "communities"},
+		{Key: "topic", Value: "policy"},
+	}
+	if !reflect.DeepEqual(q.Labels, wantLabels) {
+		t.Fatalf("Labels = %+v, want %+v", q.Labels, wantLabels)
+	}
+	if len(q.Options) != 2 || q.Options[0].Content != "Alpha" ||
+		q.Options[0].Explanation != "Alpha is correct because it matches the standard." ||
+		q.Options[1].Explanation != "" {
+		t.Fatalf("option content/explanations not decoded: %+v", q.Options)
+	}
+	if q.Explanation != "Overall question rationale." || len(q.References) != 2 ||
+		q.References[0].Href != "https://www.rfc-editor.org/rfc/rfc1997.html" ||
+		q.References[0].Title != "RFC 1997" || q.References[1].Title != "" {
+		t.Fatalf("question feedback not decoded: explanation=%q references=%+v", q.Explanation, q.References)
+	}
+
+	out, err := xml.Marshal(q)
+	if err != nil {
+		t.Fatalf("Marshal: unexpected error: %v", err)
+	}
+	for _, want := range []string{
+		`<label key="topic" value="policy"></label>`,
+		`<option id="1">Alpha<explanation>Alpha is correct because it matches the standard.</explanation></option>`,
+		`<explanation>Overall question rationale.</explanation>`,
+		`<reference href="urn:example:lab-result"></reference>`,
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("marshaled XML missing %s:\n%s", want, out)
+		}
+	}
+	if strings.Contains(string(out), `<option id="2">Beta<explanation>`) {
+		t.Fatalf("empty option explanation was emitted: %s", out)
+	}
+
+	var roundTripped Question
+	if err := xml.Unmarshal(out, &roundTripped); err != nil {
+		t.Fatalf("Unmarshal of marshaled question: %v", err)
+	}
+	if !reflect.DeepEqual(roundTripped.Labels, q.Labels) ||
+		!reflect.DeepEqual(roundTripped.Options, q.Options) ||
+		!reflect.DeepEqual(roundTripped.References, q.References) ||
+		roundTripped.Explanation != q.Explanation {
+		t.Fatalf("learning metadata round-trip mismatch:\n got: %+v\nwant: %+v", roundTripped, q)
+	}
+}
+
 // virtualCollectionExamXML builds an exam document of the given category,
 // carrying two question collections (2 and 1 questions) plus the given
 // <virtualcollection> block, for virtual-collection validation tests.

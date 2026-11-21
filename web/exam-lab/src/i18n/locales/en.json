@@ -133,6 +133,8 @@
     "yourAnswerCorrect": "Your answer — correct",
     "yourAnswerIncorrect": "Your answer — incorrect",
     "correctAnswer": "Correct answer",
+    "explanation": "Explanation",
+    "references": "References",
     "unsupportedType": "Questions of type \"{{type}}\" are not supported yet.",
     "candidates": "Candidates",
     "imageSnippets": "Image snippets",

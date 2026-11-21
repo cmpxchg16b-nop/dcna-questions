@@ -180,13 +180,22 @@ export type CreateExamSessionResponse = {
 // useExamSessions.
 export type ExamSessions = ExamSessionSummary[];
 
-// QuestionOption mirrors the Go question.Option struct {"id", "content"}.
+// QuestionOption mirrors the Go question.Option struct. explanation is answer-
+// sensitive and is present only on options embedded in practice feedback.
 export type QuestionOption = {
   id: string;
   content: string;
   // imgSrc optionally references an image rendered as the option's content,
   // modeling a pure-image option (content may then be empty).
   imgSrc?: string;
+  explanation?: string;
+};
+
+// QuestionReference mirrors the Go question.Reference struct: an optional
+// display title plus the URI of a question-level technical or learning resource.
+export type QuestionReference = {
+  href: string;
+  title: string;
 };
 
 // DragCandidate mirrors the Go question.Candidate struct {"id", "content"}: a
@@ -303,14 +312,14 @@ export type ConnectionSolution = {
 
 // Question mirrors the subset of the Go question.Question struct
 // (pkg/models/question/question.go) that the client renders. Its json tags
-// produce camelCase wire fields. correctAnswer is deliberately not modeled:
-// the exam server strips it from every served question, so the only place it
-// ever appears on the wire is inside an assessment (see AssessedQuestion).
+// produce camelCase wire fields. Answer-sensitive fields are modeled only on
+// AssessedQuestion: the server strips them from every unsolved served question.
 export type Question = {
   id: string;
   type: QuestionType;
   score?: number;
   description: { text: string };
+  labels?: ExamLabel[];
   exhibits?: { image: { src: string } }[];
   options?: QuestionOption[];
   // Drag-and-drop payload: candidates are the draggable source items, and the
@@ -365,18 +374,17 @@ export type QuestionScore = {
   scoreEarned: number;
 };
 
-// AssessedQuestion is a Question as embedded in an Assessment: for
-// practice-exam submissions the grader attaches the origin question document,
-// which carries its correctAnswer so the candidate can review what they got
-// wrong. Question deliberately does not model correctAnswer — it must never
-// influence the client while answering — so the field is modeled here, where
-// revealing it is the point. Certification-exam assessments omit questions
-// entirely.
+// AssessedQuestion is a Question as embedded in an Assessment. For practice
+// submissions it carries the correct answer and learning feedback; certification
+// assessments omit questions entirely. Keeping these fields off Question makes
+// the pre-answer / post-check boundary explicit in the client data model.
 export type AssessedQuestion = Question & {
   correctAnswer?: {
     options?: QuestionOption[];
     connectionSolutions?: ConnectionSolution[];
   };
+  explanation?: string;
+  references?: QuestionReference[];
 };
 
 // Assessment mirrors the Go question.Assessment struct

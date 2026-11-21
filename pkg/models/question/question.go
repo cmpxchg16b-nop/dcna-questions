@@ -37,11 +37,13 @@ type PlainText string
 
 // Option is a choice of a single-choice or multiple-choice question. ImgSrc
 // optionally references an image rendered as the option's content, modeling a
-// pure-image option (Content may then be empty).
+// pure-image option (Content may then be empty). Explanation records why the
+// option is correct or incorrect and is revealed only with practice feedback.
 type Option struct {
-	Id      string    `xml:"id,attr" json:"id"`
-	ImgSrc  string    `xml:"imgSrc,attr,omitempty" json:"imgSrc,omitempty"`
-	Content PlainText `xml:",chardata" json:"content"`
+	Id          string    `xml:"id,attr" json:"id"`
+	ImgSrc      string    `xml:"imgSrc,attr,omitempty" json:"imgSrc,omitempty"`
+	Content     PlainText `xml:",chardata" json:"content"`
+	Explanation PlainText `xml:"explanation,omitempty" json:"explanation,omitempty"`
 }
 
 type Options []Option
@@ -173,12 +175,20 @@ type QuestionDescription struct {
 	Text PlainText `xml:",chardata" json:"text"`
 }
 
+// Reference is a question-level learning or technical reference. Title is the
+// optional human-readable link text and Href identifies the resource.
+type Reference struct {
+	Href  string    `xml:"href,attr" json:"href"`
+	Title PlainText `xml:",chardata" json:"title"`
+}
+
 type Question struct {
 	XMLName        xml.Name            `xml:"question" json:"-"`
 	Id             string              `xml:"id,attr" json:"id"`
 	Type           QuestionType        `xml:"type,attr" json:"type"`
 	Score          float32             `xml:"score,attr" json:"score,omitempty"`
 	Description    QuestionDescription `xml:"description" json:"description"`
+	Labels         []Label             `xml:"label" json:"labels,omitempty"`
 	Exhibits       Exhibits            `xml:"exhibits>exhibit" json:"exhibits,omitempty"`
 	Options        Options             `xml:"options>option" json:"options,omitempty"`
 	Candidates     Candidates          `xml:"candidates>candidate" json:"candidates,omitempty"`
@@ -186,6 +196,8 @@ type Question struct {
 	MultiAreaDrop  *MultiAreaDrop      `xml:"multiareadrop" json:"multiAreaDrop,omitempty"`
 	Drops          Drops               `xml:"drops>drop" json:"drops,omitempty"`
 	CorrectAnswer  CorrectAnswer       `xml:"correctanswer" json:"correctAnswer"`
+	Explanation    PlainText           `xml:"explanation" json:"explanation,omitempty"`
+	References     []Reference         `xml:"references>reference" json:"references,omitempty"`
 }
 
 // MarshalXML encodes q as a <question> element. Unlike the default struct
@@ -205,6 +217,11 @@ func (q Question) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 	if err := e.EncodeElement(q.Description, xml.StartElement{Name: xml.Name{Local: "description"}}); err != nil {
 		return err
+	}
+	for _, label := range q.Labels {
+		if err := e.EncodeElement(label, xml.StartElement{Name: xml.Name{Local: "label"}}); err != nil {
+			return err
+		}
 	}
 	if len(q.Exhibits) > 0 {
 		if err := e.EncodeElement(struct {
@@ -246,6 +263,18 @@ func (q Question) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	}
 	if err := e.EncodeElement(q.CorrectAnswer, xml.StartElement{Name: xml.Name{Local: "correctanswer"}}); err != nil {
 		return err
+	}
+	if q.Explanation != "" {
+		if err := e.EncodeElement(q.Explanation, xml.StartElement{Name: xml.Name{Local: "explanation"}}); err != nil {
+			return err
+		}
+	}
+	if len(q.References) > 0 {
+		if err := e.EncodeElement(struct {
+			References []Reference `xml:"reference"`
+		}{References: q.References}, xml.StartElement{Name: xml.Name{Local: "references"}}); err != nil {
+			return err
+		}
 	}
 
 	return e.EncodeToken(start.End())
@@ -306,8 +335,9 @@ type VirtualCollection struct {
 	CollectionIdx []int `xml:"collectionidx" json:"collectionIdx"`
 }
 
-// Label is a <label> element: a key-value pair carrying free-form metadata
-// about the enclosing exam. An exam may carry zero or any number of labels.
+// Label is a <label> element: a key-value pair carrying free-form business
+// metadata about the enclosing exam or question. Either may carry any number
+// of labels, including repeated keys with different values.
 type Label struct {
 	Key   string `xml:"key,attr" json:"key"`
 	Value string `xml:"value,attr" json:"value"`
@@ -561,7 +591,6 @@ func (l *FileExamLoader) LoadFile(path string) (*Exam, error) {
 func (l *FileExamLoader) LoadFrom(ctx context.Context, url string) (*Exam, error) {
 	return l.LoadFile(url)
 }
-
 
 // validate reports structural problems with a decoded exam. It catches the
 // kinds of mistakes (a typo'd question type, a missing id) that would otherwise
